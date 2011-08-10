@@ -58,13 +58,12 @@ def find_cascades(raster, bin_width=1):
 
     starts = (raster==1).nonzero()[0]
     stops = (raster==-1).nonzero()[0]
-    #Correct for offset of 1 that occurs in the stops due to using diff
-    stops = stops-1
 
     #Expand the bin indices back into the indices of the original raster
     starts = starts*bin_width
-    stops = stops*bin_width+bin_width-1 #We have to move the stop index to the end of the finishing bin, not the beginning
-    #Additionally, if the data stops during an avalanche, we put the avalanche end at the end of the recording
+    stops = stops*bin_width
+    #Additionally, if the data stops midway through a bin, and there is an avalanche in that bin, the above code will put the stop index in a later,
+    #non-existent bin. Here we put the avalanche end at the end of the recording
     if stops[-1]>data_points:
         stops[-1] = data_points
 
