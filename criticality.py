@@ -3,13 +3,12 @@ def avalanche_analysis(data,bin_width=1, percentile=.01, event_method='amplitude
     raster = find_events(data, percentile, event_method)
     starts, stops = find_cascades(raster, bin_width)
 
-    from collections import defaultdict
-    metrics = defaultdict(list)
+    metrics = {'starts': starts, 'stops': stops}
 
     for i in range(len(starts)):
-        m = avalanche_metrics(raster[:,starts:stops], bin_width)
+        m = avalanche_metrics(raster[:,starts[i]:stops[i]], bin_width)
         for k,v in m:
-            metrics[k].append(v)
+            metrics.setdefault(k,[]).append(v)
 
     return metrics
 
@@ -84,10 +83,10 @@ def avalanche_metrics(raster, bin_width):
         sigma_amplitudes= 0
         sigma_events = 0
     else:
-        sigma_amplitudes = raster[:,bin_width:(2*bin_width-1)].sum() \
+        sigma_amplitudes = raster[:,bin_width:(2*bin_width)].sum() \
                 / raster[:,:bin_width].sum()
 
-        sigma_events = event_raster[:,bin_width:(2*bin_width-1)].sum() \
+        sigma_events = event_raster[:,bin_width:(2*bin_width)].sum() \
                 / event_raster[:,:bin_width].sum()
 
 
