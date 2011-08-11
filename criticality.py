@@ -25,12 +25,22 @@ def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude
     raster = find_events(data, percentile, event_method)
     starts, stops = find_cascades(raster, bin_width)
 
-    metrics = {'starts': starts, 'stops': stops}
+    metrics = {'start': starts,
+            'stop': stops,
+            'duration_silences': starts[1:]-stops[:-1],
+            'bin_width': bin_width,
+            'percentile': percentile,
+            'event_method': event_method,
+            }
+    from numpy import concatenate, array
 
+    #For every avalanche, calculate some list of metrics, then save those metrics in a dictionary
+    #Metrics arrive as tuples of the form (label, array([value]))
     for i in range(len(starts)):
         m = avalanche_metrics(raster[:,starts[i]:stops[i]], bin_width)
         for k,v in m:
-            metrics.setdefault(k,[]).append(v)
+            metrics[k] = concatenate((metrics.setdefault(k,array([])), \
+                    v))
 
     return metrics
 
@@ -57,7 +67,7 @@ def find_events(data, percentile=.99, event_method='amplitude'):
 
 def find_cascades(raster, bin_width=1):
     """find_events does things"""
-    from numpy import concatenate, reshape, zeros, diff
+    from numpy import concatenate, reshape, zeros, diff, size
 
     #Collapse the reaster into a vector of zeros and ones, indicating activity or inactivity on all channels
     raster = raster>0
@@ -86,7 +96,7 @@ def find_cascades(raster, bin_width=1):
     stops = stops*bin_width
     #Additionally, if the data stops midway through a bin, and there is an avalanche in that bin, the above code will put the stop index in a later,
     #non-existent bin. Here we put the avalanche end at the end of the recording
-    if stops[-1]>data_points:
+    if size(stops)>0 and stops[-1]>data_points:
         stops[-1] = data_points
 
     return (starts, stops)
@@ -110,9 +120,12 @@ def avalanche_metrics(raster, bin_width):
         sigma_events = event_raster[:,bin_width:(2*bin_width)].sum() \
                 / event_raster[:,:bin_width].sum()
 
-
-    metrics = [('duration', duration), ('size_amplitudes', size_amplitudes),\
-            ('sigma_amplitudes',sigma_amplitudes), ('size_events', size_events), \
-            ('sigma_events', sigma_events)]
+    from numpy import array
+    metrics = [('duration', array([duration])), \
+            ('size_amplitudes', array([size_amplitudes])),\
+            ('sigma_amplitudes',array([sigma_amplitudes])),\
+            ('size_events', array([size_events])), \
+            ('sigma_events', array([sigma_events])), \
+            ]
     return metrics
 
