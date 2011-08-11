@@ -1,4 +1,26 @@
-def avalanche_analysis(data,bin_width=1, percentile=.01, event_method='amplitude'):
+def neuro_band_filter(data, band, sampling_rate=1000):
+    """docstring for neuro_band_filter"""
+    from numpy import array
+    bands = {'delta': (array([4]), True),
+            'theta': (array([4,8]), False),
+            'alpha': (array([8,12]), False),
+            'beta': (array([12,30]), False),
+            'gamma': (array([30,80]), False),
+            'high-gamma': (array([80]), False),
+            'broad': (array([1,100]), False),
+            }
+    frequencies = bands[band]
+    from scipy.signal import firwin, lfilter
+    nyquist = sampling_rate/2
+    kernel= firwin(25, frequencies[0]/nyquist, pass_zero=frequencies[1])
+    data = lfilter(kernel, 1.0, data)
+    return data
+
+
+
+
+
+def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude'):
     """docstring for avalanche_analysis  """
     raster = find_events(data, percentile, event_method)
     starts, stops = find_cascades(raster, bin_width)
@@ -12,7 +34,7 @@ def avalanche_analysis(data,bin_width=1, percentile=.01, event_method='amplitude
 
     return metrics
 
-def find_events(data, percentile=.01, event_method='amplitude'):
+def find_events(data, percentile=.99, event_method='amplitude'):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
