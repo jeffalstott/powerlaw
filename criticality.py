@@ -20,8 +20,8 @@ def neuro_band_filter(data, band, sampling_rate=1000.0):
 
 def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude'):
     """docstring for avalanche_analysis  """
-    raster, iei = find_events(data, percentile, event_method)
-    starts, stops = find_cascades(raster, bin_width)
+    raster_displacement, raster_amplitude, iei = find_events(data, percentile, event_method)
+    starts, stops = find_cascades(raster_displacement, bin_width)
 
     metrics = {'iei_mean': iei.mean(),
             'start': starts,
@@ -36,22 +36,31 @@ def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude
     #For every avalanche, calculate some list of metrics, then save those metrics in a dictionary
     #Metrics arrive as tuples of the form (label, array([value]))
     for i in range(len(starts)):
-        m = avalanche_metrics(raster[:,starts[i]:stops[i]], bin_width)
+        m = avalanche_metrics(raster_displacement[:,starts[i]:stops[i]], \
+                raster_amplitude[:,starts[i]:stops[i]], \
+                bin_width)
         for k,v in m:
             metrics[k] = concatenate((metrics.setdefault(k,array([])), \
                     v))
     return metrics
 
-def find_events(data, percentile=.99, event_method='amplitude'):
+def find_events(data_displacement, percentile=.99, event_method='amplitude', data_amplitude=0):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
-    from numpy import rot90, tile, where, diff, sort
+    from scipy.sparse import csc_matrix
+    from numpy import rot90, tile, diff, sort, nonzero
+
+    if ~data_amplitude:
+        data_amplitude = abs(hilbert(data_displacement))
     
     if event_method == 'amplitude':
-        signal = abs(hilbert(data))
+        signal = data_amplitude
+    elif event_method == 'displacement':
+        signal = data_displacement
     else:
-        signal = data
+        print 'Please select a valid event detection method (amplitude or displacement)'
+
 
     #scoreatpercentile only computes along the first dimension, which in this case is channels, not time. So we rotate the array before
     #we hand it to scoreatpercentile. The result is a vector of threshold values for each channel.
@@ -59,20 +68,23 @@ def find_events(data, percentile=.99, event_method='amplitude'):
 
     #In order to avoid looping over each channel individually, we replicate the vector of thresholds to the number of time steps in the data. 
     #Then we rotate it to fit the shape of the data.
-    threshold_matrix = rot90( tile( threshold, (len(data[0]), 1)), 3)
-    raster = data*(data>threshold_matrix)
-
-    interevent_intervals = diff(sort(where(0<raster)[1]))
-    return (raster, interevent_intervals)
+    threshold_matrix = rot90( tile( threshold, (len(data_displacement[0]), 1)), 3)
+    raster_displacement = csc_matrix(data_displacement*\
+            (signal>threshold_matrix))
+    raster_amplitude = csc_matrix(data_amplitude*\
+            (signal>threshold_matrix))
+    interevent_intervals = diff(sort(nonzero(raster_displacement)[1]))
+    return (raster_displacement, raster_amplitude, interevent_intervals)
 
 def find_cascades(raster, bin_width=1):
     """find_events does things"""
-    from numpy import concatenate, reshape, zeros, diff, size
+    from numpy import concatenate, reshape, zeros, diff, size, nonzero, unique
 
     #Collapse the reaster into a vector of zeros and ones, indicating activity or inactivity on all channels
-    raster = raster>0
-    raster = raster.sum(0)
-    raster = raster>0
+    z = zeros(raster.shape[1])
+    activity = unique(nonzero(raster)[1])
+    z[activity] = 1
+    raster = z
 
     #Find how short we'll be trying to fill the last bin, then pad the end
     data_points = raster.shape[0]
@@ -101,29 +113,39 @@ def find_cascades(raster, bin_width=1):
 
     return (starts, stops)
 
-def avalanche_metrics(raster, bin_width):
+def avalanche_metrics(raster_displacement, raster_amplitude, bin_width):
     """avalanche_metrics calculates various things"""
-    duration = raster.shape[1]
+    duration = raster_displacement.shape[1]
 
-    event_raster = raster>0
+    from numpy import zeros, shape, nonzero
+    raster_event = zeros(shape(raster_displacement))
+    raster_event[nonzero(raster_displacement)] = 1
+    raster_displacement = abs(raster_displacement)
 
-    size_amplitudes = raster.sum()
-    size_events = event_raster.sum()
+    size_displacements = raster_displacement.sum()
+    size_events = raster_event.sum()
+    size_amplitudes = raster_amplitude.sum()
 
     if duration<(2*bin_width):
         sigma_amplitudes= 0
         sigma_events = 0
+        sigma_displacements = 0
     else:
-        sigma_amplitudes = raster[:,bin_width:(2*bin_width)].sum() \
-                / raster[:,:bin_width].sum()
+        sigma_displacements = raster_displacement[:,bin_width:(2*bin_width)].sum() \
+                / raster_displacement[:,:bin_width].sum()
 
-        sigma_events = event_raster[:,bin_width:(2*bin_width)].sum() \
-                / event_raster[:,:bin_width].sum()
+        sigma_amplitudes = raster_amplitude[:,bin_width:(2*bin_width)].sum() \
+                / raster_amplitude[:,:bin_width].sum()
+
+        sigma_events = raster_event[:,bin_width:(2*bin_width)].sum() \
+                / raster_event[:,:bin_width].sum()
 
     from numpy import array
     metrics = [('duration', array([duration])), \
             ('size_amplitudes', array([size_amplitudes])),\
+            ('size_displacements', array([size_displacements])),\
             ('sigma_amplitudes',array([sigma_amplitudes])),\
+            ('sigma_displacements',array([sigma_displacements])),\
             ('size_events', array([size_events])), \
             ('sigma_events', array([sigma_events])), \
             ]
