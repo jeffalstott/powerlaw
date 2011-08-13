@@ -1,31 +1,30 @@
-def neuro_band_filter(data, band, sampling_rate=1000):
+def neuro_band_filter(data, band, sampling_rate=1000.0):
     """docstring for neuro_band_filter"""
     from numpy import array
-    bands = {'delta': (array([4]), True),
-            'theta': (array([4,8]), False),
-            'alpha': (array([8,12]), False),
-            'beta': (array([12,30]), False),
-            'gamma': (array([30,80]), False),
-            'high-gamma': (array([80]), False),
-            'broad': (array([1,100]), False),
+    bands = {'delta': (array([4.0]), True),
+            'theta': (array([4.0,8.0]), False),
+            'alpha': (array([8.0,12.0]), False),
+            'beta': (array([12.0,30.0]), False),
+            'gamma': (array([30.0,80.0]), False),
+            'high-gamma': (array([80.0]), False),
+            'broad': (array([1.0,100.0]), False),
             }
     frequencies = bands[band]
     from scipy.signal import firwin, lfilter
-    nyquist = sampling_rate/2
-    kernel= firwin(25, frequencies[0]/nyquist, pass_zero=frequencies[1])
+    nyquist = sampling_rate/2.0
+    kernel= firwin(25.0, frequencies[0]/nyquist, pass_zero=frequencies[1])
     data = lfilter(kernel, 1.0, data)
+    downsampling_rate = (1.0/(2.0*frequencies[0].max()))*sampling_rate
+    data = data[:,:-1:downsampling_rate]
     return data
-
-
-
-
 
 def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude'):
     """docstring for avalanche_analysis  """
-    raster = find_events(data, percentile, event_method)
+    raster, iei = find_events(data, percentile, event_method)
     starts, stops = find_cascades(raster, bin_width)
 
-    metrics = {'start': starts,
+    metrics = {'iei_mean': iei.mean(),
+            'start': starts,
             'stop': stops,
             'duration_silences': starts[1:]-stops[:-1],
             'bin_width': bin_width,
@@ -41,14 +40,13 @@ def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude
         for k,v in m:
             metrics[k] = concatenate((metrics.setdefault(k,array([])), \
                     v))
-
     return metrics
 
 def find_events(data, percentile=.99, event_method='amplitude'):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
-    from numpy import rot90, tile
+    from numpy import rot90, tile, where, diff, sort
     
     if event_method == 'amplitude':
         signal = abs(hilbert(data))
@@ -63,7 +61,9 @@ def find_events(data, percentile=.99, event_method='amplitude'):
     #Then we rotate it to fit the shape of the data.
     threshold_matrix = rot90( tile( threshold, (len(data[0]), 1)), 3)
     raster = data*(data>threshold_matrix)
-    return raster
+
+    interevent_intervals = diff(sort(where(0<raster)[1]))
+    return (raster, interevent_intervals)
 
 def find_cascades(raster, bin_width=1):
     """find_events does things"""
@@ -129,3 +129,19 @@ def avalanche_metrics(raster, bin_width):
             ]
     return metrics
 
+def log_hist(data, max_size, min_size=1, show=True):
+    """log_hist does things"""
+    from numpy import logspace, histogram
+    from math import ceil, log10
+    import pylab
+    log_min_size = log10(min_size)
+    log_max_size = log10(max_size)
+    number_of_bins = ceil((log_max_size-log_min_size)*10)
+    bins=logspace(log_min_size, log_max_size, num=number_of_bins)
+    hist, edges = histogram(data, bins, density=True)
+    if show:
+        pylab.plot(edges[:-1], hist, 'o')
+        pylab.gca().set_xscale("log")
+        pylab.gca().set_yscale("log")
+        pylab.show()
+    return (hist, edges)
