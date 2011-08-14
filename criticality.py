@@ -61,7 +61,6 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
     else:
         print 'Please select a supported event detection method (amplitude or displacement)'
 
-
     #scoreatpercentile only computes along the first dimension, so we transpose the 
     #(channels, times) matrix to a (times, channels) matrix. This is also useful for
     #applying the threshold, which is #channels long. We just need to make sure to 
@@ -73,11 +72,46 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
     amplitudes = data_amplitude[channels,times]
     interevent_intervals = numpy.diff(numpy.sort(times))
 
+    #Calculating the "area under the curve" of each event, which is
+    #integral of the deflection from "baseline" (mean signal) in which
+    #the event occurs
+    baselines = data_amplitude.mean(1) #mean for each channel
+    baseline_excursion = data_amplitude - \
+            baselines.reshape(len(baselines),1)
+    from numpy import zeros, shape, where
+    aucs = zeros(shape(times))
+    for i in range(len(times)):
+        channel = channels[i]
+        below_baseline_times = where( \
+                baseline_excursion[ channel,: ] <0 )
+#        import pdb; pdb.set_trace()
+        try:
+            curve_start = below_baseline_times[where( \
+                    below_baseline_times < times[i])[1][-1] + 1]
+        #It may be the case that the current curve begins
+        #at the beginning of the recording, which will produce
+        #an error when where() returns an empty array. 
+        #Here's the catch: 
+        except IndexError:
+            curve_start = 0
+        try:
+            curve_end = below_baseline_times[where( \
+                    below_baseline_times > times[i])[1][0]]
+        #It may be the case that the current curve ends
+        #at the ends of the recording, which will produce
+        #an error when where() returns an empty array. 
+        #Here's the catch: 
+        except IndexError:
+            curve_end = len(times)
+        aucs[i] = sum(data_amplitude[channel, curve_start:curve_end])
+ #       import pdb; pdb.set_trace()
+
     output_metrics = { \
             'event_times': times, \
             'event_channels': channels,\
             'event_displacements': displacements,\
             'event_amplitudes': amplitudes,\
+            'event_aucs': aucs,\
             'interevent_intervals': interevent_intervals,\
             }
     return output_metrics
@@ -125,6 +159,7 @@ def avalanche_metrics(input_metrics, avalanche_number):
     avalanche_start = where(input_metrics['event_times'] >= \
             input_metrics['starts'][avalanche_number])[0][0]
 
+#Calculate sizes
     size_events = array([avalanche_stop-avalanche_start])
     size_displacements = array([\
             sum(abs(\
@@ -134,10 +169,16 @@ def avalanche_metrics(input_metrics, avalanche_number):
             sum(abs(\
             input_metrics['event_amplitudes'][avalanche_start:avalanche_stop]))\
             ])
-
+    size_aucs = array([\
+            sum(abs(\
+            input_metrics['event_aucs'][avalanche_start:avalanche_stop]))\
+            ])
+#Calculate sigmas
     if input_metrics['durations'][avalanche_number] < \
             (2*input_metrics['bin_width']):
-                sigma_amplitudes = sigma_events = sigma_displacements = array([0])
+                sigma_amplitudes = sigma_events = \
+                        sigma_displacements = sigma_aucs = \
+                        array([0])
     else:
         first_bin = where( \
                 input_metrics['event_times'] < \
@@ -162,14 +203,20 @@ def avalanche_metrics(input_metrics, avalanche_number):
                 sum(abs(input_metrics['event_amplitudes'][first_bin:second_bin]))/  \
                 sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin+1]))\
                 ])
+        sigma_aucs = array([\
+                sum(abs(input_metrics['event_aucs'][first_bin:second_bin]))/  \
+                sum(abs(input_metrics['event_aucs'][avalanche_start:first_bin+1]))\
+                ])
 
     output_metrics = (\
-            ('size_amplitudes', size_amplitudes),\
-            ('size_displacements', size_displacements),\
-            ('sigma_amplitudes', sigma_amplitudes),\
-            ('sigma_displacements', sigma_displacements),\
             ('size_events', size_events), \
-            ('sigma_events', sigma_events), \
+            ('size_displacements', size_displacements),\
+            ('size_amplitudes', size_amplitudes),\
+            ('size_aucs', size_aucs), \
+            ('sigma_events', sigma_events), 
+            ('sigma_displacements', sigma_displacements),\
+            ('sigma_amplitudes', sigma_amplitudes),\
+            ('sigma_aucs', sigma_aucs),\
             )
     return output_metrics
 
