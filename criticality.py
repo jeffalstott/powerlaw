@@ -18,7 +18,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0):
     data = data[:,:-1:downsampling_rate]
     return data
 
-def avalanche_analysis(data,bin_width=1.0, percentile=.99, event_method='amplitude'):
+def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude', data_amplitude=0):
     """docstring for avalanche_analysis  """
     metrics = {}
     metrics['bin_width'] = bin_width
@@ -26,13 +26,10 @@ def avalanche_analysis(data,bin_width=1.0, percentile=.99, event_method='amplitu
     metrics['event_method'] = event_method
 
 
-    m = find_events(data, percentile, event_method)
+    m = find_events(data, percentile, event_method, data_amplitude)
     metrics.update(m)
+
     from numpy import concatenate, array
-    #for k,v in e:
-    #    metrics[k] = concatenate((metrics.setdefault(k,array([])), \
-    #            v))
-    
     starts, stops = find_cascades(metrics['event_times'], bin_width)
 
     metrics['starts'] = starts
@@ -43,7 +40,6 @@ def avalanche_analysis(data,bin_width=1.0, percentile=.99, event_method='amplitu
     #For every avalanche, calculate some list of metrics, then save those metrics in a dictionary
     for i in range(len(starts)):
         m = avalanche_metrics(metrics, i)
-
         for k,v in m:
             metrics[k] = concatenate((metrics.setdefault(k,array([])), \
                     v))
@@ -53,9 +49,9 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
-    from numpy import transpose, diff, sort, where
+    import numpy
 
-    if ~data_amplitude:
+    if type(data_amplitude)!=numpy.ndarray:
         data_amplitude = abs(hilbert(data_displacement))
 
     if event_method == 'amplitude':
@@ -70,12 +66,12 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
     #(channels, times) matrix to a (times, channels) matrix. This is also useful for
     #applying the threshold, which is #channels long. We just need to make sure to 
     #invert back the coordinate system when we assign the results, which we do 
-    threshold = scoreatpercentile(transpose(signal), percentile*100)
-    times, channels = where(transpose(signal)>threshold)
+    threshold = scoreatpercentile(numpy.transpose(signal), percentile*100)
+    times, channels = numpy.where(numpy.transpose(signal)>threshold)
 
     displacements = data_displacement[channels, times]
     amplitudes = data_amplitude[channels,times]
-    interevent_intervals = diff(sort(times))
+    interevent_intervals = numpy.diff(numpy.sort(times))
 
     output_metrics = { \
             'event_times': times, \
@@ -144,10 +140,10 @@ def avalanche_metrics(input_metrics, avalanche_number):
                 sigma_amplitudes = sigma_events = sigma_displacements = array([0])
     else:
         first_bin = where( \
-                input_metrics['event_times'] > \
+                input_metrics['event_times'] < \
                 (input_metrics['starts'][avalanche_number] \
                 +input_metrics['bin_width'])\
-                )[0][0]
+                )[0][-1]
         second_bin = where( \
                 input_metrics['event_times'] < \
                 (input_metrics['starts'][avalanche_number] \
@@ -156,15 +152,15 @@ def avalanche_metrics(input_metrics, avalanche_number):
         
         sigma_events = array([\
                 (second_bin-first_bin)/ \
-                first_bin \
+                (first_bin-avalanche_start+1.0) \
                 ])
         sigma_displacements = array([\
                 sum(abs(input_metrics['event_displacements'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_displacements'][avalanche_start:first_bin]))\
+                sum(abs(input_metrics['event_displacements'][avalanche_start:first_bin+1]))\
                 ])
         sigma_amplitudes = array([\
                 sum(abs(input_metrics['event_amplitudes'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin]))\
+                sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin+1]))\
                 ])
 
     output_metrics = (\
