@@ -18,7 +18,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0):
     data = data[:,:-1:downsampling_rate]
     return data
 
-def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude', data_amplitude=0):
+def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude', data_amplitude=0, method='grid'):
     """docstring for avalanche_analysis  """
     metrics = {}
     metrics['bin_width'] = bin_width
@@ -30,7 +30,7 @@ def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude
     metrics.update(m)
 
     from numpy import concatenate, array
-    starts, stops = find_cascades(metrics['event_times'], bin_width)
+    starts, stops = find_cascades(metrics['event_times'], bin_width, method)
 
     metrics['starts'] = starts
     metrics['stops'] = stops
@@ -116,38 +116,51 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
             }
     return output_metrics
 
-def find_cascades(event_times, bin_width=1):
+def find_cascades(event_times, bin_width=1, method='grid'):
     """find_events does things"""
-    from numpy import concatenate, reshape, zeros, diff, size, unique
+    from numpy import array, where, diff, concatenate
 
-    #Collapse the reaster into a vector of zeros and ones, indicating activity or inactivity on all channels
-    raster = zeros(event_times.max()+1)
-    raster[unique(event_times)] = 1
+    if method=='gap':
+        starts = array([event_times[0]])
+        stops = array([event_times[-1]])
+        changes = where(diff(event_times)>=bin_width+1)[0]
+        starts = concatenate((starts, event_times[changes+1]))
+        stops = concatenate((event_times[changes], stops))
 
-    #Find how short we'll be trying to fill the last bin, then pad the end
-    data_points = raster.shape[0]
-    short = bin_width - (data_points % bin_width)
-    raster = concatenate((raster, zeros(short)), 1)
+    elif method=='grid':
+        from numpy import reshape, zeros, size, unique
+        
+        #Collapse the reaster into a vector of zeros and ones, indicating activity or inactivity on all channels
+        raster = zeros(event_times.max()+1)
+        raster[unique(event_times)] = 1
+        
+        #Find how short we'll be trying to fill the last bin, then pad the end
+        data_points = raster.shape[0]
+        short = bin_width - (data_points % bin_width)
+        raster = concatenate((raster, zeros(short)), 1)
+        
+        #Reshaped the raster vector into a bin_width*bins array, so that we can easily collapse bins together without using for loops
+        raster = reshape( raster, (raster.shape[0]/bin_width, bin_width) )
+        
+        #Collapse bins together and find where the system switches states
+        raster = raster.sum(1)
+        raster = raster>0
+        raster = diff(concatenate((zeros((1)), raster, zeros((1))), 1))
+        #raster = squeeze(raster)
+        
+        starts = (raster==1).nonzero()[0]
+        stops = (raster==-1).nonzero()[0]
+        
+        #Expand the bin indices back into the indices of the original raster
+        starts = starts*bin_width
+        stops = stops*bin_width
+        #Additionally, if the data stops midway through a bin, and there is an avalanche in that bin, the above code will put the stop index in a later,
+        #non-existent bin. Here we put the avalanche end at the end of the recording
+        if size(stops)>0 and stops[-1]>data_points:
+            stops[-1] = data_points
 
-    #Reshaped the raster vector into a bin_width*bins array, so that we can easily collapse bins together without using for loops
-    raster = reshape( raster, (raster.shape[0]/bin_width, bin_width) )
-    
-    #Collapse bins together and find where the system switches states
-    raster = raster.sum(1)
-    raster = raster>0
-    raster = diff(concatenate((zeros((1)), raster, zeros((1))), 1))
-    #raster = squeeze(raster)
-
-    starts = (raster==1).nonzero()[0]
-    stops = (raster==-1).nonzero()[0]
-
-    #Expand the bin indices back into the indices of the original raster
-    starts = starts*bin_width
-    stops = stops*bin_width
-    #Additionally, if the data stops midway through a bin, and there is an avalanche in that bin, the above code will put the stop index in a later,
-    #non-existent bin. Here we put the avalanche end at the end of the recording
-    if size(stops)>0 and stops[-1]>data_points:
-        stops[-1] = data_points
+    else:
+        print 'Please select a supported cascade detection method (grid or gap)'
 
     return (starts, stops)
 
@@ -208,6 +221,38 @@ def avalanche_metrics(input_metrics, avalanche_number):
                 sum(abs(input_metrics['event_aucs'][avalanche_start:first_bin+1]))\
                 ])
 
+#Calculate Tara's growth ratio
+    event_times_within_avalanche = (\
+            input_metrics['event_times'][avalanche_start:avalanche_stop] - \
+            input_metrics['event_times'][avalanche_start]
+            )
+    #initial_events = where(event_times_within_avalanche==0)[0]
+
+    from numpy import log2
+    initial_amplitude = (\
+            input_metrics['event_amplitudes'][avalanche_start].sum() \
+            )
+    t_ratio_amplitude = log2(\
+            input_metrics['event_amplitudes'][avalanche_start:avalanche_stop] / \
+            initial_amplitude \
+            )
+
+    initial_displacement = (\
+            abs(input_metrics['event_displacements'][avalanche_start]).sum() \
+            )
+    t_ratio_displacement = log2(\
+            abs(input_metrics['event_displacements'][avalanche_start:avalanche_stop]) / \
+            initial_displacement \
+            )
+
+    initial_auc = (\
+            input_metrics['event_aucs'][avalanche_start].sum() \
+            )
+    t_ratio_auc = log2(\
+            input_metrics['event_aucs'][avalanche_start:avalanche_stop] / \
+            initial_auc \
+            )
+
     output_metrics = (\
             ('size_events', size_events), \
             ('size_displacements', size_displacements),\
@@ -217,6 +262,10 @@ def avalanche_metrics(input_metrics, avalanche_number):
             ('sigma_displacements', sigma_displacements),\
             ('sigma_amplitudes', sigma_amplitudes),\
             ('sigma_aucs', sigma_aucs),\
+            ('event_times_within_avalanche', event_times_within_avalanche), \
+            ('t_ratio_amplitude', t_ratio_amplitude),\
+            ('t_ratio_displacement', t_ratio_displacement),\
+            ('t_ratio_auc', t_ratio_auc),
             )
     return output_metrics
 
