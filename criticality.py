@@ -1,4 +1,4 @@
-def neuro_band_filter(data, band, sampling_rate=1000.0):
+def neuro_band_filter(data, band, sampling_rate=1000.0, taps=512.0, window_type='blackmanharris'):
     """docstring for neuro_band_filter"""
     from numpy import array
     bands = {'delta': (array([4.0]), True),
@@ -12,7 +12,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0):
     frequencies = bands[band]
     from scipy.signal import firwin, lfilter
     nyquist = sampling_rate/2.0
-    kernel= firwin(25.0, frequencies[0]/nyquist, pass_zero=frequencies[1])
+    kernel= firwin(taps, frequencies[0]/nyquist, pass_zero=frequencies[1], window = window_type)
     data = lfilter(kernel, 1.0, data)
     downsampling_rate = (1.0/(2.0*frequencies[0].max()))*sampling_rate
     data = data[:,:-1:downsampling_rate]
