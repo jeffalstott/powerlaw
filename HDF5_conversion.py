@@ -30,7 +30,7 @@ for band in bands:
     d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
     f.create_dataset(version+'/'+band+'/displacement', data=d)
     hd = abs(hilbert(d))
-    f.create_dataset(version+'/'+band+'raw/amplitude', data=hd)
+    f.create_dataset(version+'/'+band+'/amplitude', data=hd)
     f[version+'/'+band].attrs['frequency_range'] = frequency_range 
     f[version+'/'+band].attrs['processing_date'] = strftime("%Y-%m-%d", gmtime())
 
