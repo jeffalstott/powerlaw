@@ -10,7 +10,7 @@ sampling_rate=1000.0
 
 filter_type = 'FIR'
 window = 'blackmanharris'
-taps = 512.0
+taps = 511.0
 
 f = h5py.File(subject_name+'.hdf5')
 f.create_group(version)
