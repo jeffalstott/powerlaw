@@ -16,7 +16,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0, taps=512.0, window_type=
     data = lfilter(kernel, 1.0, data)
     downsampling_rate = (1.0/(2.0*frequencies[0].max()))*sampling_rate
     data = data[:,:-1:downsampling_rate]
-    return data
+    return data, frequencies[0]
 
 def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude', data_amplitude=0, method='grid'):
     """docstring for avalanche_analysis  """
