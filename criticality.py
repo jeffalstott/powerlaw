@@ -234,6 +234,7 @@ def avalanche_metrics(input_metrics, avalanche_number):
             ('t_ratio_displacement_auc', t_ratio_displacement_auc),
             )
     return output_metrics
+
 def area_under_the_curve(data, baseline='mean'):
     """area_under_the_curve is currently a mentally messy but computationally fast way to get an array of area under the curve information, to be used to assign to events. The area under the curve is the integral of the deflection from baseline (mean signal) in which an event occurrs. area_under_the_curve returns an array of the same size as the input data, where the datapoints are the areas of the curves the datapoints are contained in. So, all values located within curve N are the area of curve N, all values located within curve N+1 are the area of curve N+1, etc. Note that many curves go below baseline, so negative areas can be returned."""
     from numpy import cumsum, concatenate, zeros, empty, shape, repeat, diff, where, sign, ndarray
@@ -271,20 +272,3 @@ def area_under_the_curve(data, baseline='mean'):
         data_aucs[i] = repeat(values, durations)
 
     return data_aucs
-
-def log_hist(data, max_size, min_size=1, show=True):
-    """log_hist does things"""
-    from numpy import logspace, histogram
-    from math import ceil, log10
-    import pylab
-    log_min_size = log10(min_size)
-    log_max_size = log10(max_size)
-    number_of_bins = ceil((log_max_size-log_min_size)*10)
-    bins=logspace(log_min_size, log_max_size, num=number_of_bins)
-    hist, edges = histogram(data, bins, density=True)
-    if show:
-        pylab.plot(edges[:-1], hist, 'o')
-        pylab.gca().set_xscale("log")
-        pylab.gca().set_yscale("log")
-        pylab.show()
-    return (hist, edges)
