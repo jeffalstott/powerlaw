@@ -58,10 +58,10 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
     amplitudes = data_amplitude[channels,times]
     interevent_intervals = diff(sort(times))
 
-    data_aucs_amplitude = area_under_the_curve(data_amplitude)
-    event_amplitude_aucs = data_aucs_amplitude[channels, times]
-    #data_aucs_displacement = area_under_the_curve(data_displacement)
-    #event_displacement_aucs = data_aucs_displacement[channels, times]
+    data_amplitude_aucs = area_under_the_curve(data_amplitude)
+    event_amplitude_aucs = data_amplitude_aucs[channels, times]
+    data_displacement_aucs = area_under_the_curve(data_displacement)
+    event_displacement_aucs = data_displacement_aucs[channels, times]
 
     output_metrics = { \
             'event_times': times, \
@@ -69,7 +69,7 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
             'event_displacements': displacements,\
             'event_amplitudes': amplitudes,\
             'event_amplitude_aucs': event_amplitude_aucs,\
-     #       'event_displacement_aucs': event_displacement_aucs,\
+            'event_displacement_aucs': event_displacement_aucs,\
             'interevent_intervals': interevent_intervals,\
             }
     return output_metrics
@@ -203,14 +203,21 @@ def avalanche_metrics(input_metrics, avalanche_number):
             initial_displacement \
             )
 
-    initial_auc = (\
+    initial_amplitude_auc = (\
             input_metrics['event_amplitude_aucs'][avalanche_start].sum() \
             )
-    t_ratio_auc = log2(\
+    t_ratio_amplitude_auc = log2(\
             input_metrics['event_amplitude_aucs'][avalanche_start:avalanche_stop] / \
-            initial_auc \
+            initial_amplitude_auc \
             )
 
+    initial_displacement_auc = (\
+            abs(input_metrics['event_displacement_aucs'][avalanche_start]).sum() \
+            )
+    t_ratio_displacement_auc = log2(\
+            abs(input_metrics['event_displacement_aucs'][avalanche_start:avalanche_stop]) / \
+            initial_displacement_auc \
+            )
     output_metrics = (\
             ('size_events', size_events), \
             ('size_displacements', size_displacements),\
@@ -223,35 +230,43 @@ def avalanche_metrics(input_metrics, avalanche_number):
             ('event_times_within_avalanche', event_times_within_avalanche), \
             ('t_ratio_amplitude', t_ratio_amplitude),\
             ('t_ratio_displacement', t_ratio_displacement),\
-            ('t_ratio_auc', t_ratio_auc),
+            ('t_ratio_amplitude_auc', t_ratio_amplitude_auc),
+            ('t_ratio_displacement_auc', t_ratio_displacement_auc),
             )
     return output_metrics
-def area_under_the_curve(data):
-    """area_under_the_curve is currently a mentally messy but computationally fast way to get an array of area under the curve information, to be used to assign to events. The area under the curve is the integral of the deflection from baseline (mean signal) in which an event occurrs. area_under_the_curve returns an array of the same size as the input data, with auc values located where such curves actually occur. OUTSIDE OF WHERE CURVES ACTUALLY OCCUR, THE AUC VALUES ARE INCORRECT. Specifically, during the time period for curve N, the value is the auc of N. During the time period for curve N+1, the value is the auc of N+1. During the time period between them, the value is the auc of N+1. After the last curve, before the timeseries ends, the value is of the last curve."""
+def area_under_the_curve(data, baseline='mean'):
+    """area_under_the_curve is currently a mentally messy but computationally fast way to get an array of area under the curve information, to be used to assign to events. The area under the curve is the integral of the deflection from baseline (mean signal) in which an event occurrs. area_under_the_curve returns an array of the same size as the input data, where the datapoints are the areas of the curves the datapoints are contained in. So, all values located within curve N are the area of curve N, all values located within curve N+1 are the area of curve N+1, etc. Note that many curves go below baseline, so negative areas can be returned."""
+    from numpy import cumsum, concatenate, zeros, empty, shape, repeat, diff, where, sign, ndarray
     n_rows, n_columns = data.shape
-    #Convert the signal to just curves above the mean
-    from numpy import cumsum, concatenate, zeros, empty, shape, repeat, diff, where
-    above_mean = data-data.mean(1).reshape(n_rows,1)
-    above_mean[above_mean<0] = 0
 
-    #Take the cumulative sum of the signals. This will be rising during curves and flat between them
-    sums = cumsum(above_mean, axis=-1)
+    if baseline=='mean':
+        baseline = data.mean(1).reshape(n_rows,1)
+    elif type(baseline)!=ndarray:
+        print 'Please select a supported baseline_method (Currently only support mean and an explicit array)'
+
+    #Convert the signal to curves around baseline
+    curves_around_baseline = data-baseline
+
+    #Take the cumulative sum of the signals. This will be rising during up curves and decreasing during down curves
+    sums = cumsum(curves_around_baseline, axis=-1)
     #Find where the curves are, then where they stop
     z = zeros((n_rows,1))
-    sums_to_diff = concatenate((z, z, sums, z), axis=-1)
-    curving = (diff(sums_to_diff)>0)*1.0
-    curve_changes = diff(curving)
-    stop_channels, stop_times =where(curve_changes==-1)
-    stop_times = stop_times.clip(0,sums.shape[1]-1) #corrects for a +1 offset that can occur in a curve that ends at the end of the recording (in order to detect it we add an empty column at the end of the time series, but that puts the "end" of the curve 1 step after the end of the time series)
+    sums_to_diff = concatenate((z, sums, z), axis=-1)
+    curving = sign(diff(sums_to_diff)) #1 during up curve and -1 during down curve
+    curve_changes = diff(curving) #-2 at end of up curve and 2 at end of down curve
+    curve_changes[:,-1] = 2 # Sets the last time point to be the end of a curve
+    stop_channels, stop_times =where(abs(curve_changes)==2)
+    stop_times = stop_times.clip(0,n_columns-1) #corrects for a +1 offset that can occur in a curve that ends at the end of the recording (in order to detect it we add an empty column at the end of the time series, but that puts the "end" of the curve 1 step after the end of the time series)
 
     data_aucs = empty(shape(data))
     for i in range(n_rows):
     #The value in the cumulative sum at a curve's finish will be the sum of all curves so far. So the value of the most recently finished curve is just the cumsum at this curve minus the cumsum at the end of the previous curve
         curves_in_row = where(stop_channels==i)[0]
         stops_in_row = stop_times[curves_in_row]
-        previous_stops = concatenate(([0], stops_in_row[:-1]))
-        values = sums[i,stops_in_row]-sums[i, previous_stops]
-        stops_in_row[-1] = n_columns #Ensures the last set of auc information runs to the end of the timeseries (so we fill out the auc matrix)
+        if stops_in_row[0]==1: #If the first stop occurs at index 1, that means there's a curve at index 0 of duration 1
+            stops_in_row = concatenate(([0],stops_in_row))
+        values = sums[i,stops_in_row]-concatenate(([0],sums[i,stops_in_row[:-1]]))
+        previous_stops = concatenate(([-1], stops_in_row[:-1]))
         durations = stops_in_row-previous_stops
         data_aucs[i] = repeat(values, durations)
 
