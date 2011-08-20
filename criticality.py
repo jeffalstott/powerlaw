@@ -140,7 +140,11 @@ def avalanche_metrics(input_metrics, avalanche_number):
             sum(abs(\
             input_metrics['event_amplitudes'][avalanche_start:avalanche_stop]))\
             ])
-    size_aucs = array([\
+    size_displacement_aucs = array([\
+            sum(abs(\
+            input_metrics['event_displacement_aucs'][avalanche_start:avalanche_stop]))\
+            ])
+    size_amplitude_aucs = array([\
             sum(abs(\
             input_metrics['event_amplitude_aucs'][avalanche_start:avalanche_stop]))\
             ])
@@ -222,7 +226,8 @@ def avalanche_metrics(input_metrics, avalanche_number):
             ('size_events', size_events), \
             ('size_displacements', size_displacements),\
             ('size_amplitudes', size_amplitudes),\
-            ('size_aucs', size_aucs), \
+            ('size_displacement_aucs', size_displacement_aucs), \
+            ('size_amplitude_aucs', size_amplitude_aucs), \
             ('sigma_events', sigma_events), 
             ('sigma_displacements', sigma_displacements),\
             ('sigma_amplitudes', sigma_amplitudes),\
