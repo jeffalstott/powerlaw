@@ -1,15 +1,15 @@
-def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude', data_amplitude=0, method='grid'):
+def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, bin_width=1, percentile=.99, event_method='amplitude', cascade_method='grid'):
     """docstring for avalanche_analysis  """
     metrics = {}
     metrics['bin_width'] = bin_width
     metrics['percentile'] = percentile
     metrics['event_method'] = event_method
 
-    m = find_events(data, percentile, event_method, data_amplitude)
+    m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method)
     metrics.update(m)
 
     from numpy import concatenate, array
-    starts, stops = find_cascades(metrics['event_times'], bin_width, method)
+    starts, stops = find_cascades(metrics['event_times'], bin_width, cascade_method)
 
     metrics['starts'] = starts
     metrics['stops'] = stops
@@ -24,17 +24,35 @@ def avalanche_analysis(data,bin_width=1, percentile=.99, event_method='amplitude
                     v))
     return metrics
 
-def find_events(data_displacement, percentile=.99, event_method='amplitude', data_amplitude=0):
+def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, percentile=.99, event_method='amplitude'):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
     from numpy import ndarray, transpose, where, diff, sort
+    import h5py
+
+    #See if we received a reference to section of an HDF5 file. If so, pull what data is available
+    if type(data)==h5py._hl.group.Group:
+        data_displacement = data['displacement'][:,:]
+        if 'amplitude' in data:
+            data_amplitude = data['amplitude'][:,:]
+        if 'displacemet_aucs' in data:
+            data_displacement_aucs = data['displacement_aucs'][:,:]
+        if 'amplitude_aucs' in data:
+            data_amplitude_aucs = data['amplitude_aucs'][:,:]
+    else:
+        data_displacement = data
     
     n_rows, n_columns = data_displacement.shape
     data_displacement = data_displacement-data_displacement.mean(1).reshape(n_rows,1)
 
+    #If we don't have amplitude or area_under_the_curve information yet, calculate it
     if type(data_amplitude)!=ndarray:
         data_amplitude = abs(hilbert(data_displacement))
+    if type(data_displacement_aucs)!=ndarray:
+        data_displacement_aucs = area_under_the_curve(data_displacement)
+    if type(data_amplitude_aucs)!=ndarray:
+        data_amplitude_aucs = area_under_the_curve(data_amplitude)
 
     if event_method == 'amplitude':
         signal = data_amplitude
@@ -58,9 +76,7 @@ def find_events(data_displacement, percentile=.99, event_method='amplitude', dat
     amplitudes = data_amplitude[channels,times]
     interevent_intervals = diff(sort(times))
 
-    data_amplitude_aucs = area_under_the_curve(data_amplitude)
     event_amplitude_aucs = data_amplitude_aucs[channels, times]
-    data_displacement_aucs = area_under_the_curve(data_displacement)
     event_displacement_aucs = data_displacement_aucs[channels, times]
 
     output_metrics = { \
