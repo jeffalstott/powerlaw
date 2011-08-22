@@ -3,7 +3,7 @@ def fieldtrip_import(filename):
     from numpy import where
     matfile = loadmat(filename)
     data = matfile['D']['trial'][0][0][0][0]
-    activity_starts_index = where(data.sum(1)!=0)[0][0]
+    activity_starts_index = where(data.sum(0)!=0)[0][0]
     data = data[:, activity_starts_index:]
 
 
