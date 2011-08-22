@@ -1,4 +1,5 @@
 from scipy.io import loadmat
+from numpy import empty
 file_base = '/home/jalstott/Monkey_ECoG/Rest/ECoG_ch'
 variable_base = 'ECoGData_ch'
 
