@@ -1,3 +1,6 @@
+from numpy import array, where, log2
+from bisect import bisect_left
+
 def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, bin_width=1, percentile=.99, event_method='amplitude', cascade_method='grid'):
     """docstring for avalanche_analysis  """
     metrics = {}
@@ -8,7 +11,6 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_am
     m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method)
     metrics.update(m)
 
-    from numpy import concatenate, array
     starts, stops = find_cascades(metrics['event_times'], bin_width, cascade_method)
 
     metrics['starts'] = starts
@@ -17,18 +19,27 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_am
     metrics['durations_silences'] = starts[1:]-stops[:-1]
 
     #For every avalanche, calculate some list of metrics, then save those metrics in a dictionary
-    for i in range(len(starts)):
+    from numpy import empty, ndarray
+    n_avalanches = len(starts)
+    n_events = len(metrics['event_times'])
+    previous_event = 0
+    for i in range(n_avalanches):
         m = avalanche_metrics(metrics, i)
         for k,v in m:
-            metrics[k] = concatenate((metrics.setdefault(k,array([])), \
-                    v))
+            if type(v)==ndarray:
+                n_events_covered = max(v.shape)
+                latest_event = previous_event+n_events_covered
+                metrics.setdefault(k,empty((n_events)))[previous_event:latest_event] = v
+            else:
+                metrics.setdefault(k,empty((n_avalanches)))[i] = v
+        previous_event = latest_event
     return metrics
 
 def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, percentile=.99, event_method='amplitude'):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
-    from numpy import ndarray, transpose, where, diff, sort
+    from numpy import ndarray, transpose, diff
     import h5py
 
     #See if we received a reference to section of an HDF5 file. If so, pull what data is available
@@ -36,7 +47,7 @@ def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude
         data_displacement = data['displacement'][:,:]
         if 'amplitude' in data:
             data_amplitude = data['amplitude'][:,:]
-        if 'displacemet_aucs' in data:
+        if 'displacement_aucs' in data:
             data_displacement_aucs = data['displacement_aucs'][:,:]
         if 'amplitude_aucs' in data:
             data_amplitude_aucs = data['amplitude_aucs'][:,:]
@@ -74,7 +85,7 @@ def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude
 
     displacements = data_displacement[channels, times]
     amplitudes = data_amplitude[channels,times]
-    interevent_intervals = diff(sort(times))
+    interevent_intervals = diff(times)
 
     event_amplitude_aucs = data_amplitude_aucs[channels, times]
     event_displacement_aucs = data_displacement_aucs[channels, times]
@@ -92,7 +103,7 @@ def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude
 
 def find_cascades(event_times, bin_width=1, method='grid'):
     """find_events does things"""
-    from numpy import array, where, diff, concatenate
+    from numpy import diff, concatenate
 
     if method=='gap':
         starts = array([event_times[0]])
@@ -140,100 +151,81 @@ def find_cascades(event_times, bin_width=1, method='grid'):
 
 def avalanche_metrics(input_metrics, avalanche_number):
     """avalanche_metrics calculates various things"""
-    from numpy import array, where
-    avalanche_stop = where(input_metrics['event_times'] < \
-            input_metrics['stops'][avalanche_number])[0][-1]+1
-    avalanche_start = where(input_metrics['event_times'] >= \
-            input_metrics['starts'][avalanche_number])[0][0]
+    #Index of leftmost item in x greater than or equal to y
+    avalanche_stop = bisect_left(input_metrics['event_times'], \
+            input_metrics['stops'][avalanche_number])
+    avalanche_start = bisect_left(input_metrics['event_times'], \
+            input_metrics['starts'][avalanche_number])
 
 #Calculate sizes
-    size_events = array([avalanche_stop-avalanche_start])
-    size_displacements = array([\
-            sum(abs(\
-            input_metrics['event_displacements'][avalanche_start:avalanche_stop]))\
-            ])
-    size_amplitudes = array([\
-            sum(abs(\
-            input_metrics['event_amplitudes'][avalanche_start:avalanche_stop]))\
-            ])
-    size_displacement_aucs = array([\
-            sum(abs(\
-            input_metrics['event_displacement_aucs'][avalanche_start:avalanche_stop]))\
-            ])
-    size_amplitude_aucs = array([\
-            sum(abs(\
-            input_metrics['event_amplitude_aucs'][avalanche_start:avalanche_stop]))\
-            ])
+    size_events = avalanche_stop-avalanche_start
+    size_displacements = sum(abs(\
+            input_metrics['event_displacements'][avalanche_start:avalanche_stop]))
+    size_amplitudes = sum(abs(\
+            input_metrics['event_amplitudes'][avalanche_start:avalanche_stop]))
+    size_displacement_aucs = sum(abs(\
+            input_metrics['event_displacement_aucs'][avalanche_start:avalanche_stop]))
+    size_amplitude_aucs = sum(abs(\
+            input_metrics['event_amplitude_aucs'][avalanche_start:avalanche_stop]))
 #Calculate sigmas
     if input_metrics['durations'][avalanche_number] < \
             (2*input_metrics['bin_width']):
                 sigma_amplitudes = sigma_events = \
                         sigma_displacements = sigma_amplitude_aucs = \
-                        array([0])
+                        0
     else:
-        first_bin = where( \
-                input_metrics['event_times'] < \
+        first_bin = bisect_left( \
+                input_metrics['event_times'], \
                 (input_metrics['starts'][avalanche_number] \
                 +input_metrics['bin_width'])\
-                )[0][-1]
-        second_bin = where( \
-                input_metrics['event_times'] < \
+                )-1
+        second_bin = bisect_left( \
+                input_metrics['event_times'], \
                 (input_metrics['starts'][avalanche_number] \
                 +2*input_metrics['bin_width'])\
-                )[0][-1]+1
+                )
         
-        sigma_events = array([\
-                (second_bin-first_bin)/ \
-                (first_bin-avalanche_start+1.0) \
-                ])
-        sigma_displacements = array([\
+        sigma_events = (second_bin-first_bin)/ \
+                (first_bin-avalanche_start+1.0)
+        sigma_displacements = \
                 sum(abs(input_metrics['event_displacements'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_displacements'][avalanche_start:first_bin+1]))\
-                ])
-        sigma_amplitudes = array([\
+                sum(abs(input_metrics['event_displacements'][avalanche_start:first_bin+1]))
+        sigma_amplitudes = \
                 sum(abs(input_metrics['event_amplitudes'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin+1]))\
-                ])
-        sigma_amplitude_aucs = array([\
+                sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin+1]))
+        sigma_amplitude_aucs = \
                 sum(abs(input_metrics['event_amplitude_aucs'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_amplitude_aucs'][avalanche_start:first_bin+1]))\
-                ])
+                sum(abs(input_metrics['event_amplitude_aucs'][avalanche_start:first_bin+1]))
 
 #Calculate Tara's growth ratio
     event_times_within_avalanche = (\
             input_metrics['event_times'][avalanche_start:avalanche_stop] - \
             input_metrics['event_times'][avalanche_start]
             )
-    #initial_events = where(event_times_within_avalanche==0)[0]
 
-    from numpy import log2
-    initial_amplitude = (\
-            input_metrics['event_amplitudes'][avalanche_start].sum() \
-            )
+    initial_amplitude = \
+            input_metrics['event_amplitudes'][avalanche_start].sum()
     t_ratio_amplitude = log2(\
             input_metrics['event_amplitudes'][avalanche_start:avalanche_stop] / \
             initial_amplitude \
             )
 
-    initial_displacement = (\
-            abs(input_metrics['event_displacements'][avalanche_start]).sum() \
-            )
+    initial_displacement = \
+            abs(input_metrics['event_displacements'][avalanche_start]).sum()
     t_ratio_displacement = log2(\
             abs(input_metrics['event_displacements'][avalanche_start:avalanche_stop]) / \
             initial_displacement \
             )
 
-    initial_amplitude_auc = (\
-            input_metrics['event_amplitude_aucs'][avalanche_start].sum() \
-            )
+    initial_amplitude_auc = \
+            input_metrics['event_amplitude_aucs'][avalanche_start].sum()
     t_ratio_amplitude_auc = log2(\
             input_metrics['event_amplitude_aucs'][avalanche_start:avalanche_stop] / \
             initial_amplitude_auc \
             )
 
-    initial_displacement_auc = (\
-            abs(input_metrics['event_displacement_aucs'][avalanche_start]).sum() \
-            )
+    initial_displacement_auc = \
+            abs(input_metrics['event_displacement_aucs'][avalanche_start]).sum()
     t_ratio_displacement_auc = log2(\
             abs(input_metrics['event_displacement_aucs'][avalanche_start:avalanche_stop]) / \
             initial_displacement_auc \
