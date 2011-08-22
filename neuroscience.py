@@ -1,4 +1,4 @@
-def neuro_band_filter(data, band, sampling_rate=1000.0, taps=511.0, window_type='blackmanharris', downsample=True):
+def neuro_band_filter(data, band, sampling_rate=1000.0, taps=513.0, window_type='blackmanharris', downsample=True):
     """docstring for neuro_band_filter"""
     from numpy import array, floor
     bands = {'delta': (array([4.0]), True),
