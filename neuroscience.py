@@ -6,7 +6,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0, taps=511.0, window_type=
             'alpha': (array([8.0,12.0]), False),
             'beta': (array([12.0,30.0]), False),
             'gamma': (array([30.0,80.0]), False),
-            'high-gamma': (array([80.0]), False),
+            'high-gamma': (array([80.0, 100.0]), False),
             'broad': (array([1.0,100.0]), False),
             }
     frequencies = bands[band][0]
