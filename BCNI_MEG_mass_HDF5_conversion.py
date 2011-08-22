@@ -5,6 +5,7 @@ import human_import
 path = '/home/jja34/public_html/MEG_Data/Rest/Group1'
 dirList=os.listdir(path)
 
+bands = ('broad', 'delta', 'theta', 'alpha', 'beta')
 for fname in dirList:
     if fname[0]=='f':
         filename = path+'/'+fname
@@ -16,8 +17,8 @@ for fname in dirList:
         print subject_id+eyes+visit
         output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group1/Subject'+subject_id
         condition = 'rest/'+eyes+'/magnetometer'
-        HDF5_conversion.convert(data['magnetometer'],output_file, condition, 250.0)
+        HDF5_conversion.convert(data['magnetometer'],output_file, condition, 250.0, bands=bands)
         condition = 'rest/'+eyes+'/gradiometer'
-        HDF5_conversion.convert(data['gradiometer'],output_file, condition, 250.0)
+        HDF5_conversion.convert(data['gradiometer'],output_file, condition, 250.0, bands=bands)
 
 

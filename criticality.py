@@ -1,12 +1,15 @@
 from numpy import array, where, log2
 from bisect import bisect_left
 
-def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, bin_width=1, percentile=.99, event_method='amplitude', cascade_method='grid'):
+def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
+        data_amplitude_aucs=0, bin_width=1, percentile=.99, \
+        event_method='amplitude', cascade_method='grid', write_to_HDF5=False):
     """docstring for avalanche_analysis  """
     metrics = {}
     metrics['bin_width'] = bin_width
     metrics['percentile'] = percentile
     metrics['event_method'] = event_method
+    metrics['cascade_method'] = cascade_method
 
     m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method)
     metrics.update(m)
@@ -33,7 +36,34 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_am
             else:
                 metrics.setdefault(k,empty((n_avalanches)))[i] = v
         previous_event = latest_event
-    return metrics
+
+    #Done calculating. Now to return or write to file
+    if not(write_to_HDF5):
+        return metrics
+    else:
+        #Assume we were given an HDF5 group in $data
+        elements = list(data)
+        previous_versions = []
+        for i in elements:
+            if 'avalanches_version_' in i:
+                previous_versions.append(int(i[-3:]))
+        if previous_versions == ():
+            current_version = 0
+        else:
+            latest_version = max(previous_versions)
+            current_version = latest_version+1
+        results_subgroup = data.create_group('avalanches_version_'+str(current_version).zfill(3))
+        #Store parameters for this analysis (including some parameters formatted as strings)
+        #as attributes of this version. All the numerical results we store as new datasets in
+        #in this version group
+        attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method')
+        for k in attributes:
+            results_subgroup.attrs[k] = metrics[k]
+        for k in metrics:
+            if k not in attributes:
+                results_subgroup.create_dataset(k, data=metrics[k])
+        return
+
 
 def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, percentile=.99, event_method='amplitude'):
     """find_events does things"""
