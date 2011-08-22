@@ -1,4 +1,4 @@
-def convert(data, file_name, condition, sampling_rate):
+def convert(data, file_name, condition, sampling_rate, bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
     import h5py
     from neuroscience import neuro_band_filter
     from criticality import area_under_the_curve
@@ -30,7 +30,6 @@ def convert(data, file_name, condition, sampling_rate):
     f.create_dataset(condition+'/raw/amplitude_aucs', data=data_amplitude_aucs)
     f.create_dataset(condition+'/raw/displacement_aucs', data=data_displacement_aucs)
     
-    bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')
     
     for band in bands:
         print 'Processing '+band
