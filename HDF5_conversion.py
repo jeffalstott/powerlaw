@@ -5,7 +5,7 @@ from scipy.signal import hilbert
 from time import gmtime, strftime
 
 subject_name = 'Monkey_K2'
-condition = 'rest'
+condition = 'anesthesia'
 version = 'filter_version0'
 sampling_rate=1000.0
 
@@ -14,11 +14,11 @@ filter_type = 'FIR'
 window = 'blackmanharris'
 taps = 511.0
 
-f = h5py.File('/scratch/'+subject_name+'.hdf5')
-f.create_group(version)
-f[version].attrs['filter_type'] = filter_type
-f[version].attrs['window'] = window
-f[version].attrs['taps'] = taps
+f = h5py.File('/scratch/alstottj/'+subject_name+'.hdf5')
+f.create_group(condition+'/'+version)
+f[condition+'/'+version].attrs['filter_type'] = filter_type
+f[condition+'/'+version].attrs['window'] = window
+f[condition+'/'+version].attrs['taps'] = taps
 
 print 'Processing raw data'
 data_amplitude = abs(hilbert(data))
@@ -33,6 +33,7 @@ bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')
 
 for band in bands:
     print 'Processing '+band
+
     d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
     f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
     hd = abs(hilbert(d))
@@ -43,7 +44,8 @@ for band in bands:
     data_amplitude_aucs = area_under_the_curve(hd)
     f.create_dataset(condition+'/'+version+'/'+band+'/amplitude_aucs', data=data_amplitude_aucs)
 
-    f[version+'/'+band].attrs['frequency_range'] = frequency_range 
-    f[version+'/'+band].attrs['processing_date'] = strftime("%Y-%m-%d", gmtime())
+    f[condition+'/'+version+'/'+band].attrs['frequency_range'] = frequency_range 
+    f[condition+'/'+version+'/'+band].attrs['processing_date'] = strftime("%Y-%m-%d", gmtime())
+
 
 f.close()
