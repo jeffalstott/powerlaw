@@ -41,8 +41,8 @@ def convert(data, file_name, condition, sampling_rate, bands = ('delta', 'theta'
         print toc-tic
         print 'Hilbert Transform'
         tic = clock()
-        if band in ('broad', 'gamma', 'high-gamma'):
-            import pdb; pdb.set_trace()
+        #if band in ('broad', 'gamma', 'high-gamma'):
+        #import pdb; pdb.set_trace()
         hd = abs(hilbert(d))
         f.create_dataset(condition+'/'+version+'/'+band+'/amplitude', data=hd)
         toc = clock()
