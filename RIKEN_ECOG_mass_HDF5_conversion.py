@@ -6,7 +6,7 @@ dirList=os.listdir(path)
 
 bands = ('delta', 'theta', 'alpha', 'beta')
 
-tasks = {'FFT': 'food_tracking', 'EMT': 'emotional_movie', 'VGT': 'visual_grating', \
+tasks = {'FTT': 'food_tracking', 'EMT': 'emotional_movie', 'VGT': 'visual_grating', \
         'SCT': 'social_competition'}
 
 A_counter = -1

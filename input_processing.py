@@ -35,7 +35,7 @@ def riken_import(directory):
     return monkey_data
 
 
-def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
+def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
     import h5py
     from neuroscience import neuro_band_filter
     from criticality import area_under_the_curve
@@ -53,26 +53,26 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('delta', '
     taps = 513.0
     
     f = h5py.File(file_name+'.hdf5')
-    f.create_group(condition+'/'+version)
-    f[condition+'/'+version].attrs['filter_type'] = filter_type
-    f[condition+'/'+version].attrs['window'] = window
-    f[condition+'/'+version].attrs['taps'] = taps
-    
-    print 'Processing raw data'
-    data_amplitude = abs(hilbert(data))
-    data_displacement_aucs = area_under_the_curve(data)
-    data_amplitude_aucs = area_under_the_curve(data_amplitude)
-    f.create_dataset(condition+'/raw/displacement', data=data)
-    f.create_dataset(condition+'/raw/amplitude', data=data_amplitude)
-    f.create_dataset(condition+'/raw/amplitude_aucs', data=data_amplitude_aucs)
-    f.create_dataset(condition+'/raw/displacement_aucs', data=data_displacement_aucs)
     
     
     for band in bands:
         print 'Processing '+band
+        if band=='raw':
+            tic = clock()
+            data_amplitude = abs(hilbert(data))
+            data_displacement_aucs = area_under_the_curve(data)
+            data_amplitude_aucs = area_under_the_curve(data_amplitude)
+            f.create_dataset(condition+'/raw/displacement', data=data)
+            f.create_dataset(condition+'/raw/amplitude', data=data_amplitude)
+            f.create_dataset(condition+'/raw/amplitude_aucs', data=data_amplitude_aucs)
+            f.create_dataset(condition+'/raw/displacement_aucs', data=data_displacement_aucs)
+            toc = clock()
+            print toc-tic
+            continue
         print 'Filtering' 
         tic = clock()
         d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+        #Make sure length of data isn't prime before handing to hilbert, which can run in O(N^2) time for prime-length datasets
         if d.shape[-1]%2:
             d = d[:,:-1]
         f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
@@ -102,6 +102,9 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('delta', '
         f[condition+'/'+version+'/'+band].attrs['frequency_range'] = frequency_range 
         f[condition+'/'+version+'/'+band].attrs['processing_date'] = strftime("%Y-%m-%d", gmtime())
     
+    f[condition+'/'+version].attrs['filter_type'] = filter_type
+    f[condition+'/'+version].attrs['window'] = window
+    f[condition+'/'+version].attrs['taps'] = taps
     
     f.close()
     return
