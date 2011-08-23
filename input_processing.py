@@ -22,8 +22,8 @@ def riken_import(directory):
     file_base = directory+'/ECoG_ch'
     variable_base = 'ECoGData_ch'
 
-    f = str.format('{0}{1}.mat', file_base, 0)
-    v = str.format('{0}{1}', variable_base, 0)
+    f = str.format('{0}{1}.mat', file_base, 1)
+    v = str.format('{0}{1}', variable_base, 1)
     n_datapoints = loadmat(f)[v].shape[1]
 
     monkey_data = empty((n_channels,n_datapoints))
