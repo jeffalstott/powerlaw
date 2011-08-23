@@ -16,9 +16,9 @@ for fname in dirList:
         print fname
         print subject_id+eyes+visit
         output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group1/Subject'+subject_id
-        condition = 'rest/'+eyes+'/magnetometer'
+        condition = visit+'/rest/'+eyes+'/magnetometer'
         HDF5_conversion.convert(data['magnetometer'],output_file, condition, 250.0, bands=bands)
-        condition = 'rest/'+eyes+'/gradiometer'
+        condition = visit+'/rest/'+eyes+'/gradiometer'
         HDF5_conversion.convert(data['gradiometer'],output_file, condition, 250.0, bands=bands)
 
 
