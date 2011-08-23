@@ -17,5 +17,5 @@ def neuro_band_filter(data, band, sampling_rate=1000.0, taps=513.0, window_type=
     data = lfilter(kernel, 1.0, data)
     if downsample:
         downsampling_rate = floor(( 1.0/ (2.0*frequencies.max()) )*sampling_rate)
-        data = data[:,:-1:downsampling_rate]
+        data = data[:,::downsampling_rate]
     return data, frequencies
