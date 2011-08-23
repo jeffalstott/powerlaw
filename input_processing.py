@@ -1,4 +1,41 @@
-def convert(data, file_name, condition, sampling_rate, bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
+def bcni_fieldtrip_import(filename):
+    from scipy.io import loadmat
+    from numpy import where
+    matfile = loadmat(filename)
+    data = matfile['D']['trial'][0][0][0][0]
+    activity_starts_index = where(data[:306,:].sum(0)!=0)[0][0]
+    data = data[:, activity_starts_index:]
+
+    output = {}
+    output['magnetometer'] = data[0:102]
+    output['gradiometer'] = data[102:306]
+    return output
+
+def riken_import(directory):
+    from scipy.io import loadmat
+    from numpy import empty
+    from os import listdir
+    
+    directory_files = listdir(directory)
+    n_channels =len([s for s in directory_files if 'ECoG_ch' in s])
+
+    file_base = directory+'/ECoG_ch'
+    variable_base = 'ECoGData_ch'
+
+    f = str.format('{0}{1}.mat', file_base, 0)
+    v = str.format('{0}{1}', variable_base, 0)
+    n_datapoints = loadmat(f)[v].shape[1]
+
+    monkey_data = empty((n_channels,n_datapoints))
+
+    for i in range(n_channels):
+        f = str.format('{0}{1}.mat', file_base, i+1)
+	v = str.format('{0}{1}', variable_base, i+1)
+	monkey_data[i,:] = loadmat(f)[v]
+    return monkey_data
+
+
+def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
     import h5py
     from neuroscience import neuro_band_filter
     from criticality import area_under_the_curve

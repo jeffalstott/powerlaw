@@ -42,17 +42,12 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         return metrics
     else:
         #Assume we were given an HDF5 group in $data
+        version = 'avalanches_b'+str(bin_width)+'_p'+str(percentile*100)+'_e-'+event_method + '_c-'+ cascade_method
         elements = list(data)
-        previous_versions = []
-        for i in elements:
-            if 'avalanches_version_' in i:
-                previous_versions.append(int(i[-3:]))
-        if previous_versions == ():
-            current_version = 0
-        else:
-            latest_version = max(previous_versions)
-            current_version = latest_version+1
-        results_subgroup = data.create_group('avalanches_version_'+str(current_version).zfill(3))
+        if version in elements:
+            print 'Avalanche analysis has already been done on these data with these parameters!'
+            return metrics
+        results_subgroup = data.create_group(version)
         #Store parameters for this analysis (including some parameters formatted as strings)
         #as attributes of this version. All the numerical results we store as new datasets in
         #in this version group
