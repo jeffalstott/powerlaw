@@ -73,6 +73,8 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('delta', '
         print 'Filtering' 
         tic = clock()
         d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+        if d.shape[-1]%2:
+            d = d[:,:-1]
         f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
         toc = clock()
         print toc-tic
