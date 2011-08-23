@@ -1,15 +1,14 @@
 import os
-import HDF5_conversion
-import human_import
+from input_processing import bcni_fieldtrip_import, write_to_HDF5
 
 path = '/home/jja34/public_html/MEG_Data/Rest/Group1'
 dirList=os.listdir(path)
 
-bands = ('broad', 'delta', 'theta', 'alpha', 'beta')
+bands = ('delta', 'theta', 'alpha', 'beta')
 for fname in dirList:
     if fname[0]=='f':
         filename = path+'/'+fname
-        data = human_import.fieldtrip_import(filename)
+        data = bcni_fieldtrip_import(filename)
         subject_id = fname[31:34]
         eyes = fname[26:30]
         visit = fname[37]
@@ -17,8 +16,8 @@ for fname in dirList:
         print subject_id+eyes+visit
         output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group1/Subject'+subject_id
         condition = visit+'/rest/'+eyes+'/magnetometer'
-        HDF5_conversion.convert(data['magnetometer'],output_file, condition, 250.0, bands=bands)
+        write_to_HDF5(data['magnetometer'],output_file, condition, 250.0, bands=bands)
         condition = visit+'/rest/'+eyes+'/gradiometer'
-        HDF5_conversion.convert(data['gradiometer'],output_file, condition, 250.0, bands=bands)
+        write_to_HDF5(data['gradiometer'],output_file, condition, 250.0, bands=bands)
 
 
