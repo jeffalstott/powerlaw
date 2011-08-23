@@ -44,13 +44,13 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('delta', '
     
     #subject_name = 'Monkey_K2'
     #condition = 'anesthesia'
-    version = 'filter_version0'
+    version = 'filter_FIR_513_blackmanharris'
     #sampling_rate=1000.0
     
     
     filter_type = 'FIR'
     window = 'blackmanharris'
-    taps = 511.0
+    taps = 513.0
     
     f = h5py.File(file_name+'.hdf5')
     f.create_group(condition+'/'+version)
