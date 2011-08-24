@@ -14,6 +14,7 @@ bands = ('beta', 'alpha', 'theta', 'delta')
 recordings = range(5)
 methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
 for monkey, task in monkeys:
+    print monkey+task
     for band in bands:
         if monkey == 'A':
             b = 3
