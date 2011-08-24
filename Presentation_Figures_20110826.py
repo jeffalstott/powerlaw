@@ -21,7 +21,7 @@ for monkey in monkeys:
             d = criticality.avalanche_analysis(data, bin_width=3)
         
             for method, fig in methods:
-                X = data['size_'+method]
+                X = d['size_'+method]
                 plt.figure(fig)
                 statistics.hist_log(X, X.max(), X.min())
                 plt.xlabel('Size ('+method+')', fontsize='xx-large')
