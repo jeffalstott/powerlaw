@@ -20,15 +20,18 @@ for monkey, task in monkeys:
     for band in bands:
         if monkey == 'A':
             b = 3
+            p = .99
         if monkey=='K1':
             b = 1
+            p = .99
         if monkey=='K2':
             b = 1
+            p = .992
             if task!='visual_grating':
                 filter = 'filter_version0'
         f = h5py.File(data_directory+'Monkey_'+monkey+'.hdf5')
         data = f[task+'/'+filter+'/'+band]
-        d = criticality.avalanche_analysis(data, bin_width=b)
+        d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
         
         for method, fig in methods:
             X = d['size_'+method]
