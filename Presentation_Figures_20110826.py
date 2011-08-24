@@ -14,6 +14,7 @@ bands = ('beta', 'alpha', 'theta', 'delta')
 recordings = range(5)
 methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
 for monkey, task in monkeys:
+    print monkey+task
     for band in bands:
         if monkey == 'A':
             b = 3
@@ -37,6 +38,6 @@ for monkey, task in monkeys:
                 statistics.hist_log(X, X.max(), X.min())
                 plt.xlabel('Size ('+method+')', fontsize='xx-large')
                 plt.ylabel('P(Size)', fontsize='xx-large')
-                plt.savefig(figure_directory+task+band+'_'+method+'_'+monkey)
+                plt.savefig(figure_directory+task+'_'+band+'_'+method+'_'+monkey)
                 plt.title('Sizes as '+method+', '+band+' band,  Monkey '+monkey, fontsize='xx-large')
         plt.close('all')
