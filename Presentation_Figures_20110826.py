@@ -15,6 +15,8 @@ recordings = range(5)
 methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
 for monkey in monkeys:
     for band in bands:
+        if monkey=='K1':
+            recordings = range(3)
         for i in recordings:
             f = h5py.File(data_directory+'Monkey_'+monkey+'.hdf5')
             data = f['food_tracking'+str(i)+'/'+filter+'/'+band]
