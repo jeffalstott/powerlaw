@@ -15,12 +15,16 @@ recordings = range(5)
 methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
 for monkey in monkeys:
     for band in bands:
+        if monkey == 'A':
+            b = 3
+            recordings = range(5)
         if monkey=='K1':
             recordings = range(3)
+            b = 1
         for i in recordings:
             f = h5py.File(data_directory+'Monkey_'+monkey+'.hdf5')
             data = f['food_tracking'+str(i)+'/'+filter+'/'+band]
-            d = criticality.avalanche_analysis(data, bin_width=3)
+            d = criticality.avalanche_analysis(data, bin_width=b)
         
             for method, fig in methods:
                 X = d['size_'+method]
