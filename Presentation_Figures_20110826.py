@@ -37,6 +37,6 @@ for monkey, task in monkeys:
                 statistics.hist_log(X, X.max(), X.min())
                 plt.xlabel('Size ('+method+')', fontsize='xx-large')
                 plt.ylabel('P(Size)', fontsize='xx-large')
-                plt.savefig(figure_directory+band+'_'+method+'_'+monkey)
+                plt.savefig(figure_directory+task+band+'_'+method+'_'+monkey)
                 plt.title('Sizes as '+method+', '+band+' band,  Monkey '+monkey, fontsize='xx-large')
         plt.close('all')
