@@ -9,11 +9,11 @@ figure_directory = '/home/jja34/public_html/Figures/'
 data_directory = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/'
 filter = 'filter_FIR_513_blackmanharris'
 
-monkeys = ('A', 'K1')
+monkeys = (('A', 'food_tracking'), ('K1', 'food_tracking'), ('K2', 'rest'), ('K2', 'anesthesia'), ('K2', 'visual_grating'))
 bands = ('beta', 'alpha', 'theta', 'delta')
 recordings = range(5)
 methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
-for monkey in monkeys:
+for monkey, task in monkeys:
     for band in bands:
         if monkey == 'A':
             b = 3
@@ -21,9 +21,12 @@ for monkey in monkeys:
         if monkey=='K1':
             recordings = range(3)
             b = 1
+        if monkey=='K2':
+            b = 1
+            recordings = ''
         for i in recordings:
             f = h5py.File(data_directory+'Monkey_'+monkey+'.hdf5')
-            data = f['food_tracking'+str(i)+'/'+filter+'/'+band]
+            data = f[task+str(i)+'/'+filter+'/'+band]
             d = criticality.avalanche_analysis(data, bin_width=b)
         
             for method, fig in methods:
