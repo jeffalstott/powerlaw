@@ -33,3 +33,4 @@ for monkey in monkeys:
                 plt.xlabel('Size ('+method+')', fontsize='xx-large')
                 plt.ylabel('P(Size)', fontsize='xx-large')
                 plt.savefig(figure_directory+band+'_'+method+'_'+monkey)
+        plt.close('all')
