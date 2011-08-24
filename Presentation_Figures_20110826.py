@@ -9,7 +9,7 @@ figure_directory = '/home/jja34/public_html/Figures/'
 data_directory = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/'
 filter = 'filter_FIR_513_blackmanharris'
 
-monkeys = (('A', 'food_tracking'), ('K1', 'food_tracking'), ('K2', 'rest'), ('K2', 'anesthesia'), ('K2', 'visual_grating'))
+monkeys = (('A', 'food_tracking'), ('K1', 'food_tracking'), ('K2', 'visual_grating'), ('K2', 'rest'), ('K2', 'anesthesia'))
 bands = ('beta', 'alpha', 'theta', 'delta')
 recordings = range(5)
 methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
@@ -24,6 +24,8 @@ for monkey, task in monkeys:
         if monkey=='K2':
             b = 1
             recordings = ''
+            if task!='visual_grating':
+                filter = 'filter_version0'
         for i in recordings:
             f = h5py.File(data_directory+'Monkey_'+monkey+'.hdf5')
             data = f[task+str(i)+'/'+filter+'/'+band]
