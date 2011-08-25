@@ -49,6 +49,7 @@ for band in bands:
 
     plt.suptitle(band+' band, Monkeys A and K1', fontsize='xx-large')
     plt.savefig(figure_directory+'Presentation_Figures_20110826_2_'+band)
+    plt.close('all')
     f.close()
 
 filter = 'filter_version0'
@@ -66,10 +67,12 @@ for i in range(4):
         X = d['size_'+method]
         statistics.hist_log(X, X.max(), X.min())
     plt.axis([10., 10.**6, 10.**-8, 10.**-2])
-    plt.xlabel('Avalanche Size (Total Amplitude)', fontsize='medium')
-    plt.ylabel('P(Size)', fontsize='medium')
+    if i==2 or i==3:
+        plt.xlabel('Avalanche Size (Total Amplitude)', fontsize='medium')
+    if i==0 or i==2:
+        plt.ylabel('P(Size)', fontsize='medium')
     plt.title(band+' band')
-    plt.legend(('rest', 'anesthesia'))
+plt.figlegend(('rest', 'anesthesia'))
 plt.suptitle('Monkey K2, rest and anesthesia', fontsize='xx-large')
             
 plt.savefig(figure_directory+'Presentation_Figures_20110826_1')
