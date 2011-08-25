@@ -7,38 +7,67 @@ import matplotlib.pyplot as plt
 
 figure_directory = '/home/jja34/public_html/Figures/' 
 data_directory = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/'
-filter = 'filter_FIR_513_blackmanharris'
 
-monkeys = (('A', 'food_tracking0'),('A', 'food_tracking1'),('A', 'food_tracking2'),('A', 'food_tracking3'),('A', 'food_tracking4'),\
-        ('K1', 'food_tracking0'), ('K1', 'food_tracking1'),('K1', 'food_tracking2'),
-        ('K2', 'visual_grating'), ('K2', 'rest'), ('K2', 'anesthesia'))
 bands = ('beta', 'alpha', 'theta', 'delta')
-recordings = range(5)
-methods = (('events', 1), ('displacements', 2), ('amplitudes', 3), ('amplitude_aucs', 4))
-for monkey, task in monkeys:
-    print monkey+task
-    for band in bands:
-        if monkey == 'A':
-            b = 3
-            p = .99
-        if monkey=='K1':
-            b = 1
-            p = .99
-        if monkey=='K2':
-            b = 1
-            p = .992
-            if task!='visual_grating':
-                filter = 'filter_version0'
-        f = h5py.File(data_directory+'Monkey_'+monkey+'.hdf5')
+method = 'amplitude_aucs'
+
+
+filter = 'filter_FIR_513_blackmanharris'
+task = 'food_tracking'
+for band in bands:
+    plt.subplot(1,2,1)
+    m = 'A'
+    b=3
+    i = 5
+    f = h5py.File(data_directory+'Monkey_'+m+'.hdf5')
+    for task_ind in range(i):
+        p=.99
+        data = f['food_tracking'+task_ind+'/'+filter+'/'+band]
+        d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
+        X = d['size_'+method]
+        statistics.hist_log(X, X.max(), X.min())
+    plt.xlabel('Size ('+method+')', fontsize='xx-large')
+    plt.ylabel('P(Size)', fontsize='xx-large')
+    plt.title(band+' band, Monkey '+m, fontsize='xx-large')
+    plt.legend(('Trial 1', 'Trial 2', 'Trial 3', 'Trial 4', 'Trial 5'))
+    f.close()
+            
+    plt.subplot(1,2,2)
+    m = 'K1'
+    b=1
+    i = 3
+    f = h5py.File(data_directory+'Monkey_'+m+'.hdf5')
+    for task_ind in range(i):
+        p=.99
+        data = f['food_tracking'+task_ind+'/'+filter+'/'+band]
+        d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
+        X = d['size_'+method]
+        statistics.hist_log(X, X.max(), X.min())
+    plt.xlabel('Size ('+method+')', fontsize='xx-large')
+    plt.ylabel('P(Size)', fontsize='xx-large')
+    plt.title(band+' band, Monkey '+m, fontsize='xx-large')
+    plt.legend(('Trial 1', 'Trial 2', 'Trial 3'))
+    plt.savefig(figure_directory+'Presentation_Figures_20110826_2_'+band)
+    f.close()
+
+filter = 'filter_version0'
+tasks = ('rest', 'anesthesia')
+for i in range(4):
+    plt.subplot(1,2,i+1)
+    band = bands[i]
+    m = 'K2'
+    b=1
+    for task in tasks:
+        p=.992
+        f = h5py.File(data_directory+'Monkey_'+m+'.hdf5')
         data = f[task+'/'+filter+'/'+band]
         d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
-        
-        for method, fig in methods:
-            X = d['size_'+method]
-            plt.figure(fig)
-            statistics.hist_log(X, X.max(), X.min())
-            plt.xlabel('Size ('+method+')', fontsize='xx-large')
-            plt.ylabel('P(Size)', fontsize='xx-large')
-            plt.title('Sizes as '+method+', '+band+' band,  Monkey '+monkey, fontsize='xx-large')
-            plt.savefig(figure_directory+task+'_'+band+'_'+method+'_'+monkey)
-        plt.close('all')
+        X = d['size_'+method]
+        statistics.hist_log(X, X.max(), X.min())
+    plt.xlabel('Size ('+method+')', fontsize='xx-large')
+    plt.ylabel('P(Size)', fontsize='xx-large')
+    plt.title(band+' band, Monkey '+m, fontsize='xx-large')
+    plt.legend(('rest', 'anesthesia'))
+            
+plt.savefig(figure_directory+'Presentation_Figures_20110826_1')
+f.close()
