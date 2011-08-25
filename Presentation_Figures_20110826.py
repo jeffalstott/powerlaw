@@ -26,9 +26,9 @@ for band in bands:
         d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
         X = d['size_'+method]
         statistics.hist_log(X, X.max(), X.min())
-    plt.xlabel('Size ('+method+')', fontsize='xx-large')
+    plt.axis([10., 10.**6, 10.**-8, 10.**-2])
+    plt.xlabel('Avalanche Size (Total Amplitude)', fontsize='xx-large')
     plt.ylabel('P(Size)', fontsize='xx-large')
-    plt.title(band+' band, Monkey '+m, fontsize='xx-large')
     plt.legend(('Trial 1', 'Trial 2', 'Trial 3', 'Trial 4', 'Trial 5'))
     f.close()
             
@@ -43,17 +43,18 @@ for band in bands:
         d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
         X = d['size_'+method]
         statistics.hist_log(X, X.max(), X.min())
-    plt.xlabel('Size ('+method+')', fontsize='xx-large')
-    plt.ylabel('P(Size)', fontsize='xx-large')
-    plt.title(band+' band, Monkey '+m, fontsize='xx-large')
+    plt.axis([10., 10.**6, 10.**-8, 10.**-2])
+    plt.xlabel('Avalanche Size (Total Amplitude)', fontsize='xx-large')
     plt.legend(('Trial 1', 'Trial 2', 'Trial 3'))
+
+    plt.suptitle(band+' band, Monkeys A and K1', fontsize='xx-large')
     plt.savefig(figure_directory+'Presentation_Figures_20110826_2_'+band)
     f.close()
 
 filter = 'filter_version0'
 tasks = ('rest', 'anesthesia')
 for i in range(4):
-    plt.subplot(1,2,i+1)
+    plt.subplot(2,2,i+1)
     band = bands[i]
     m = 'K2'
     b=1
@@ -64,10 +65,12 @@ for i in range(4):
         d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
         X = d['size_'+method]
         statistics.hist_log(X, X.max(), X.min())
-    plt.xlabel('Size ('+method+')', fontsize='xx-large')
-    plt.ylabel('P(Size)', fontsize='xx-large')
-    plt.title(band+' band, Monkey '+m, fontsize='xx-large')
+    plt.axis([10., 10.**6, 10.**-8, 10.**-2])
+    plt.xlabel('Avalanche Size (Total Amplitude)', fontsize='medium')
+    plt.ylabel('P(Size)', fontsize='medium')
+    plt.title(band+' band')
     plt.legend(('rest', 'anesthesia'))
+plt.suptitle('Monkey K2, rest and anesthesia', fontsize='xx-large')
             
 plt.savefig(figure_directory+'Presentation_Figures_20110826_1')
 f.close()
