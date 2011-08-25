@@ -22,7 +22,7 @@ for band in bands:
     f = h5py.File(data_directory+'Monkey_'+m+'.hdf5')
     for task_ind in range(i):
         p=.99
-        data = f['food_tracking'+task_ind+'/'+filter+'/'+band]
+        data = f['food_tracking'+str(task_ind)+'/'+filter+'/'+band]
         d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
         X = d['size_'+method]
         statistics.hist_log(X, X.max(), X.min())
@@ -39,7 +39,7 @@ for band in bands:
     f = h5py.File(data_directory+'Monkey_'+m+'.hdf5')
     for task_ind in range(i):
         p=.99
-        data = f['food_tracking'+task_ind+'/'+filter+'/'+band]
+        data = f['food_tracking'+str(task_ind)+'/'+filter+'/'+band]
         d = criticality.avalanche_analysis(data, bin_width=b, percentile=p)
         X = d['size_'+method]
         statistics.hist_log(X, X.max(), X.min())
