@@ -1,10 +1,12 @@
 import os
 from input_processing import riken_import, write_to_HDF5
 
-path = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/data'
+#path = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/data'
+path = '/home/alstottj/data'
 dirList=os.listdir(path)
 
-bands = ('delta', 'theta', 'alpha', 'beta')
+#bands = ('delta', 'theta', 'alpha', 'beta')
+bands = ('raw', 'gamma', 'high-gamma')
 
 tasks = {'FTT': 'food_tracking', 'EMT': 'emotional_movie', 'VGT': 'visual_grating', \
         'SCT': 'social_competition'}
@@ -25,6 +27,7 @@ for dirname in dirList:
         task = task+str(K1_counter)
 
     output_file = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/Monkey_'+name
+    #output_file = '/scratch/alstottj/Monkey_'+name
     write_to_HDF5(data,output_file, task, 1000.0, bands=bands)
 
 
