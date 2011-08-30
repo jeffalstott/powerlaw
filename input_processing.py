@@ -41,6 +41,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
     from criticality import area_under_the_curve
     from scipy.signal import hilbert
     from time import gmtime, strftime, clock
+    from numpy import concatenate, zeros
     
     #subject_name = 'Monkey_K2'
     #condition = 'anesthesia'
@@ -53,6 +54,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
     taps = 513.0
     
     f = h5py.File(file_name+'.hdf5')
+
     
     
     for band in bands:
@@ -73,16 +75,19 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
         tic = clock()
         d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
         #Make sure length of data isn't prime before handing to hilbert, which can run in O(N^2) time for prime-length datasets
-        if d.shape[-1]%2:
-            d = d[:,:-1]
+   #     if d.shape[-1]%2:
+    #        d = d[:,:-1]
         f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
         toc = clock()
         print toc-tic
         print 'Hilbert Transform '+str(d.shape[-1])+' time points'
         tic = clock()
-        #if band in ('broad', 'gamma', 'high-gamma'):
-        #import pdb; pdb.set_trace()
-        hd = abs(hilbert(d))
+        n_rows, n_columns = d.shape
+        target = next_power_of_2(n_columns) #Pad the array with zeros to the next power of 2 to speed up the Hilbert transform, which recursively calls DFT
+        shortage = n_columns-target
+        hd = abs(hilbert( \
+                concatenate((d, zeros((n_rows, shortage))), axis=-1)))
+        hd = hd[:,n_columns]
         f.create_dataset(condition+'/'+version+'/'+band+'/amplitude', data=hd)
         toc = clock()
         print toc-tic
@@ -108,3 +113,13 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
     
     f.close()
     return
+
+def next_power_of_2(x):
+    x -= 1
+    x |= x >> 1
+    x |= x >> 2
+    x |= x >> 4
+    x |= x >> 8
+    x |= x >> 16
+    x += 1
+    return x 

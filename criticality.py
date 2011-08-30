@@ -3,7 +3,8 @@ from bisect import bisect_left
 
 def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         data_amplitude_aucs=0, bin_width=1, percentile=.99, \
-        event_method='amplitude', cascade_method='grid', write_to_HDF5=False):
+        event_method='amplitude', cascade_method='grid', write_to_HDF5=False, \
+        subsample='all'):
     """docstring for avalanche_analysis  """
     metrics = {}
     metrics['bin_width'] = bin_width
@@ -11,7 +12,7 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
     metrics['event_method'] = event_method
     metrics['cascade_method'] = cascade_method
 
-    m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method)
+    m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method, subsample)
     metrics.update(m)
 
     starts, stops = find_cascades(metrics['event_times'], bin_width, cascade_method)
@@ -60,7 +61,7 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         return
 
 
-def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, percentile=.99, event_method='amplitude'):
+def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, percentile=.99, event_method='amplitude', subsample='all'):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
@@ -89,6 +90,13 @@ def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude
         data_displacement_aucs = area_under_the_curve(data_displacement)
     if type(data_amplitude_aucs)!=ndarray:
         data_amplitude_aucs = area_under_the_curve(data_amplitude)
+
+    #If we're not using all sensors, take the subsample Now
+    if subsample!='all':
+        data_displacement = data_displacement[subsample,:]
+        data_amplitude = data_amplitude[subsample,:]
+        data_displacement_aucs = data_displacement_aucs[subsample,:]
+        data_amplitude_aucs = data_amplitude_aucs[subsample,:]
 
     if event_method == 'amplitude':
         signal = data_amplitude
@@ -310,3 +318,35 @@ def area_under_the_curve(data, baseline='mean'):
         data_aucs[i] = repeat(values, durations)
 
     return data_aucs
+
+def energy_levels(data, time_scales):
+    """energy_levels does things"""
+    from numpy import ndarray, concatenate, zeros
+    if type(time_scales)==list:
+        time_scales = array(time_scales)
+    if not(type(time_scales)==ndarray or type(time_scales)==array):
+        from numpy import array
+        time_scales = array([time_scales])
+    if time_scales[0] == 0:
+        time_scales +=1
+
+    levels = {}
+
+    n_columns = data.shape[-1]
+    for i in time_scales:
+        d = concatenate( (sum(data, 0), \
+                zeros(i-n_columns%i)))
+
+        windows = d.shape[0]/i
+        x = zeros(windows)
+        for j in range(i):
+            x += d[j::i]
+        levels[i] = x[:-1]
+
+    return levels
+
+
+
+
+
+
