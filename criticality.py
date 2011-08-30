@@ -310,3 +310,35 @@ def area_under_the_curve(data, baseline='mean'):
         data_aucs[i] = repeat(values, durations)
 
     return data_aucs
+
+def energy_levels(data, time_scales):
+    """energy_levels does things"""
+    from numpy import ndarray, concatenate, zeros
+    if type(time_scales)==list:
+        time_scales = array(time_scales)
+    if not(type(time_scales)==ndarray or type(time_scales)==array):
+        from numpy import array
+        time_scales = array([time_scales])
+    if time_scales[0] == 0:
+        time_scales +=1
+
+    levels = {}
+
+    n_columns = data.shape[-1]
+    for i in time_scales:
+        d = concatenate( (sum(data, 0), \
+                zeros(i-n_columns%i)))
+
+        windows = d.shape[0]/i
+        x = zeros(windows)
+        for j in range(i):
+            x += d[j::i]
+        levels[i] = x[:-1]
+
+    return levels
+
+
+
+
+
+
