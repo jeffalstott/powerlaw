@@ -60,7 +60,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
             shortage = target-n_columns
             hd = abs(hilbert( \
                 concatenate((data, zeros((n_rows, shortage))), axis=-1)))
-            data_amplitude = hd[:,n_columns]
+            data_amplitude = hd[:,:n_columns]
             data_displacement_aucs = area_under_the_curve(data)
             data_amplitude_aucs = area_under_the_curve(data_amplitude)
             f.create_dataset(condition+'/raw/displacement', data=data)
@@ -83,7 +83,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
         shortage = target-n_columns
         hd = abs(hilbert( \
                 concatenate((d, zeros((n_rows, shortage))), axis=-1)))
-        hd = hd[:,n_columns]
+        hd = hd[:,:n_columns]
         f.create_dataset(condition+'/'+version+'/'+band+'/amplitude', data=hd)
         toc = clock()
         print toc-tic
