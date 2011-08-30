@@ -1,14 +1,14 @@
 import os
-from input_processing import bcni_fieldtrip_import, write_to_HDF5
+from input_processing import mrc_fieldtrip_import, write_to_HDF5
 
 path = '/home/jja34/public_html/MEG_Data/Rest/Group1'
 dirList=os.listdir(path)
 
-bands = ('delta', 'theta', 'alpha', 'beta')
+bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw')
 for fname in dirList:
     if fname[0]=='f':
         filename = path+'/'+fname
-        data = bcni_fieldtrip_import(filename)
+        data = mrc_fieldtrip_import(filename)
         subject_id = fname[31:34]
         eyes = fname[26:30]
         visit = fname[37]
