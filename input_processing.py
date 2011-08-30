@@ -1,4 +1,4 @@
-def bcni_fieldtrip_import(filename):
+def mrc_fieldtrip_import(filename):
     from scipy.io import loadmat
     from numpy import where
     matfile = loadmat(filename)
@@ -43,18 +43,12 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
     from time import gmtime, strftime, clock
     from numpy import concatenate, zeros
     
-    #subject_name = 'Monkey_K2'
-    #condition = 'anesthesia'
-    version = 'filter_FIR_513_blackmanharris'
-    #sampling_rate=1000.0
-    
-    
     filter_type = 'FIR'
     window = 'blackmanharris'
-    taps = 513.0
+    taps = 513
+    version = 'filter_'+filter_type+'_'+str(taps)+'_'+window
     
     f = h5py.File(file_name+'.hdf5')
-
     
     
     for band in bands:
@@ -79,9 +73,6 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
         print 'Filtering '+str(data.shape[-1])+' time points' 
         tic = clock()
         d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
-        #Make sure length of data isn't prime before handing to hilbert, which can run in O(N^2) time for prime-length datasets
-   #     if d.shape[-1]%2:
-    #        d = d[:,:-1]
         f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
         toc = clock()
         print toc-tic
