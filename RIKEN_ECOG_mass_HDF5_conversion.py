@@ -1,8 +1,8 @@
 import os
 from input_processing import riken_import, write_to_HDF5
 
-#path = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/data'
-path = '/home/alstottj/data'
+path = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/data'
+#path = '/home/alstottj/data'
 dirList=os.listdir(path)
 
 #bands = ('delta', 'theta', 'alpha', 'beta')
