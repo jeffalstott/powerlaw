@@ -1,11 +1,11 @@
 import os
 from input_processing import mrc_fieldtrip_import, write_to_HDF5
 
-path = '/home/jja34/public_html/MEG_Data/Rest/Group1'
+path = '/home/jja34/public_html/MEG_Data/Rest/Group2'
 dirList=os.listdir(path)
 
-#bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw', 'broad')
-bands = ('broad',)
+bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw', 'broad')
+
 for fname in dirList:
     if fname[0]=='f':
         filename = path+'/'+fname
@@ -15,7 +15,7 @@ for fname in dirList:
         visit = fname[37]
         print fname
         print subject_id+eyes+visit
-        output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group1/Subject'+subject_id
+        output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group2/Subject'+subject_id
         condition = visit+'/rest/'+eyes+'/magnetometer'
         write_to_HDF5(data['magnetometer'],output_file, condition, 250.0, bands=bands)
         condition = visit+'/rest/'+eyes+'/gradiometer'
