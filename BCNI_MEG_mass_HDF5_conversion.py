@@ -7,7 +7,7 @@ dirList=os.listdir(path)
 bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw', 'broad')
 
 for fname in dirList:
-    if fname[0]=='f':
+    if fname[0]=='r':
         filename = path+'/'+fname
         data = mrc_raw_import(filename)
         subject_id = fname[31:34]
