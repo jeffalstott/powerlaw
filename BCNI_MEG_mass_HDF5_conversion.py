@@ -10,9 +10,10 @@ for fname in dirList:
     if fname[0]=='r':
         filename = path+'/'+fname
         data = mrc_raw_import(filename)
-        subject_id = fname[31:34]
-        eyes = fname[26:30]
-        visit = fname[37]
+        components = fname.split('_')
+        subject_id = components[6]
+        eyes = components[5]
+        visit = components[8]
         print fname
         print subject_id+eyes+visit
         output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group2/Subject'+subject_id
