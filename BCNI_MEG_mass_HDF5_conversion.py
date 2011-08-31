@@ -4,7 +4,8 @@ from input_processing import mrc_fieldtrip_import, write_to_HDF5
 path = '/home/jja34/public_html/MEG_Data/Rest/Group1'
 dirList=os.listdir(path)
 
-bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw')
+#bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw', 'broad')
+bands = ('broad',)
 for fname in dirList:
     if fname[0]=='f':
         filename = path+'/'+fname
