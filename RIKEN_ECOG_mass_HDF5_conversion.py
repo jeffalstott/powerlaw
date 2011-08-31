@@ -5,8 +5,8 @@ from input_processing import riken_import, write_to_HDF5
 path = '/home/alstottj/data'
 dirList=os.listdir(path)
 
-#bands = ('delta', 'theta', 'alpha', 'beta')
-bands = ('raw', 'gamma', 'high-gamma')
+#bands = ('delta', 'theta', 'alpha', 'beta', 'raw', 'gamma', 'high-gamma', 'broad')
+bands = ('delta', 'theta', 'alpha', 'beta')
 
 tasks = {'FTT': 'food_tracking', 'EMT': 'emotional_movie', 'VGT': 'visual_grating', \
         'SCT': 'social_competition'}
