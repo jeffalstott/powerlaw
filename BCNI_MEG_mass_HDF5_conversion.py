@@ -16,7 +16,7 @@ for fname in dirList:
         visit = components[8]
         print fname
         print subject_id+eyes+visit
-        output_file = '/work/imaging8/jja34/MEG_Study/MEG_Data/Group2/Subject'+subject_id
+        output_file = '/work/imagingA/jja34/MEG_Study/MEG_Data/Group2/Subject'+subject_id
         condition = visit+'/rest/'+eyes+'/magnetometer'
         write_to_HDF5(data['magnetometer'],output_file, condition, 250.0, bands=bands)
         condition = visit+'/rest/'+eyes+'/gradiometer'

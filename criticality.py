@@ -3,14 +3,30 @@ from bisect import bisect_left
 
 def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         data_amplitude_aucs=0, bin_width=1, percentile=.99, \
-        event_method='amplitude', cascade_method='grid', write_to_HDF5=False, \
-        subsample='all'):
+        event_method='amplitude', cascade_method='grid', \
+        subsample='all', sample_name=False,\
+        write_to_HDF5=False, overwrite=False):
     """docstring for avalanche_analysis  """
+
+    if not sample_name:
+        if subsample=='all':
+            sample_name='all'
+        else:
+            sample_name = str(len(subsample))
+
+#If we're writing to HDF5, construct the version label we will save. 
+#If that version already exists, and we're not overwriting it, then cancel the calculation
+    if write_to_HDF5:
+        version = 'b-'+str(bin_width)+'_p-'+str(percentile)[2:]+'_e-'+event_method + '_c-'+ cascade_method +'_s-'+sample_name
+        if not overwrite and 'avalanches' in list(data) and version in list(data['avalanches']):
+            return 'Calculation aborted for version '+version+' as results already exist and the option overwrite=False'
+
     metrics = {}
     metrics['bin_width'] = bin_width
     metrics['percentile'] = percentile
     metrics['event_method'] = event_method
     metrics['cascade_method'] = cascade_method
+    metrics['subsample'] = sample_name 
 
     m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method, subsample)
     metrics.update(m)
@@ -43,16 +59,15 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         return metrics
     else:
         #Assume we were given an HDF5 group in $data
-        version = 'avalanches_b'+str(bin_width)+'_p'+str(percentile*100)+'_e-'+event_method + '_c-'+ cascade_method
         elements = list(data)
         if version in elements:
             print 'Avalanche analysis has already been done on these data with these parameters!'
             return metrics
-        results_subgroup = data.create_group(version)
+        results_subgroup = data.create_group('avalanches/'+version)
         #Store parameters for this analysis (including some parameters formatted as strings)
         #as attributes of this version. All the numerical results we store as new datasets in
         #in this version group
-        attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method')
+        attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method', 'subsample')
         for k in attributes:
             results_subgroup.attrs[k] = metrics[k]
         for k in metrics:
@@ -318,6 +333,27 @@ def area_under_the_curve(data, baseline='mean'):
         data_aucs[i] = repeat(values, durations)
 
     return data_aucs
+
+def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, \
+        subsamples, sample_names=False, overwrite=False):
+    if sample_names:
+        subsamples = zip(subsamples, sample_names)
+    elif type(subsamples[0])!=tuple:
+        print 'Requires a list of samples AND a list of sample names, either as sample_names=list or as subsamples=a zipped list of tuples with indices and labels'
+        return
+
+    parameter_space = [(b,p,e,c,s,n) for b in bins for p in percentiles \
+            for e in event_methods for c in cascade_methods \
+            for s,n in subsamples]
+
+    for b,p,e,c,s,n in parameter_space:
+        avalanche_analysis(file, bin_width=b, percentile=p, \
+            event_method=e, cascade_method=c,\
+            subsample=s, sample_name=n,\
+            write_to_HDF5=True, overwrite=overwrite)
+    return
+
+
 
 def energy_levels(data, time_scales):
     """energy_levels does things"""
