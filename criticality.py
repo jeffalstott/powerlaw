@@ -72,7 +72,7 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
             results_subgroup.attrs[k] = metrics[k]
         for k in metrics:
             if k not in attributes:
-                if metrics[k].ndim!=0:
+                if len(metrics[k])!=0:
                     results_subgroup.create_dataset(k, data=metrics[k])
                 else:
                     results_subgroup.create_dataset(k, data=array([0]))
