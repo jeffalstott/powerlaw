@@ -76,8 +76,11 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
             data_amplitude = hd[:,:n_columns]
             data_displacement_aucs = area_under_the_curve(data)
             data_amplitude_aucs = area_under_the_curve(data_amplitude)
-            if condition in list(f) and 'raw' in list(f[condition]) and 'displacement' in list(f[condition+'/raw']):
+            try:
+                if 'raw' in list(f[condition]) and 'displacement' in list(f[condition+'/raw']):
                     continue
+            except KeyError:
+                pass
             f.create_dataset(condition+'/raw/displacement', data=data)
             f.create_dataset(condition+'/raw/amplitude', data=data_amplitude)
             f.create_dataset(condition+'/raw/amplitude_aucs', data=data_amplitude_aucs)
@@ -86,8 +89,11 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
             print toc-tic
             continue
         print 'Filtering '+str(data.shape[-1])+' time points' 
-        if condition in list(f) and band in list(f[condition]) and 'displacement' in list(f[condition+'/'+band]):
+        try:
+            if band in list(f[condition]) and 'displacement' in list(f[condition+'/'+band]):
                 continue
+        except KeyError:
+            pass
         tic = clock()
         d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
         f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
