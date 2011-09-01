@@ -90,7 +90,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
             continue
         print 'Filtering '+str(data.shape[-1])+' time points' 
         try:
-            if band in list(f[condition]) and 'displacement' in list(f[condition+'/'+band]):
+            if 'displacement' in list(f[condition+'/'+version+'/'+band]):
                 continue
         except KeyError:
             pass
