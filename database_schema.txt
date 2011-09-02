@@ -1,0 +1,98 @@
+CREATE TABLE Tasks(
+task_id integer primary key, 
+type text, 
+description text);
+
+CREATE TABLE Subjects(
+subject_id integer primary key, 
+species text, 
+name text,
+group_name text
+number_in_group integer);
+
+CREATE TABLE Experiments(
+experiment_id integer primary key, 
+location text, 
+date text, 
+subject_id integer, 
+visit_number unsigned integer, 
+mains unsigned integer, 
+drug text, 
+rest text, 
+task_id  integer, 
+FOREIGN KEY(task_id) REFERENCES Tasks(task_id),
+FOREIGN KEY(subject_id) REFERENCES Subjects(subject_id));
+
+CREATE TABLE Sensors(
+sensor_id integer primary key, 
+location text, 
+sensor_type text, 
+sampling_rate unsigned integer, 
+sensor_count unsigned integer, 
+sensors_locations_file text, 
+sensor_spacing float);
+
+CREATE TABLE Recordings_Raw(
+recording_id integer primary key, 
+experiment_id integer, 
+sensor_id integer, 
+duration float, 
+FOREIGN KEY(experiment_id) REFERENCES Experiments(experiment_id), 
+FOREIGN KEY(sensor_id) REFERENCES Sensors(sensor_id));
+
+CREATE TABLE Recordings_Filtered(
+filter_id integer primary key, 
+recording_id integer, 
+filter_type text, 
+poles unsigned integer, 
+window text, 
+band_name text, 
+band_min float, 
+band_max float, 
+notch unsigned integer, 
+phase_shuffled unsigned tinyint,
+FOREIGN KEY(recording_id) REFERENCES Recordings_Raw(recording_id));
+
+CREATE TABLE Avalanche_Analyses(
+analysis_id integer primary key, 
+filter_id integer, 
+subsample text, 
+threshold_mode text, 
+threshold_level float, 
+time_scale float, 
+event_method text, 
+cascade_method text, 
+interevent_interval float, 
+sigma_events float, 
+sigma_displacements float, 
+sigma_amplitudes float, 
+sigma_amplitude_aucs float, 
+t_ratio_displacements_slope float, 
+t_ratio_displacements_R float, 
+t_ratio_displacements_p float, 
+t_ratio_amplitudes_slope float, 
+t_ratio_amplitudes_R float, 
+t_ratio_amplitudes_p float, 
+t_ratio_displacement_aucs_slope float, 
+t_ratio_displacement_aucs_R float, 
+t_ratio_displacement_aucs_p float, 
+t_ratio_amplitude_aucs_slope float, 
+t_ratio_amplitude_aucs_R float, 
+t_ratio_amplitude_aucs_p float, 
+FOREIGN KEY(filter_id) REFERENCES Recordings_Filtered(filter_id));
+
+CREATE TABLE Fit_Statistics(
+fit_id integer primary key, 
+analysis_type text, 
+analysis_id integer, 
+variable text, 
+distribution text, 
+parameter1_name text, 
+parameter1_value float, 
+parameter2_name text, 
+parameter2_value float, 
+parameter3_name text,
+parameter3_value float,
+xmin float, 
+loglikelihood float, 
+xmax float);
