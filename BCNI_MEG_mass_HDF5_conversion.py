@@ -8,7 +8,7 @@ bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw', 'broad
 
 for fname in dirList:
     components = fname.split('_')
-    if fname[6]=='001' or fname[6]=='002':
+    if components[0] == 'fieldtrip' and (components[6]=='001' or components[6]=='002'):
         filename = path+'/'+fname
         data = mrc_fieldtrip_import(filename)
         subject_id = components[6]
