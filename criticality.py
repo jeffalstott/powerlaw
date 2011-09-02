@@ -292,10 +292,10 @@ def avalanche_metrics(input_metrics, avalanche_number):
             ('sigma_amplitudes', sigma_amplitudes),\
             ('sigma_amplitude_aucs', sigma_amplitude_aucs),\
             ('event_times_within_avalanche', event_times_within_avalanche), \
-            ('t_ratio_amplitude', t_ratio_amplitude),\
-            ('t_ratio_displacement', t_ratio_displacement),\
-            ('t_ratio_amplitude_auc', t_ratio_amplitude_auc),
-            ('t_ratio_displacement_auc', t_ratio_displacement_auc),
+            ('t_ratio_displacements', t_ratio_displacement),\
+            ('t_ratio_amplitudes', t_ratio_amplitude),\
+            ('t_ratio_displacement_aucs', t_ratio_displacement_auc),
+            ('t_ratio_amplitude_aucs', t_ratio_amplitude_auc),
             )
     return output_metrics
 
@@ -337,10 +337,14 @@ def area_under_the_curve(data, baseline='mean'):
 
     return data_aucs
 
-def avalanche_statistics(metrics):
+def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
     from scipy.stats import mode, linregress
     from numpy import empty
     from plfit import plfit
+    
+    if write_to_database:
+        import sqlite3
+        conn = sqlite3.connect(write_to_database)
 
     statistics = {}
     j = empty(max(metrics['event_times_within_avalanche'])+1)
@@ -350,6 +354,10 @@ def avalanche_statistics(metrics):
         if k.startswith('sigma'):
             statistics[k]=metrics[k].mean()
 
+            if write_to_database:
+                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
+                        (k, statistics[k], analysis_id))
+
         elif k.startswith('t_ratio'):
             statistics[k] = {}
             for i in times_within_avalanche:
@@ -358,6 +366,14 @@ def avalanche_statistics(metrics):
             statistics[k]['slope'] = regress[0]
             statistics[k]['R'] = regress[2]
             statistics[k]['p'] = regress[3]
+
+            if write_to_database:
+                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
+                        (k+'_slope', statistics[k]['slope'], analysis_id))
+                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
+                        (k+'_R', statistics[k]['R'], analysis_id))
+                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
+                        (k+'_p', statistics[k]['p'], analysis_id))
 
         elif k.startswith('duration') or k.startswith('size'):
             statistics[k]={}
@@ -372,6 +388,21 @@ def avalanche_statistics(metrics):
             statistics[k]['power_law']['KS']=fit._ks
             statistics[k]['power_law']['p']=fit._ks_prob
 
+            if write_to_database:
+                conn.execute("INSERT INTO Fit_Statistics (analysis_type, analysis_id, \
+                        variable, distribution, parameter1_name, parameter1_value, \
+                        parameter2_name, parameter2_value, xmin, loglikelihood, KS, p) \
+                        values ('avalanches', ?, ?, 'power_law', ?, ?, ?, ?, ?, ?, ?, ?)", \
+                        (analysis_id, k, \
+                        statistics[k]['power_law']['parameter1_name'],\
+                        statistics[k]['power_law']['parameter1_value'],\
+                        statistics[k]['power_law']['parameter2_name'],\
+                        statistics[k]['power_law']['parameter2_value'],\
+                        statistics[k]['power_law']['xmin'], \
+                        statistics[k]['power_law']['loglikelihood'],\
+                        statistics[k]['power_law']['KS'],\
+                        statistics[k]['power_law']['p']))
+
             statistics[k]['lognormal']={}
             fit.lognormal(doprint=False)
             statistics[k]['lognormal']['parameter1_name']='shape'
@@ -384,6 +415,25 @@ def avalanche_statistics(metrics):
             statistics[k]['lognormal']['KS']=fit.lognormal_ksD
             statistics[k]['lognormal']['p']=fit.lognormal_ksP
 
+            if write_to_database:
+                conn.execute("INSERT INTO Fit_Statistics (analysis_type, analysis_id, \
+                        variable, distribution, parameter1_name, parameter1_value, \
+                        parameter2_name, parameter2_value, parameter3_name, parameter3_value,\
+                        loglikelihood, KS, p) \
+                        values ('avalanches', ?, ?, 'lognormal', ?, ?, ?, ?, ?, ?, ?, ?)", \
+                        (analysis_id, k, \
+                        statistics[k]['power_law']['parameter1_name'],\
+                        statistics[k]['power_law']['parameter1_value'],\
+                        statistics[k]['power_law']['parameter2_name'],\
+                        statistics[k]['power_law']['parameter2_value'],\
+                        statistics[k]['power_law']['parameter3_name'],\
+                        statistics[k]['power_law']['parameter3_value'],\
+                        statistics[k]['power_law']['loglikelihood'],\
+                        statistics[k]['power_law']['KS'],\
+                        statistics[k]['power_law']['p']))
+
+    if write_to_database:
+        conn.commit()
 
     return statistics
 
