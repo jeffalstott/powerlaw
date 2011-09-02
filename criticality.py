@@ -434,29 +434,61 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
 
     if write_to_database:
         conn.commit()
-
+        conn.close()
     return statistics
 
 def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, \
-        subsamples, sample_names=False, overwrite=False):
+        subsamples, sample_names=False, \
+        write_to_HDF5=False, overwrite=False,\
+        write_to_database=False, filter_id=False, \
+        verbose=False):
+
     if sample_names:
         subsamples = zip(subsamples, sample_names)
     elif type(subsamples[0])!=tuple:
         print 'Requires a list of samples AND a list of sample names, either as sample_names=list or as subsamples=a zipped list of tuples with indices and labels'
         return
+    analysis_id=False 
+    results = {}
+
 
     parameter_space = [(b,p,e,c,s,n) for b in bins for p in percentiles \
             for e in event_methods for c in cascade_methods \
             for s,n in subsamples]
 
     for b,p,e,c,s,n in parameter_space:
-        print str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(n)
-        avalanche_analysis(file, bin_width=b, percentile=p, \
+        parameters = str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(n)
+        results[parameters] = {}
+
+        if verbose:
+            print parameters
+
+        metrics = avalanche_analysis(file, bin_width=b, percentile=p, \
             event_method=e, cascade_method=c,\
             subsample=s, sample_name=n,\
-            write_to_HDF5=True, overwrite=overwrite)
-    return
+            write_to_HDF5=write_to_HDF5, overwrite=overwrite)
 
+        if write_to_database:
+            import sql3
+            conn = sql3.connect(write_to_database)
+            cur = conn.execute("INSERT INTO Avalanche_Analyses \
+                    (filter_id, subsample, threshold_mode, threshold_level, time_scale,\
+                    event_method, cascade_method)", 
+                    (filter_id, n, 'percentile', p, b, e, c))\
+
+            analysis_id = cur.lastrowid
+            conn.commit()
+            conn.close()
+
+        statistics = avalanche_statistics(metrics, \
+                write_to_database=write_to_database, analysis_id=analysis_id)
+
+        results[parameters][metrics] = metrics 
+        results[parameters][statistics] = statistics
+
+    if verbose:
+        return results
+    return
 
 
 def energy_levels(data, time_scales):
