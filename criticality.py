@@ -337,6 +337,56 @@ def area_under_the_curve(data, baseline='mean'):
 
     return data_aucs
 
+def avalanche_statistics(metrics):
+    from scipy.stats import mode, linregress
+    from numpy import empty
+    from plfit import plfit
+
+    statistics = {}
+    j = empty(max(metrics['event_times_within_avalanche'])+1)
+    times_within_avalanche = range(len(j))
+
+    for k in metrics:
+        if k.startswith('sigma'):
+            statistics[k]=metrics[k].mean()
+
+        elif k.startswith('t_ratio'):
+            statistics[k] = {}
+            for i in times_within_avalanche:
+                j[i] = mode(metrics[k][metrics['event_times_within_avalanche']==i])[0][0] 
+            regress = linregress(times_within_avalanche, j)
+            statistics[k]['slope'] = regress[0]
+            statistics[k]['R'] = regress[2]
+            statistics[k]['p'] = regress[3]
+
+        elif k.startswith('duration') or k.startswith('size'):
+            statistics[k]={}
+            statistics[k]['power_law']={}
+            fit=plfit(metrics[k], usefortran=True, quiet=True)
+            statistics[k]['power_law']['parameter1_name']='alpha'
+            statistics[k]['power_law']['parameter1_value']=fit._alpha
+            statistics[k]['power_law']['parameter2_name']='error'
+            statistics[k]['power_law']['parameter2_value']=fit._alphaerr
+            statistics[k]['power_law']['xmin']=fit._xmin
+            statistics[k]['power_law']['loglikelihood']=fit._alphaerr
+            statistics[k]['power_law']['KS']=fit._ks
+            statistics[k]['power_law']['p']=fit._ks_prob
+
+            statistics[k]['lognormal']={}
+            fit.lognormal(doprint=False)
+            statistics[k]['lognormal']['parameter1_name']='shape'
+            statistics[k]['lognormal']['parameter1_value']=fit.lognormal_dist.args[0]
+            statistics[k]['lognormal']['parameter2_name']='location'
+            statistics[k]['lognormal']['parameter2_value']=fit.lognormal_dist.args[1]
+            statistics[k]['lognormal']['parameter3_name']='scale'
+            statistics[k]['lognormal']['parameter3_value']=fit.lognormal_dist.args[2]
+            statistics[k]['lognormal']['loglikelihood']=-1*fit.lognormal_likelihood
+            statistics[k]['lognormal']['KS']=fit.lognormal_ksD
+            statistics[k]['lognormal']['p']=fit.lognormal_ksP
+
+
+    return statistics
+
 def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, \
         subsamples, sample_names=False, overwrite=False):
     if sample_names:
@@ -350,6 +400,7 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
             for s,n in subsamples]
 
     for b,p,e,c,s,n in parameter_space:
+        print str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(n)
         avalanche_analysis(file, bin_width=b, percentile=p, \
             event_method=e, cascade_method=c,\
             subsample=s, sample_name=n,\
