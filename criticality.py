@@ -378,7 +378,7 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
         elif k.startswith('duration') or k.startswith('size'):
             statistics[k]={}
             statistics[k]['power_law']={}
-            fit=plfit(metrics[k], usefortran=True, quiet=True)
+            fit=plfit(metrics[k], usefortran=False, quiet=True)
             statistics[k]['power_law']['parameter1_name']='alpha'
             statistics[k]['power_law']['parameter1_value']=fit._alpha
             statistics[k]['power_law']['parameter2_name']='error'
@@ -483,8 +483,8 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
         statistics = avalanche_statistics(metrics, \
                 write_to_database=write_to_database, analysis_id=analysis_id)
 
-        results[parameters][metrics] = metrics 
-        results[parameters][statistics] = statistics
+        results[parameters]['metrics'] = metrics 
+        results[parameters]['statistics'] = statistics
 
     if verbose:
         return results
