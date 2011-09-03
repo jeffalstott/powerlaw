@@ -37,6 +37,8 @@ for fname in dirList:
         cur = conn.execute("INSERT INTO Subjects (species, group_name, number_in_group) values (?, ?, ?)",\
                 values)
         subject_id = cur.lastrowid
+    else:
+        subject_id = ids[0][0]
     conn.commit()
     conn.close()
 
@@ -84,8 +86,8 @@ for fname in dirList:
         conn.commit()
         conn.close()
 
-        for band in list(f[base]):
-            data = f[base+'/'+band]
+        for band in list(f[base_filtered]):
+            data = f[base_filtered+'/'+band]
             conn = sqlite3.connect(database)
             values = (recording_id, filter_type, taps-1, window, band, \
                     data.attrs['frequency_range'][0], data.attrs['frequency_range'][1], \
