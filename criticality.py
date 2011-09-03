@@ -471,12 +471,17 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
         if write_to_database:
             import sql3
             conn = sql3.connect(write_to_database)
-            cur = conn.execute("INSERT INTO Avalanche_Analyses \
-                    (filter_id, subsample, threshold_mode, threshold_level, time_scale,\
-                    event_method, cascade_method)", 
-                    (filter_id, n, 'percentile', p, b, e, c))\
-
-            analysis_id = cur.lastrowid
+            values = (filter_id, n, 'percentile', p, b, e, c)
+            ids = conn.execute("SELECT analysis_id FROM Avalanche_Analyses WHERE filter_id=? AND subsample=?\
+                    AND threshold_mode=? AND threshold_level=? AND time_scale=? AND event_method=?\
+                    AND cascade_method=?", values).fetchall()
+            if len(ids)==0:
+                cur = conn.execute("INSERT INTO Avalanche_Analyses \
+                        (filter_id, subsample, threshold_mode, threshold_level, time_scale,\
+                        event_method, cascade_method)", values) 
+                analysis_id = cur.lastrowid
+            else:
+                analysis_id = ids[0][0]
             conn.commit()
             conn.close()
 
