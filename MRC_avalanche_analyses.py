@@ -15,7 +15,7 @@ tasks = ['rest']
 eyes = ['open']
 sensors = ['gradiometer']
 
-group_name ='GSK1'
+group_name ='GSK2'
 data_path = '/work/imagingA/jja34/MEG_Study/Data/'+group_name
 database = '/work/imagingA/jja34/Results'
 filter_type = 'FIR'
