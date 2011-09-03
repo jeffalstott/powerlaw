@@ -339,7 +339,7 @@ def area_under_the_curve(data, baseline='mean'):
 
 def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, overwrite=False):
     from scipy.stats import mode, linregress
-    from numpy import empty
+    from numpy import empty, unique
     from plfit import plfit
     
     if write_to_database:
@@ -353,8 +353,8 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
 	    return
 	
     statistics = {}
-    j = empty(max(metrics['event_times_within_avalanche'])+1)
-    times_within_avalanche = range(len(j))
+    times_within_avalanche = unique(metrics['event_times_within_avalanche'])
+    j = empty(times_within_avalanche.shape)
 
     for k in metrics:
 	update_string = 'UPDATE Avalanche_Analyses SET %s=? WHERE analysis_id=?'
@@ -366,8 +366,8 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
 
         elif k.startswith('t_ratio'):
             statistics[k] = {}
-            for i in times_within_avalanche:
-                j[i] = mode(metrics[k][metrics['event_times_within_avalanche']==i])[0][0] 
+            for i in range(len(times_within_avalanche)):
+                j[i] = mode(metrics[k][metrics['event_times_within_avalanche']==times_within_avalanche[i]])[0][0] 
             regress = linregress(times_within_avalanche, j)
             statistics[k]['slope'] = regress[0]
             statistics[k]['R'] = regress[2]

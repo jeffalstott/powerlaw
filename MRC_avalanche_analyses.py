@@ -1,17 +1,16 @@
 import criticality
 import h5py
-from numpy import arange
 import os
 import sqlite3
 
-bins = [1,  3, 5, 7, 9]]
-percentiles = [.9, .95, .99, .999]
+bins = [1, 3, 5, 7, 9]
+percentiles = [.99, .999]
 event_methods = ['amplitude']
 cascade_methods = ['grid']
 subsamples = [('all', 'all')]
 
 
-visits = ['2, 3']
+visits = ['2', '3']
 tasks = ['rest']
 eyes = ['open']
 sensors = ['gradiometer']
