@@ -28,13 +28,13 @@ dirList=os.listdir(data_path)
 
 for fname in dirList:
     file = data_path+'/'+fname
-    number_within_group = int(fname[7:10])
+    number_in_group = int(fname[7:10])
     conn = sqlite3.connect(database)
-    values = ('human', group_name, number_within_group)
-    ids = conn.execute("SELECT subject_id FROM Subjects WHERE species=? AND group_name=? and number_within_group=?",\
+    values = ('human', group_name, number_in_group)
+    ids = conn.execute("SELECT subject_id FROM Subjects WHERE species=? AND group_name=? and number_in_group=?",\
             values).fetchall()
     if len(ids)==0:
-        cur = conn.execute("INSERT INTO Subjects (species, group_name, number_within_group) values (?, ?, ?)",\
+        cur = conn.execute("INSERT INTO Subjects (species, group_name, number_in_group) values (?, ?, ?)",\
                 values)
         subject_id = cur.lastrowid
     conn.commit()
@@ -66,7 +66,7 @@ for fname in dirList:
         ids = conn.execute("SELECT experiment_id FROM Experiments WHERE location=? AND subject_id=? AND \
                 visit_number=? AND mains=? AND drug=? AND rest=? AND task_id=?", values).fetchall()
         if len(ids)==0:
-            cur = conn.execute("INSERT INTO Experiments (location, subject_id, visit_number, mains, drug, rest, task_id),\
+            cur = conn.execute("INSERT INTO Experiments (location, subject_id, visit_number, mains, drug, rest, task_id)\
                     values (?, ?, ?, ?, ?, ?, ?)", values)
             experiment_id = cur.lastrowid
         else:
@@ -76,7 +76,7 @@ for fname in dirList:
         ids = conn.execute('SELECT recording_id FROM Recordings_Raw WHERE experiment_id=? AND sensor_id=? \
                 AND duration=?', values).fetchall()
         if len(ids)==0:
-            cur = conn.execute("INSERT INTO Recordings_Raw (experiment_id, sensor_id, duration), values (?,?,?)",\
+            cur = conn.execute("INSERT INTO Recordings_Raw (experiment_id, sensor_id, duration) values (?,?,?)",\
                     values)
             recording_id = cur.lastrowid
         else:

@@ -478,7 +478,7 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
             if len(ids)==0:
                 cur = conn.execute("INSERT INTO Avalanche_Analyses \
                         (filter_id, subsample, threshold_mode, threshold_level, time_scale,\
-                        event_method, cascade_method)", values) 
+                        event_method, cascade_method) values(?,?,?,?,?,?,?)", values) 
                 analysis_id = cur.lastrowid
             else:
                 analysis_id = ids[0][0]
