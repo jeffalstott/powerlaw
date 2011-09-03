@@ -4,14 +4,14 @@ from numpy import arange
 import os
 import sqlite3
 
-bins = arange(1)+1
-percentiles = [.99]
+bins = [1,  3, 5, 7, 9]]
+percentiles = [.9, .95, .99, .999]
 event_methods = ['amplitude']
 cascade_methods = ['grid']
 subsamples = [('all', 'all')]
 
 
-visits = ['2']
+visits = ['2, 3']
 tasks = ['rest']
 eyes = ['open']
 sensors = ['gradiometer']
@@ -87,17 +87,25 @@ for fname in dirList:
         conn.close()
 
         for band in list(f[base_filtered]):
+	    print band
             data = f[base_filtered+'/'+band]
             conn = sqlite3.connect(database)
+	    band_range = data.attrs['frequency_range']
+	    if band_range.shape[0]==1:
+		band_min=0.
+		band_max=band_range[0]
+	    else:
+		band_min=band_range[0]
+		band_max=band_range[1]
             values = (recording_id, filter_type, taps-1, window, band, \
-                    data.attrs['frequency_range'][0], data.attrs['frequency_range'][1], \
+                    band_min, band_max, \
                     data['displacement'].shape[1], 0, 0)
             ids = conn.execute("SELECT filter_id FROM Recordings_Filtered WHERE recording_id=? AND filter_type=?\
                     AND poles=? AND window=? AND band_name=? AND band_min=? AND band_max=? AND duration=?\
-                    AND duration=? AND notch=? AND phase_shuffled=?", values)
+                    AND notch=? AND phase_shuffled=?", values).fetchall()
             if len(ids)==0:
                 cur = conn.execute("INSERT INTO Recordings_Filtered (recording_id, filter_type, poles, window,\
-                        band_name, band_min, band_max, duration, notch, phase_shuffled) values (?,?,?,?,?,?,?, 0,0)",\
+                        band_name, band_min, band_max, duration, notch, phase_shuffled) values (?,?,?,?,?,?,?,?,?,? )",\
                         values)
                 filter_id = cur.lastrowid
             else:

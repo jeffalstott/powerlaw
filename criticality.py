@@ -35,8 +35,8 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
 
     metrics['starts'] = starts
     metrics['stops'] = stops
-    metrics['durations'] = stops-starts
-    metrics['durations_silences'] = starts[1:]-stops[:-1]
+    metrics['durations'] = (stops-starts).astype(float)
+    metrics['durations_silences'] = (starts[1:]-stops[:-1]).astype(float)
 
     #For every avalanche, calculate some list of metrics, then save those metrics in a dictionary
     from numpy import empty, ndarray
@@ -209,7 +209,7 @@ def avalanche_metrics(input_metrics, avalanche_number):
             input_metrics['starts'][avalanche_number])
 
 #Calculate sizes
-    size_events = avalanche_stop-avalanche_start
+    size_events = float(avalanche_stop-avalanche_start)
     size_displacements = sum(abs(\
             input_metrics['event_displacements'][avalanche_start:avalanche_stop]))
     size_amplitudes = sum(abs(\
@@ -337,7 +337,7 @@ def area_under_the_curve(data, baseline='mean'):
 
     return data_aucs
 
-def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
+def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, overwrite=False):
     from scipy.stats import mode, linregress
     from numpy import empty
     from plfit import plfit
@@ -345,18 +345,24 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
     if write_to_database:
         import sqlite3
         conn = sqlite3.connect(write_to_database)
-
+	
+	#If there are statistics already calculated, and we're not overwriting, then end.
+	ids = conn.execute("SELECT analysis_id FROM Avalanche_Analyses WHERE analysis_id=? AND \
+		sigma_events IS NOT NULL", (analysis_id,)).fetchall()
+	if len(ids)!=0 and not overwrite:
+	    return
+	
     statistics = {}
     j = empty(max(metrics['event_times_within_avalanche'])+1)
     times_within_avalanche = range(len(j))
 
     for k in metrics:
+	update_string = 'UPDATE Avalanche_Analyses SET %s=? WHERE analysis_id=?'
         if k.startswith('sigma'):
             statistics[k]=metrics[k].mean()
 
             if write_to_database:
-                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
-                        (k, statistics[k], analysis_id))
+                conn.execute(update_string % k, (statistics[k], analysis_id))
 
         elif k.startswith('t_ratio'):
             statistics[k] = {}
@@ -368,12 +374,9 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
             statistics[k]['p'] = regress[3]
 
             if write_to_database:
-                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
-                        (k+'_slope', statistics[k]['slope'], analysis_id))
-                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
-                        (k+'_R', statistics[k]['R'], analysis_id))
-                conn.execute('UPDATE Avalanche_Analyses SET ?=? WHERE analysis_id=?', \
-                        (k+'_p', statistics[k]['p'], analysis_id))
+                conn.execute(update_string % (k+'_slope'), (statistics[k]['slope'], analysis_id))
+                conn.execute(update_string % (k+'_R'), (statistics[k]['R'], analysis_id))
+                conn.execute(update_string % (k+'_p'), (statistics[k]['p'], analysis_id))
 
         elif k.startswith('duration') or k.startswith('size'):
             statistics[k]={}
@@ -392,8 +395,8 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
                 conn.execute("INSERT INTO Fit_Statistics (analysis_type, analysis_id, \
                         variable, distribution, parameter1_name, parameter1_value, \
                         parameter2_name, parameter2_value, xmin, loglikelihood, KS, p) \
-                        values ('avalanches', ?, ?, 'power_law', ?, ?, ?, ?, ?, ?, ?, ?)", \
-                        (analysis_id, k, \
+                        values ('avalanches', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", \
+                        (analysis_id, k, 'power_law', \
                         statistics[k]['power_law']['parameter1_name'],\
                         statistics[k]['power_law']['parameter1_value'],\
                         statistics[k]['power_law']['parameter2_name'],\
@@ -420,17 +423,17 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False):
                         variable, distribution, parameter1_name, parameter1_value, \
                         parameter2_name, parameter2_value, parameter3_name, parameter3_value,\
                         loglikelihood, KS, p) \
-                        values ('avalanches', ?, ?, 'lognormal', ?, ?, ?, ?, ?, ?, ?, ?)", \
-                        (analysis_id, k, \
-                        statistics[k]['power_law']['parameter1_name'],\
-                        statistics[k]['power_law']['parameter1_value'],\
-                        statistics[k]['power_law']['parameter2_name'],\
-                        statistics[k]['power_law']['parameter2_value'],\
-                        statistics[k]['power_law']['parameter3_name'],\
-                        statistics[k]['power_law']['parameter3_value'],\
-                        statistics[k]['power_law']['loglikelihood'],\
-                        statistics[k]['power_law']['KS'],\
-                        statistics[k]['power_law']['p']))
+                        values ('avalanches', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", \
+                        (analysis_id, k, 'lognormal', \
+                        statistics[k]['lognormal']['parameter1_name'],\
+                        statistics[k]['lognormal']['parameter1_value'],\
+                        statistics[k]['lognormal']['parameter2_name'],\
+                        statistics[k]['lognormal']['parameter2_value'],\
+                        statistics[k]['lognormal']['parameter3_name'],\
+                        statistics[k]['lognormal']['parameter3_value'],\
+                        statistics[k]['lognormal']['loglikelihood'],\
+                        statistics[k]['lognormal']['KS'],\
+                        statistics[k]['lognormal']['p']))
 
     if write_to_database:
         conn.commit()
@@ -469,8 +472,8 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
             write_to_HDF5=write_to_HDF5, overwrite=overwrite)
 
         if write_to_database:
-            import sql3
-            conn = sql3.connect(write_to_database)
+            import sqlite3
+            conn = sqlite3.connect(write_to_database)
             values = (filter_id, n, 'percentile', p, b, e, c)
             ids = conn.execute("SELECT analysis_id FROM Avalanche_Analyses WHERE filter_id=? AND subsample=?\
                     AND threshold_mode=? AND threshold_level=? AND time_scale=? AND event_method=?\
