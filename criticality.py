@@ -442,8 +442,8 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
 
 def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, \
         subsamples, sample_names=False, \
-        write_to_HDF5=False, overwrite=False,\
-        write_to_database=False, filter_id=False, \
+        write_to_HDF5=False, overwrite_HDF5=False,\
+        write_to_database=False, filter_id=False, overwrite_database=False,\
         verbose=False):
 
     if sample_names:
@@ -466,11 +466,6 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
         if verbose:
             print parameters
 
-        metrics = avalanche_analysis(file, bin_width=b, percentile=p, \
-            event_method=e, cascade_method=c,\
-            subsample=s, sample_name=n,\
-            write_to_HDF5=write_to_HDF5, overwrite=overwrite)
-
         if write_to_database:
             import sqlite3
             conn = sqlite3.connect(write_to_database)
@@ -478,7 +473,11 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
             ids = conn.execute("SELECT analysis_id FROM Avalanche_Analyses WHERE filter_id=? AND subsample=?\
                     AND threshold_mode=? AND threshold_level=? AND time_scale=? AND event_method=?\
                     AND cascade_method=?", values).fetchall()
-            if len(ids)==0:
+
+            if len(ids)!=0 and not overwrite_database:
+            #If there's an already analysis with these parameters in the database and we're not overwriting, there's no need to recalculate the avalanche metrics, so we continue to the next set of parameters
+                continue
+            elif len(ids)==0:
                 cur = conn.execute("INSERT INTO Avalanche_Analyses \
                         (filter_id, subsample, threshold_mode, threshold_level, time_scale,\
                         event_method, cascade_method) values(?,?,?,?,?,?,?)", values) 
@@ -487,6 +486,11 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
                 analysis_id = ids[0][0]
             conn.commit()
             conn.close()
+
+        metrics = avalanche_analysis(file, bin_width=b, percentile=p, \
+            event_method=e, cascade_method=c,\
+            subsample=s, sample_name=n,\
+            write_to_HDF5=write_to_HDF5, overwrite=overwrite_HDF5)
 
         statistics = avalanche_statistics(metrics, \
                 write_to_database=write_to_database, analysis_id=analysis_id)
