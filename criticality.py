@@ -343,27 +343,32 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
     from plfit import plfit
     
     if write_to_database:
-        import sqlite3
-        conn = sqlite3.connect(write_to_database)
+        from sqlalchemy import create_engine, sessionmaker
+        import database_classes as dc
+        engine = create_engine(write_to_database, echo=False)
+        Session = sessionmaker(bind=engine)
+        session = Session()
 	
 	#If there are statistics already calculated, and we're not overwriting, then end.
-	ids = conn.execute("SELECT analysis_id FROM Avalanche_Analyses WHERE analysis_id=? AND \
-		sigma_events IS NOT NULL", (analysis_id,)).fetchall()
-	if len(ids)!=0 and not overwrite:
-	    return
-	
+        distribution_fit = session.query(dc.Distribution_Fit).filter_by(\
+                analysis_id=analysis_id).one()
+        if distribution_fit!=None and not overwrite:
+            return
+
+        avalanche_analysis = session.query(dc.Avalanche_Analysis).filter_by(\
+                analysis_id=analysis_id).one()
+
     statistics = {}
     times_within_avalanche = unique(metrics['event_times_within_avalanche'])
     j = empty(times_within_avalanche.shape)
 
     for k in metrics:
-	update_string = 'UPDATE Avalanche_Analyses SET %s=? WHERE analysis_id=?'
         if k.startswith('sigma'):
             statistics[k]=metrics[k].mean()
 
             if write_to_database:
-                conn.execute(update_string % k, (statistics[k], analysis_id))
-
+                setattr(avalanche_analysis, k, statistics[k])
+                
         elif k.startswith('t_ratio'):
             statistics[k] = {}
             for i in range(len(times_within_avalanche)):
@@ -374,9 +379,9 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
             statistics[k]['p'] = regress[3]
 
             if write_to_database:
-                conn.execute(update_string % (k+'_slope'), (statistics[k]['slope'], analysis_id))
-                conn.execute(update_string % (k+'_R'), (statistics[k]['R'], analysis_id))
-                conn.execute(update_string % (k+'_p'), (statistics[k]['p'], analysis_id))
+                setattr(avalanche_analysis, k+'_slope', statistics[k]['slope'])
+                setattr(avalanche_analysis, k+'_R', statistics[k]['R'])
+                setattr(avalanche_analysis, k+'_p', statistics[k]['p'])
 
         elif k.startswith('duration') or k.startswith('size'):
             statistics[k]={}
@@ -391,21 +396,6 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
             statistics[k]['power_law']['KS']=fit._ks
             statistics[k]['power_law']['p']=fit._ks_prob
 
-            if write_to_database:
-                conn.execute("INSERT INTO Fit_Statistics (analysis_type, analysis_id, \
-                        variable, distribution, parameter1_name, parameter1_value, \
-                        parameter2_name, parameter2_value, xmin, loglikelihood, KS, p) \
-                        values ('avalanches', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", \
-                        (analysis_id, k, 'power_law', \
-                        statistics[k]['power_law']['parameter1_name'],\
-                        statistics[k]['power_law']['parameter1_value'],\
-                        statistics[k]['power_law']['parameter2_name'],\
-                        statistics[k]['power_law']['parameter2_value'],\
-                        statistics[k]['power_law']['xmin'], \
-                        statistics[k]['power_law']['loglikelihood'],\
-                        statistics[k]['power_law']['KS'],\
-                        statistics[k]['power_law']['p']))
-
             statistics[k]['lognormal']={}
             fit.lognormal(doprint=False)
             statistics[k]['lognormal']['parameter1_name']='shape'
@@ -419,25 +409,25 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
             statistics[k]['lognormal']['p']=fit.lognormal_ksP
 
             if write_to_database:
-                conn.execute("INSERT INTO Fit_Statistics (analysis_type, analysis_id, \
-                        variable, distribution, parameter1_name, parameter1_value, \
-                        parameter2_name, parameter2_value, parameter3_name, parameter3_value,\
-                        loglikelihood, KS, p) \
-                        values ('avalanches', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", \
-                        (analysis_id, k, 'lognormal', \
-                        statistics[k]['lognormal']['parameter1_name'],\
-                        statistics[k]['lognormal']['parameter1_value'],\
-                        statistics[k]['lognormal']['parameter2_name'],\
-                        statistics[k]['lognormal']['parameter2_value'],\
-                        statistics[k]['lognormal']['parameter3_name'],\
-                        statistics[k]['lognormal']['parameter3_value'],\
-                        statistics[k]['lognormal']['loglikelihood'],\
-                        statistics[k]['lognormal']['KS'],\
-                        statistics[k]['lognormal']['p']))
+                fit_variables = ('parameter1_name', 'parameter1_value', \
+                        'parameter2_name', 'parameter2_value', 'xmin', 'loglikelihood', 'KS', 'p')
+
+                power_law_fit = dc.Distribution_Fit(analysis_type='avalanches', analysis_id=analysis_id,\
+                        variable=k, distribution='power_law')
+
+                lognormal_fit = dc.Distribution_Fit(analysis_type='avalanches', analysis_id=analysis_id,\
+                        variable=k, distribution='lognormal')
+
+                for variable in fit_variables:
+                    setattr(power_law_fit,variable, statistics[k]['power_law'][variable])
+                    setattr(lognormal_fit,variable, statistics[k]['lognormal'][variable])
+                    
+                session.add(power_law_fit)
+                session.add(lognormal_fit)
 
     if write_to_database:
-        conn.commit()
-        conn.close()
+        session.add(avalanche_analysis)
+        session.commit()
     return statistics
 
 def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, \
@@ -467,25 +457,26 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
             print parameters
 
         if write_to_database:
-            import sqlite3
-            conn = sqlite3.connect(write_to_database)
-            values = (filter_id, n, 'percentile', p, b, e, c)
-            ids = conn.execute("SELECT analysis_id FROM Avalanche_Analyses WHERE filter_id=? AND subsample=?\
-                    AND threshold_mode=? AND threshold_level=? AND time_scale=? AND event_method=?\
-                    AND cascade_method=?", values).fetchall()
+            from sqlalchemy import create_engine, sessionmaker
+            import database_classes as dc
+            engine = create_engine(write_to_database, echo=False)
+            Session = sessionmaker(bind=engine)
+            session = Session()
 
-            if len(ids)!=0 and not overwrite_database:
-            #If there's an already analysis with these parameters in the database and we're not overwriting, there's no need to recalculate the avalanche metrics, so we continue to the next set of parameters
+            analysis = session.query(dc.Avalanche_Analysis).filter_by(\
+                    filter_id=filter_id, subsample=n, threshold_mode='percentile',\
+                    threshold_level=p, time_scale=b, event_method=e, cascade_method=c).one()
+            if analysis!=None and not overwrite_database:
+            #If there is a previous analysis and we're not overwriting the database, then go on to the next set of parameters
                 continue
-            elif len(ids)==0:
-                cur = conn.execute("INSERT INTO Avalanche_Analyses \
-                        (filter_id, subsample, threshold_mode, threshold_level, time_scale,\
-                        event_method, cascade_method) values(?,?,?,?,?,?,?)", values) 
-                analysis_id = cur.lastrowid
-            else:
-                analysis_id = ids[0][0]
-            conn.commit()
-            conn.close()
+            if analysis==None:
+                analysis = dc.Avalanche_Analysis(\
+                    filter_id=filter_id, subsample=n, threshold_mode='percentile',\
+                    threshold_level=p, time_scale=b, event_method=e, cascade_method=c)
+                session.add(analysis)
+                session.commit()
+
+            analysis_id=analysis.id
 
         metrics = avalanche_analysis(file, bin_width=b, percentile=p, \
             event_method=e, cascade_method=c,\
