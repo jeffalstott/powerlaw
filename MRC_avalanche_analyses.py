@@ -1,7 +1,9 @@
 import criticality
 import h5py
 import os
-import sqlite3
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+import database_classes as dc
 
 bins = [1, 3, 5, 7, 9]
 percentiles = [.99, .999]
@@ -16,36 +18,39 @@ eyes = ['open']
 sensors = ['gradiometer']
 
 group_name ='GSK1'
+species = 'human'
+location='MRC'
 data_path = '/work/imagingA/jja34/MEG_Study/Data/'+group_name
-database = '/work/imagingA/jja34/Results'
+#database = '/work/imagingA/jja34/Results'
+database = 'sqlite:///:memory:'
 filter_type = 'FIR'
 taps = 513
 window = 'blackmanharris'
 
 
-dirList=os.listdir(data_path)
+engine = create_engine(database, echo=False)
+dc.Base.metadata.create_all(engine) 
+Session = sessionmaker(bind=engine)
 
+
+dirList=os.listdir(data_path)
 for fname in dirList:
     file = data_path+'/'+fname
     number_in_group = int(fname[7:10])
-    conn = sqlite3.connect(database)
-    values = ('human', group_name, number_in_group)
-    ids = conn.execute("SELECT subject_id FROM Subjects WHERE species=? AND group_name=? and number_in_group=?",\
-            values).fetchall()
-    if len(ids)==0:
-        cur = conn.execute("INSERT INTO Subjects (species, group_name, number_in_group) values (?, ?, ?)",\
-                values)
-        subject_id = cur.lastrowid
-    else:
-        subject_id = ids[0][0]
-    conn.commit()
-    conn.close()
+    session = Session()
+
+    subject = session.query(dc.Subject).\
+            filter_by(species=species, group_name=group_name, number_in_group=number_in_group).first()
+    if subject==None:
+        subject = dc.Subject(species=species, group_name=group_name, number_in_group=number_in_group)
+        session.add(subject)
+        session.commit()
 
     print file
     f = h5py.File(file)
     conditions = [(v,t,e,s) for v in visits for t in tasks for e in eyes for s in sensors] 
-    for visit, task, eye, sensor in conditions:
-        base = visit+'/'+task+'/'+eye+'/'+sensor
+    for visit, task_type, eye, sensor_type in conditions:
+        base = visit+'/'+task_type+'/'+eye+'/'+sensor_type
         base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window
         #If this particular set of conditions doesn't exist in for this subject, just continue to the next set of conditions
         try:
@@ -56,61 +61,50 @@ for fname in dirList:
 
         duration = f[base+'/raw/displacement'].shape[1]
 
-        conn = sqlite3.connect(database)
-        cur = conn.execute("select task_id from Tasks where type=? and eyes=?", (task, eye)).fetchall();
-        task_id = cur[0][0]
+        task = session.query(dc.Task).\
+                filter_by(type=task_type, eyes=eye)
 
-        cur = conn.execute("select sensor_id from Sensors where location='MRC' and sensor_type=?", (sensor,)).fetchall();
-        sensor_id = cur[0][0]
+        sensor = session.query(dc.Sensor).\
+                filter_by(location=location, sensor_type=sensor_type).one()
+        
+        experiment = session.query(dc.Experiment).\
+                filter_by(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
+                rest='rested', task_id=task.id)
+        if experiment==None:
+            experiment = dc.Experiment(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
+                rest='rested', task_id=task.id)
+            session.add(experiment)
+            session.commit()
 
-        values = ('MRC', subject_id, visit, 50, 'none', 'rested', task_id)
-        ids = conn.execute("SELECT experiment_id FROM Experiments WHERE location=? AND subject_id=? AND \
-                visit_number=? AND mains=? AND drug=? AND rest=? AND task_id=?", values).fetchall()
-        if len(ids)==0:
-            cur = conn.execute("INSERT INTO Experiments (location, subject_id, visit_number, mains, drug, rest, task_id)\
-                    values (?, ?, ?, ?, ?, ?, ?)", values)
-            experiment_id = cur.lastrowid
-        else:
-            experiment_id=ids[0][0]
-
-        values = (experiment_id, sensor_id, duration)
-        ids = conn.execute('SELECT recording_id FROM Recordings_Raw WHERE experiment_id=? AND sensor_id=? \
-                AND duration=?', values).fetchall()
-        if len(ids)==0:
-            cur = conn.execute("INSERT INTO Recordings_Raw (experiment_id, sensor_id, duration) values (?,?,?)",\
-                    values)
-            recording_id = cur.lastrowid
-        else:
-            recording_id=ids[0][0]
-        conn.commit()
-        conn.close()
+        recording = session.query(dc.Recording).\
+                filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration).one()
+        if recording==None:
+            recording = dc.Recording(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration)
+            session.add(recording)
+            session.commit()
 
         for band in list(f[base_filtered]):
-	    print band
+            print band
             data = f[base_filtered+'/'+band]
-            conn = sqlite3.connect(database)
-	    band_range = data.attrs['frequency_range']
-	    if band_range.shape[0]==1:
-		band_min=0.
-		band_max=band_range[0]
-	    else:
-		band_min=band_range[0]
-		band_max=band_range[1]
-            values = (recording_id, filter_type, taps-1, window, band, \
-                    band_min, band_max, \
-                    data['displacement'].shape[1], 0, 0)
-            ids = conn.execute("SELECT filter_id FROM Recordings_Filtered WHERE recording_id=? AND filter_type=?\
-                    AND poles=? AND window=? AND band_name=? AND band_min=? AND band_max=? AND duration=?\
-                    AND notch=? AND phase_shuffled=?", values).fetchall()
-            if len(ids)==0:
-                cur = conn.execute("INSERT INTO Recordings_Filtered (recording_id, filter_type, poles, window,\
-                        band_name, band_min, band_max, duration, notch, phase_shuffled) values (?,?,?,?,?,?,?,?,?,? )",\
-                        values)
-                filter_id = cur.lastrowid
+            band_range = data.attrs['frequency_range']
+            if band_range.shape[0]==1:
+                band_min=0.
+                band_max=band_range[0]
             else:
-                filter_id = ids[0][0]
-            conn.commit()
-            conn.close()
+                band_min=band_range[0]
+                band_max=band_range[1]
+
+            filter = session.query(dc.Filter).\
+                    filter_by(recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
+                    band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
+                    notch=0,phase_shuffled=0).one()
+            if filter==None:
+                filter = dc.Filter(\
+                    recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
+                    band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
+                    notch=0,phase_shuffled=0)
+                session.add(filter)
+                session.commit()
 
             criticality.avalanche_analyses(data, bins, percentiles, event_methods, cascade_methods, subsamples,\
-                    write_to_database=database, filter_id=filter_id)
+                    write_to_database=database, filter_id=filter.id)
