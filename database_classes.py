@@ -181,7 +181,7 @@ class HasFits(object):
     def fit_association(cls):
         discriminator = cls.__name__.lower()
         cls.fits= association_proxy(
-                    "fit_Association", "fit",
+                    "fit_association", "fits",
                     creator=Fit_Association.creator(discriminator)
                 )
         return relationship(Fit_Association, 
@@ -253,6 +253,7 @@ class Fit(Base):
     KS = Column(Float)
     p = Column(Float)
     
+    analysis_id = Column(Integer)
     subject_id = Column(Integer, ForeignKey('Subject.id'))
     task_id = Column(Integer, ForeignKey('Task.id'))
     experiment_id = Column(Integer, ForeignKey('Experiment.id'))

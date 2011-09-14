@@ -64,7 +64,7 @@ for fname in dirList:
         duration = f[base+'/raw/displacement'].shape[1]
 
         task = session.query(dc.Task).\
-                filter_by(type=task_type, eyes=eye)
+                filter_by(type=task_type, eyes=eye).first()
         if not task:
             print('Task not found!')
             break
@@ -80,14 +80,15 @@ for fname in dirList:
                 rest='rested', task_id=task.id).first()
         if not experiment:
             experiment = dc.Experiment(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
-                rest='rested', task_id=task.id).first()
+                rest='rested', task_id=task.id)
             session.add(experiment)
             session.commit()
 
         recording = session.query(dc.Recording).\
                 filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration).first()
         if not recording:
-            recording = dc.Recording(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration)
+            recording = dc.Recording(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration,\
+                    subject_id = subject.id, task_id=task.id)
             session.add(recording)
             session.commit()
 
@@ -105,16 +106,21 @@ for fname in dirList:
             filter = session.query(dc.Filter).\
                     filter_by(recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
                     band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
-                    notch=0,phase_shuffled=0).first()
+                    notch=False,phase_shuffled=False).first()
             if not filter:
                 filter = dc.Filter(\
                     recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
                     band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
-                    notch=0,phase_shuffled=0)
+                    notch=False,phase_shuffled=False,\
+                    subject_id = subject.id, task_id=task.id, experiment_id=experiment.id, sensor_id=sensor.id)
+
                 session.add(filter)
                 session.commit()
 
             criticality.avalanche_analyses(data, \
                     bins=bins, percentiles=percentiles, event_methods=event_methods, cascade_methods=cascade_methods, \
                     spatial_samples=spatial_samples, temporal_samples=temporal_samples,\
-                    write_to_database=database, filter_id=filter.id)
+                    write_to_database=database, filter_id=filter.id,\
+                    subject_id=subject.id, task_id=task.id, experiment_id=experiment.id,\
+                    sensor_id=sensor.id, recording_id=recording.id,\
+                    verbose=True)
