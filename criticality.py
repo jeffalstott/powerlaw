@@ -454,6 +454,12 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
     analysis_id=False 
     results = {}
 
+    if write_to_database:
+        from sqlalchemy import create_engine, sessionmaker
+        import database_classes as dc
+        engine = create_engine(write_to_database, echo=False)
+        Session = sessionmaker(bind=engine)
+        session = Session()
 
     parameter_space = [(b,p,e,c,s,n) for b in bins for p in percentiles \
             for e in event_methods for c in cascade_methods \
@@ -467,12 +473,6 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
             print parameters
 
         if write_to_database:
-            from sqlalchemy import create_engine, sessionmaker
-            import database_classes as dc
-            engine = create_engine(write_to_database, echo=False)
-            Session = sessionmaker(bind=engine)
-            session = Session()
-
             analysis = session.query(dc.Avalanche_Analysis).filter_by(\
                     filter_id=filter_id, subsample=n, threshold_mode='percentile',\
                     threshold_level=p, time_scale=b, event_method=e, cascade_method=c).first()

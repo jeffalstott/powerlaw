@@ -20,9 +20,10 @@ sensors = ['gradiometer']
 group_name ='GSK1'
 species = 'human'
 location='MRC'
-data_path = '/work/imagingA/jja34/MEG_Study/Data/'+group_name
+data_path = '/work/imagingA/jja34/Data/MRC/'+group_name
 #database = '/work/imagingA/jja34/Results'
-database = 'sqlite:///:memory:'
+database = 'mysql://jja34:r38bf2u9@iron/JeffAnalysis'
+#database = 'sqlite:///:memory:'
 filter_type = 'FIR'
 taps = 513
 window = 'blackmanharris'
@@ -41,7 +42,7 @@ for fname in dirList:
 
     subject = session.query(dc.Subject).\
             filter_by(species=species, group_name=group_name, number_in_group=number_in_group).first()
-    if subject==None:
+    if not subject:
         subject = dc.Subject(species=species, group_name=group_name, number_in_group=number_in_group)
         session.add(subject)
         session.commit()
@@ -65,20 +66,20 @@ for fname in dirList:
                 filter_by(type=task_type, eyes=eye)
 
         sensor = session.query(dc.Sensor).\
-                filter_by(location=location, sensor_type=sensor_type).one()
+                filter_by(location=location, sensor_type=sensor_type).first()
         
         experiment = session.query(dc.Experiment).\
                 filter_by(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
-                rest='rested', task_id=task.id)
-        if experiment==None:
+                rest='rested', task_id=task.id).first()
+        if not experiment:
             experiment = dc.Experiment(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
-                rest='rested', task_id=task.id)
+                rest='rested', task_id=task.id).first()
             session.add(experiment)
             session.commit()
 
         recording = session.query(dc.Recording).\
-                filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration).one()
-        if recording==None:
+                filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration).first()
+        if not recording:
             recording = dc.Recording(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration)
             session.add(recording)
             session.commit()
@@ -97,8 +98,8 @@ for fname in dirList:
             filter = session.query(dc.Filter).\
                     filter_by(recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
                     band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
-                    notch=0,phase_shuffled=0).one()
-            if filter==None:
+                    notch=0,phase_shuffled=0).first()
+            if not filter:
                 filter = dc.Filter(\
                     recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
                     band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
