@@ -9,7 +9,8 @@ bins = [1, 2, 4]
 percentiles = [.9921875, .984375, .96875]
 event_methods = ['amplitude']
 cascade_methods = ['grid']
-subsamples = [('all', 'all')]
+spatial_samples = [('all', 'all')]
+temporal_samples = [('all', 'all')]
 
 
 visits = ['2', '3']
@@ -53,7 +54,7 @@ for fname in dirList:
     for visit, task_type, eye, sensor_type in conditions:
         base = visit+'/'+task_type+'/'+eye+'/'+sensor_type
         base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window
-        #If this particular set of conditions doesn't exist in for this subject, just continue to the next set of conditions
+        #If this particular set of conditions doesn't exist for this subject, just continue to the next set of conditions
         try:
             f[base_filtered]
         except KeyError:
@@ -64,9 +65,15 @@ for fname in dirList:
 
         task = session.query(dc.Task).\
                 filter_by(type=task_type, eyes=eye)
+        if not task:
+            print('Task not found!')
+            break
 
         sensor = session.query(dc.Sensor).\
                 filter_by(location=location, sensor_type=sensor_type).first()
+        if not sensor:
+            print('Sensor not found!')
+            break
         
         experiment = session.query(dc.Experiment).\
                 filter_by(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
@@ -107,5 +114,7 @@ for fname in dirList:
                 session.add(filter)
                 session.commit()
 
-            criticality.avalanche_analyses(data, bins, percentiles, event_methods, cascade_methods, subsamples,\
+            criticality.avalanche_analyses(data, \
+                    bins=bins, percentiles=percentiles, event_methods=event_methods, cascade_methods=cascade_methods, \
+                    spatial_samples=spatial_samples, temporal_samples=temporal_samples,\
                     write_to_database=database, filter_id=filter.id)

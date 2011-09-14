@@ -54,11 +54,11 @@ class Experiment(Base):
     drug = Column(String(100))
     rest = Column(String(100))
 
-    subject_id = Column(Integer, ForeignKey('Subjects.id'))
-    task_id = Column(Integer, ForeignKey('Tasks.id'))
+    subject_id = Column(Integer, ForeignKey('Subject.id'))
+    task_id = Column(Integer, ForeignKey('Task.id'))
 
-    subject = relationship(Subject, backref=backref('experiments', order_by=id))
-    task = relationship(Task, backref=backref('experiments', order_by=id))
+    subject = relationship(Subject, backref=backref('experiments')) #, order_by=id))
+    task = relationship(Task, backref=backref('experiments')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', visit='%s', task='%s')>" % \
@@ -86,13 +86,13 @@ class Task_Performance(Base):
     measure10_name = Column(String(100))
     measure10_value = Column(Float)
 
-    subject_id = Column(Integer, ForeignKey('Subjects.id'))
-    task_id = Column(Integer, ForeignKey('Tasks.id'))
-    experiment_id = Column(Integer, ForeignKey('Experiments.id'))
+    subject_id = Column(Integer, ForeignKey('Subject.id'))
+    task_id = Column(Integer, ForeignKey('Task.id'))
+    experiment_id = Column(Integer, ForeignKey('Experiment.id'))
 
-    subject = relationship(Subject, backref=backref('task_performances', order_by=id))
-    task = relationship(Task, backref=backref('task_performances', order_by=id))
-    experiment = relationship(Experiment, backref=backref('task_performances', order_by=id))
+    subject = relationship(Subject, backref=backref('task_performances')) #, order_by=id))
+    task = relationship(Task, backref=backref('task_performances')) #, order_by=id))
+    experiment = relationship(Experiment, backref=backref('task_performances')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s')>" % \
@@ -102,15 +102,15 @@ class Recording(Base):
     duration = Column(Float)
     sampling_rate = Column(Float)
 
-    subject_id = Column(Integer, ForeignKey('Subjects.id'))
-    task_id = Column(Integer, ForeignKey('Tasks.id'))
-    experiment_id = Column(Integer, ForeignKey('Experiments.id'))
-    sensor_id = Column(Integer, ForeignKey('Sensors.id'))
+    subject_id = Column(Integer, ForeignKey('Subject.id'))
+    task_id = Column(Integer, ForeignKey('Task.id'))
+    experiment_id = Column(Integer, ForeignKey('Experiment.id'))
+    sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
-    subject = relationship(Subject, backref=backref('recordings', order_by=id))
-    task = relationship(Task, backref=backref('recordings', order_by=id))
-    experiment = relationship(Experiment, backref=backref('recordings', order_by=id))
-    sensor = relationship(Sensor, backref=backref('recordings', order_by=id))
+    subject = relationship(Subject, backref=backref('recordings')) #, order_by=id))
+    task = relationship(Task, backref=backref('recordings')) #, order_by=id))
+    experiment = relationship(Experiment, backref=backref('recordings')) #, order_by=id))
+    sensor = relationship(Sensor, backref=backref('recordings')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s')>" % \
@@ -127,17 +127,17 @@ class Filter(Base):
     notch = Column(Boolean)
     phase_shuffled = Column(Boolean)
 
-    subject_id = Column(Integer, ForeignKey('Subjects.id'))
-    task_id = Column(Integer, ForeignKey('Tasks.id'))
-    experiment_id = Column(Integer, ForeignKey('Experiments.id'))
-    recording_id = Column(Integer, ForeignKey('Recordings.id'))
-    sensor_id = Column(Integer, ForeignKey('Sensors.id'))
+    subject_id = Column(Integer, ForeignKey('Subject.id'))
+    task_id = Column(Integer, ForeignKey('Task.id'))
+    experiment_id = Column(Integer, ForeignKey('Experiment.id'))
+    recording_id = Column(Integer, ForeignKey('Recording.id'))
+    sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
-    subject = relationship(Subject, backref=backref('filters', order_by=id))
-    task = relationship(Task, backref=backref('filters', order_by=id))
-    experiment = relationship(Experiment, backref=backref('filters', order_by=id))
-    sensor = relationship(Sensor, backref=backref('filters', order_by=id))
-    recording = relationship(Recording, backref=backref('filters', order_by=id))
+    subject = relationship(Subject, backref=backref('filters')) #, order_by=id))
+    task = relationship(Task, backref=backref('filters')) #, order_by=id))
+    experiment = relationship(Experiment, backref=backref('filters')) #, order_by=id))
+    sensor = relationship(Sensor, backref=backref('filters')) #, order_by=id))
+    recording = relationship(Recording, backref=backref('filters')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s', band='%s')>" % \
@@ -175,13 +175,13 @@ class HasFits(object):
     """
     @declared_attr
     def fit_association_id(cls):
-        return Column(Integer, ForeignKey("fit_association.id"))
+        return Column(Integer, ForeignKey("Fit_Association.id"))
 
     @declared_attr
     def fit_association(cls):
         discriminator = cls.__name__.lower()
         cls.fits= association_proxy(
-                    "fit_association", "fit",
+                    "fit_Association", "fit",
                     creator=Fit_Association.creator(discriminator)
                 )
         return relationship(Fit_Association, 
@@ -189,7 +189,8 @@ class HasFits(object):
                                         uselist=False))
 
 class Avalanche(HasFits,Base):
-    subsample = Column(String(100))
+    spatial_sample = Column(String(100))
+    temporal_sample = Column(String(100))
     threshold_mode = Column(String(100))
     threshold_level = Column(Float)
     time_scale = Column(Float)
@@ -218,19 +219,19 @@ class Avalanche(HasFits,Base):
     t_ratio_amplitude_aucs_R = Column(Float)
     t_ratio_amplitude_aucs_p = Column(Float)
     
-    subject_id = Column(Integer, ForeignKey('Subjects.id'))
-    task_id = Column(Integer, ForeignKey('Tasks.id'))
-    experiment_id = Column(Integer, ForeignKey('Experiments.id'))
-    recording_id = Column(Integer, ForeignKey('Recordings.id'))
-    filter_id = Column(Integer, ForeignKey('Filters.id'))
-    sensor_id = Column(Integer, ForeignKey('Sensors.id'))
+    subject_id = Column(Integer, ForeignKey('Subject.id'))
+    task_id = Column(Integer, ForeignKey('Task.id'))
+    experiment_id = Column(Integer, ForeignKey('Experiment.id'))
+    recording_id = Column(Integer, ForeignKey('Recording.id'))
+    filter_id = Column(Integer, ForeignKey('Filter.id'))
+    sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
-    subject = relationship(Subject, backref=backref('avalanches', order_by=id))
-    task = relationship(Task, backref=backref('avalanches', order_by=id))
-    experiment = relationship(Experiment, backref=backref('avalanches', order_by=id))
-    sensor = relationship(Sensor, backref=backref('avalanches', order_by=id))
-    recording = relationship(Recording, backref=backref('avalanches', order_by=id))
-    filter = relationship(Filter, backref=backref('avalanches', order_by=id))
+    subject = relationship(Subject, backref=backref('avalanches')) #, order_by=id))
+    task = relationship(Task, backref=backref('avalanches')) #, order_by=id))
+    experiment = relationship(Experiment, backref=backref('avalanches')) #, order_by=id))
+    sensor = relationship(Sensor, backref=backref('avalanches')) #, order_by=id))
+    recording = relationship(Recording, backref=backref('avalanches')) #, order_by=id))
+    filter = relationship(Filter, backref=backref('avalanches')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s', threshold='%s', timescale='%s')>" % \
@@ -252,23 +253,23 @@ class Fit(Base):
     KS = Column(Float)
     p = Column(Float)
     
-    subject_id = Column(Integer, ForeignKey('Subjects.id'))
-    task_id = Column(Integer, ForeignKey('Tasks.id'))
-    experiment_id = Column(Integer, ForeignKey('Experiments.id'))
-    recording_id = Column(Integer, ForeignKey('Recordings.id'))
-    filter_id = Column(Integer, ForeignKey('Filters.id'))
-    sensor_id = Column(Integer, ForeignKey('Sensors.id'))
+    subject_id = Column(Integer, ForeignKey('Subject.id'))
+    task_id = Column(Integer, ForeignKey('Task.id'))
+    experiment_id = Column(Integer, ForeignKey('Experiment.id'))
+    recording_id = Column(Integer, ForeignKey('Recording.id'))
+    filter_id = Column(Integer, ForeignKey('Filter.id'))
+    sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
     association_id = Column(Integer, ForeignKey("Fit_Association.id"))
     association = relationship(Fit_Association, backref="fits")
     analysis = association_proxy("association", "analysis")
 
-    subject = relationship(Subject, backref=backref('fits', order_by=id))
-    task = relationship(Task, backref=backref('fits', order_by=id))
-    experiment = relationship(Experiment, backref=backref('fits', order_by=id))
-    sensor = relationship(Sensor, backref=backref('fits', order_by=id))
-    recording = relationship(Recording, backref=backref('fits', order_by=id))
-    filter = relationship(Filter, backref=backref('fits', order_by=id))
+    subject = relationship(Subject, backref=backref('fits')) #, order_by=id))
+    task = relationship(Task, backref=backref('fits')) #, order_by=id))
+    experiment = relationship(Experiment, backref=backref('fits')) #, order_by=id))
+    sensor = relationship(Sensor, backref=backref('fits')) #, order_by=id))
+    recording = relationship(Recording, backref=backref('fits')) #, order_by=id))
+    filter = relationship(Filter, backref=backref('fits')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s', variable='%s', distribution='%s')>" % \

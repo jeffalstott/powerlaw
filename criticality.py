@@ -1,23 +1,29 @@
 from numpy import array, where, log2
 from bisect import bisect_left
 
-def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
-        data_amplitude_aucs=0, bin_width=1, percentile=.99, \
+def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, \
+        bin_width=1, percentile=.99, \
         event_method='amplitude', cascade_method='grid', \
-        subsample='all', sample_name=False,\
+        spatial_sample='all', spatial_sample_name=False,\
+        temporal_sample='all', temporal_sample_name=False,\
         write_to_HDF5=False, overwrite=False):
     """docstring for avalanche_analysis  """
 
-    if not sample_name:
-        if subsample=='all':
-            sample_name='all'
+    if not spatial_sample_name:
+        if spatial_sample=='all':
+            spatial_sample_name='all'
         else:
-            sample_name = str(len(subsample))
+            spatial_sample_name = str(len(spatial_sample))
+    if not temporal_sample_name:
+        if temporal_sample=='all':
+            temporal_sample_name='all'
+        else:
+            temporal_sample_name = str(len(temporal_sample))
 
 #If we're writing to HDF5, construct the version label we will save. 
 #If that version already exists, and we're not overwriting it, then cancel the calculation
     if write_to_HDF5:
-        version = 'b-'+str(bin_width)+'_p-'+str(percentile)[2:]+'_e-'+event_method + '_c-'+ cascade_method +'_s-'+sample_name
+        version = 'b-'+str(bin_width)+'_p-'+str(percentile)[2:]+'_e-'+event_method + '_c-'+ cascade_method +'_s-'+spatial_sample_name+'_t-'+temporal_sample_name
         if not overwrite and 'avalanches' in list(data) and version in list(data['avalanches']):
             return 'Calculation aborted for version '+version+' as results already exist and the option overwrite=False'
 
@@ -26,9 +32,10 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
     metrics['percentile'] = percentile
     metrics['event_method'] = event_method
     metrics['cascade_method'] = cascade_method
-    metrics['subsample'] = sample_name 
+    metrics['spatial_sample'] = spatial_sample_name 
+    metrics['temporal_sample'] = temporal_sample_name 
 
-    m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method, subsample)
+    m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method, spatial_sample, temporal_sample)
     metrics.update(m)
 
     starts, stops = find_cascades(metrics['event_times'], bin_width, cascade_method)
@@ -67,7 +74,7 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         #Store parameters for this analysis (including some parameters formatted as strings)
         #as attributes of this version. All the numerical results we store as new datasets in
         #in this version group
-        attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method', 'subsample')
+        attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method', 'spatial_sample', 'temporal_sample')
         for k in attributes:
             results_subgroup.attrs[k] = metrics[k]
         for k in metrics:
@@ -79,7 +86,8 @@ def avalanche_analysis(data, data_amplitude=0, data_displacement_aucs=0, \
         return
 
 
-def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0, percentile=.99, event_method='amplitude', subsample='all'):
+def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0,\
+        percentile=.99, event_method='amplitude', spatial_sample='all', temporal_sample='all'):
     """find_events does things"""
     from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
@@ -109,12 +117,12 @@ def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude
     if type(data_amplitude_aucs)!=ndarray:
         data_amplitude_aucs = area_under_the_curve(data_amplitude)
 
-    #If we're not using all sensors, take the subsample Now
-    if subsample!='all':
-        data_displacement = data_displacement[subsample,:]
-        data_amplitude = data_amplitude[subsample,:]
-        data_displacement_aucs = data_displacement_aucs[subsample,:]
-        data_amplitude_aucs = data_amplitude_aucs[subsample,:]
+    #If we're not using all sensors, take the spatial sample Now
+    if spatial_sample!='all':
+        data_displacement = data_displacement[spatial_sample,:]
+        data_amplitude = data_amplitude[spatial_sample,:]
+        data_displacement_aucs = data_displacement_aucs[spatial_sample,:]
+        data_amplitude_aucs = data_amplitude_aucs[spatial_sample,:]
 
     if event_method == 'amplitude':
         signal = data_amplitude
@@ -133,6 +141,16 @@ def find_events(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude
     #invert back the coordinate system when we assign the results, which we do 
     threshold = scoreatpercentile(transpose(signal), percentile*100)
     times, channels = where(transpose(signal)>threshold)
+
+    #If we're not using all time points, take the temporal sample now
+    if temporal_sample!='all':
+        allowed_times = []
+        for i in len(times):
+            q = bisect_left(temporal_sample, times[i])
+            if q!=len(temporal_sample) and temporal_sample[q]==times[i]:
+                allowed_times.append(i)
+        times = times[allowed_times]
+        channels = channels[allowed_times]
 
     displacements = data_displacement[channels, times]
     amplitudes = data_amplitude[channels,times]
@@ -440,16 +458,23 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
         session.commit()
     return statistics
 
-def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, \
-        subsamples, sample_names=False, \
+def avalanche_analyses(data, data_amplitude=0, data_displacement_aucs=0, data_amplitude_aucs=0,\
+        bins, percentiles, event_methods, cascade_methods, \
+        spatial_samples, spatial_sample_names=False, \
+        temporal_samples, temporal_sample_names=False, \
         write_to_HDF5=False, overwrite_HDF5=False,\
         write_to_database=False, filter_id=False, overwrite_database=False,\
         verbose=False):
 
-    if sample_names:
-        subsamples = zip(subsamples, sample_names)
-    elif type(subsamples[0])!=tuple:
-        print 'Requires a list of samples AND a list of sample names, either as sample_names=list or as subsamples=a zipped list of tuples with indices and labels'
+    if spatial_sample_names:
+        spatial_samples = zip(spatial_samples, spatial_sample_names)
+    elif type(spatial_samples[0])!=tuple:
+        print 'Requires a list of spatial_samples AND a list of spatial_sample names, either as spatial_sample_names=list or as spatial_samples=a zipped list of tuples with indices and labels'
+        return
+    if temporal_sample_names:
+        temporal_samples = zip(temporal_samples, temporal_sample_names)
+    elif type(temporal_samples[0])!=tuple:
+        print 'Requires a list of temporal_samples AND a list of temporal_sample names, either as temporal_sample_names=list or as temporal_samples=a zipped list of tuples with indices and labels'
         return
     analysis_id=False 
     results = {}
@@ -463,7 +488,8 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
 
     parameter_space = [(b,p,e,c,s,n) for b in bins for p in percentiles \
             for e in event_methods for c in cascade_methods \
-            for s,n in subsamples]
+            for s,sn in spatial_samples \
+            for t,tn in temporal_samples]
 
     for b,p,e,c,s,n in parameter_space:
         parameters = str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(n)
@@ -474,23 +500,26 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
 
         if write_to_database:
             analysis = session.query(dc.Avalanche_Analysis).filter_by(\
-                    filter_id=filter_id, subsample=n, threshold_mode='percentile',\
-                    threshold_level=p, time_scale=b, event_method=e, cascade_method=c).first()
+                    filter_id=filter_id, spatial_sample=sn, temporal_sample=tn\
+                    threshold_mode='percentile', threshold_level=p, \
+                    time_scale=b, event_method=e, cascade_method=c).first()
             if not overwrite_database and analysis and analysis.fits:
             #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
                 continue
             if not analysis:
                 analysis = dc.Avalanche_Analysis(\
-                    filter_id=filter_id, subsample=n, threshold_mode='percentile',\
-                    threshold_level=p, time_scale=b, event_method=e, cascade_method=c)
+                    filter_id=filter_id, spatial_sample=sn, temporal_sample=tn\
+                    threshold_mode='percentile', threshold_level=p, \
+                    time_scale=b, event_method=e, cascade_method=c)
                 session.add(analysis)
                 session.commit()
 
             analysis_id=analysis.id
 
-        metrics = avalanche_analysis(file, bin_width=b, percentile=p, \
+        metrics = avalanche_analysis(data, bin_width=b, percentile=p, \
             event_method=e, cascade_method=c,\
-            subsample=s, sample_name=n,\
+            spatial_sample=s, sample_name=n,\
+            temporal_sample=t, sample_name=n,\
             write_to_HDF5=write_to_HDF5, overwrite=overwrite_HDF5)
 
         statistics = avalanche_statistics(metrics, \
