@@ -12,7 +12,7 @@ class Base(object):
     """
     @declared_attr
     def __tablename__(cls):
-        return cls.__name__+'s'
+        return cls.__name__
     id = Column(Integer, primary_key=True)
 
 Base = declarative_base(cls=Base)
@@ -63,6 +63,40 @@ class Experiment(Base):
     def __repr__(self):
         return "<%s(subject='%s', visit='%s', task='%s')>" % \
                 (self.__class__.__name__, self.subject_id, self.visit_number, self.task_id)
+
+class Task_Performance(Base):
+    measure1_name = Column(String(100)) 
+    measure1_value = Column(Float) 
+    measure2_name = Column(String(100)) 
+    measure2_value = Column(Float) 
+    measure3_name = Column(String(100))
+    measure3_value = Column(Float)
+    measure4_name = Column(String(100)) 
+    measure4_value = Column(Float) 
+    measure5_name = Column(String(100)) 
+    measure5_value = Column(Float) 
+    measure6_name = Column(String(100))
+    measure6_value = Column(Float)
+    measure7_name = Column(String(100)) 
+    measure7_value = Column(Float) 
+    measure8_name = Column(String(100)) 
+    measure8_value = Column(Float) 
+    measure9_name = Column(String(100))
+    measure9_value = Column(Float)
+    measure10_name = Column(String(100))
+    measure10_value = Column(Float)
+
+    subject_id = Column(Integer, ForeignKey('Subjects.id'))
+    task_id = Column(Integer, ForeignKey('Tasks.id'))
+    experiment_id = Column(Integer, ForeignKey('Experiments.id'))
+
+    subject = relationship(Subject, backref=backref('task_performances', order_by=id))
+    task = relationship(Task, backref=backref('task_performances', order_by=id))
+    experiment = relationship(Experiment, backref=backref('task_performances', order_by=id))
+
+    def __repr__(self):
+        return "<%s(subject='%s', experiment='%s', task='%s')>" % \
+                (self.__class__.__name__, self.subject_id, self.experiment_id, self.task_id)
 
 class Recording(Base):
     duration = Column(Float)
@@ -115,7 +149,7 @@ class Fit_Association(Base):
     with a particular analysis.
     
     """
-    __tablename__ = "Fit_Associations"
+    __tablename__ = "Fit_Association"
 
     @classmethod
     def creator(cls, discriminator):
@@ -161,11 +195,16 @@ class Avalanche(HasFits,Base):
     time_scale = Column(Float)
     event_method = Column(String(100))
     cascade_method = Column(String(100))
-    interevent_interval = Column(Float)
+
+    interevent_intervals_mean = Column(Float)
+    interevent_intervals_median = Column(Float)
+    interevent_intervals_mode = Column(Float)
+
     sigma_events = Column(Float)
     sigma_displacements = Column(Float)
     sigma_amplitudes = Column(Float)
     sigma_amplitude_aucs = Column(Float)
+
     t_ratio_displacements_slope = Column(Float)
     t_ratio_displacements_R = Column(Float)
     t_ratio_displacements_p = Column(Float)
