@@ -1,5 +1,6 @@
 from numpy import array, where, log2
 from bisect import bisect_left
+from sys import float_info
 
 def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False, \
         bin_width=1, percentile=.99, \
@@ -391,7 +392,7 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
         if k.startswith('interevent_intervals'):
             statistics[k+'_mean']=metrics[k].mean()
             statistics[k+'_median']=median(metrics[k])
-            statistics[k+'_mode']=mode(metrics[k])
+            statistics[k+'_mode']=mode(metrics[k])[0][0]
 
             if write_to_database:
                 setattr(avalanche_analysis, k+'_mean', statistics[k+'_mean'])
@@ -420,6 +421,8 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
             statistics[k]['power_law']['parameter1_value']=fit._alpha
             statistics[k]['power_law']['parameter2_name']='error'
             statistics[k]['power_law']['parameter2_value']=fit._alphaerr
+            statistics[k]['power_law']['parameter3_name']=None
+            statistics[k]['power_law']['parameter3_value']=None
             statistics[k]['power_law']['xmin']=fit._xmin
             statistics[k]['power_law']['loglikelihood']=fit._alphaerr
             statistics[k]['power_law']['KS']=fit._ks
@@ -440,7 +443,9 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
 
             if write_to_database:
                 fit_variables = ('parameter1_name', 'parameter1_value', \
-                        'parameter2_name', 'parameter2_value', 'xmin', 'loglikelihood', 'KS', 'p')
+                        'parameter2_name', 'parameter2_value', \
+                        'parameter3_name', 'parameter3_value', \
+                        'xmin', 'loglikelihood', 'KS', 'p')
 
                 power_law_fit = dc.Fit(analysis_type='avalanches',\
                         variable=k, distribution='power_law',\
@@ -455,9 +460,19 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
                         analysis_id=analysis_id)
 
                 for variable in fit_variables:
-                    setattr(power_law_fit,variable, statistics[k]['power_law'][variable])
-                    setattr(lognormal_fit,variable, statistics[k]['lognormal'][variable])
-                    
+                    if statistics[k]['power_law'][variable]==float('inf'):
+                        setattr(power_law_fit,variable, 1*10**float_info.max_10_exp)
+                    elif statistics[k]['power_law'][variable]==-float('inf'):
+                        setattr(power_law_fit,variable, -1*10**float_info.max_10_exp)
+                    else:
+                        setattr(power_law_fit,variable, statistics[k]['power_law'][variable])
+
+                    if statistics[k]['lognormal'][variable]==float('inf'):
+                        setattr(lognormal_fit,variable, 1*10**float_info.max_10_exp)
+                    elif statistics[k]['lognormal'][variable]==-float('inf'):
+                        setattr(lognormal_fit,variable, -1*10**float_info.max_10_exp)
+                    else:
+                        setattr(lognormal_fit,variable, statistics[k]['lognormal'][variable])
                 avalanche_analysis.fits.append(power_law_fit)
                 avalanche_analysis.fits.append(lognormal_fit)
 
@@ -526,7 +541,8 @@ def avalanche_analyses(data,\
                     threshold_mode='percentile', threshold_level=p, \
                     time_scale=b, event_method=e, cascade_method=c,\
                     subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
-                    sensor_id=sensor_id, recording_id=recording_id)
+                    sensor_id=sensor_id, recording_id=recording_id,\
+                    fits = [])
                 session.add(analysis)
                 session.commit()
 

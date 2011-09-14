@@ -119,7 +119,7 @@ class Recording(Base):
 class Filter(Base):
     filter_type = Column(String(100))
     poles = Column(Integer)
-    window = Column(Integer)
+    window = Column(String(100))
     band_name = Column(String(100))
     band_min = Column(Float)
     band_max = Column(Float)
