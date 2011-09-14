@@ -529,7 +529,6 @@ def avalanche_analyses(data,\
                     filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
                     threshold_mode='percentile', threshold_level=p, \
                     time_scale=b, event_method=e, cascade_method=c).first()
-            print analysis
 #            import pdb; pdb.set_ttrace()
             #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
             if not overwrite_database and analysis and analysis.fits:
