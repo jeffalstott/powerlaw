@@ -5,8 +5,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import database_classes as dc
 
-bins = [1, 3, 5, 7, 9]
-percentiles = [.99, .999]
+bins = [1, 2, 4]
+percentiles = [.9921875, .984375, .96875]
 event_methods = ['amplitude']
 cascade_methods = ['grid']
 subsamples = [('all', 'all')]

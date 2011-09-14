@@ -339,7 +339,7 @@ def area_under_the_curve(data, baseline='mean'):
 
 def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, overwrite=False):
     from scipy.stats import mode, linregress
-    from numpy import empty, unique
+    from numpy import empty, unique, median
     from plfit import plfit
     
     if write_to_database:
@@ -351,12 +351,12 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
 	
 	#If there are statistics already calculated, and we're not overwriting, then end.
         distribution_fit = session.query(dc.Distribution_Fit).filter_by(\
-                analysis_id=analysis_id).one()
-        if distribution_fit!=None and not overwrite:
+                analysis_id=analysis_id).first()
+        if distribution_fit and not overwrite:
             return
 
         avalanche_analysis = session.query(dc.Avalanche_Analysis).filter_by(\
-                analysis_id=analysis_id).one()
+                analysis_id=analysis_id).first()
 
     statistics = {}
     times_within_avalanche = unique(metrics['event_times_within_avalanche'])
@@ -368,6 +368,16 @@ def avalanche_statistics(metrics, write_to_database=False, analysis_id=False, ov
 
             if write_to_database:
                 setattr(avalanche_analysis, k, statistics[k])
+
+        if k.startswith('interevent_intervals'):
+            statistics[k+'_mean']=metrics[k].mean()
+            statistics[k+'_median']=median(metrics[k])
+            statistics[k+'_mode']=mode(metrics[k])
+
+            if write_to_database:
+                setattr(avalanche_analysis, k+'_mean', statistics[k+'_mean'])
+                setattr(avalanche_analysis, k+'_median', statistics[k+'_median'])
+                setattr(avalanche_analysis, k+'_mode', statistics[k+'_mode'])
                 
         elif k.startswith('t_ratio'):
             statistics[k] = {}
@@ -465,11 +475,11 @@ def avalanche_analyses(file, bins, percentiles, event_methods, cascade_methods, 
 
             analysis = session.query(dc.Avalanche_Analysis).filter_by(\
                     filter_id=filter_id, subsample=n, threshold_mode='percentile',\
-                    threshold_level=p, time_scale=b, event_method=e, cascade_method=c).one()
-            if analysis!=None and not overwrite_database:
-            #If there is a previous analysis and we're not overwriting the database, then go on to the next set of parameters
+                    threshold_level=p, time_scale=b, event_method=e, cascade_method=c).first()
+            if not overwrite_database and analysis and analysis.fits:
+            #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
                 continue
-            if analysis==None:
+            if not analysis:
                 analysis = dc.Avalanche_Analysis(\
                     filter_id=filter_id, subsample=n, threshold_mode='percentile',\
                     threshold_level=p, time_scale=b, event_method=e, cascade_method=c)
