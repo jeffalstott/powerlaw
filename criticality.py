@@ -479,6 +479,7 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
     if write_to_database:
         session.add(avalanche_analysis)
         session.commit()
+        session.close()
     return statistics
 
 def avalanche_analyses(data,\
@@ -565,6 +566,8 @@ def avalanche_analyses(data,\
         results[parameters]['metrics'] = metrics 
         results[parameters]['statistics'] = statistics
 
+    if write_to_database:
+        session.close()
     if verbose:
         return results
     return
