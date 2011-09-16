@@ -98,7 +98,10 @@ def find_events(data, data_amplitude=False, data_displacement_aucs=False, data_a
 
     #See if we received a reference to section of an HDF5 file. If so, pull what data is available
     if type(data)==h5py._hl.group.Group:
-        data_displacement = data['displacement'][:,:]
+        if 'displacement' in data:
+            data_displacement = data['displacement'][:,:]
+        else:
+            raise IOError("'When using an HDF5 input, need a dataset called 'displacement'")
         if 'amplitude' in data:
             data_amplitude = data['amplitude'][:,:]
         if 'displacement_aucs' in data:
@@ -357,25 +360,27 @@ def area_under_the_curve(data, baseline='mean'):
 
     return data_aucs
 
-def avalanche_statistics(metrics, write_to_database=False, overwrite=False, analysis_id=None,\
-        filter_id=None, subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None):
+def avalanche_statistics(metrics, \
+        session=None, database_url=None, overwrite_database=False, \
+        analysis_id=None, filter_id=None, \
+        subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None):
     from scipy.stats import mode, linregress
     from numpy import empty, unique, median
     from plfit import plfit
     
-    if write_to_database:
+    if not session and database_url:
         from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        import database_classes as dc
-        engine = create_engine(write_to_database, echo=False)
-        Session = sessionmaker(bind=engine)
-        session = Session()
-	
-        avalanche_analysis = session.query(dc.Avalanche).filter_by(\
+        from sqlalchemy.orm.session import Session
+        engine = create_engine(database_url, echo=False)
+        session = Session(engine)
+
+    if session:
+        import database_classes as db
+        avalanche_analysis = session.query(db.Avalanche).filter_by(\
                 id=analysis_id).first()
 
 	#If there are statistics already calculated, and we're not overwriting, then end.
-        if avalanche_analysis.fits and not overwrite:
+        if avalanche_analysis.fits and not overwrite_databse:
             return
 
     statistics = {}
@@ -386,15 +391,15 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
         if k.startswith('sigma'):
             statistics[k]=metrics[k].mean()
 
-            if write_to_database:
+            if session:
                 setattr(avalanche_analysis, k, statistics[k])
 
-        if k.startswith('interevent_intervals'):
+        elif k.startswith('interevent_intervals'):
             statistics[k+'_mean']=metrics[k].mean()
             statistics[k+'_median']=median(metrics[k])
             statistics[k+'_mode']=mode(metrics[k])[0][0]
 
-            if write_to_database:
+            if session:
                 setattr(avalanche_analysis, k+'_mean', statistics[k+'_mean'])
                 setattr(avalanche_analysis, k+'_median', statistics[k+'_median'])
                 setattr(avalanche_analysis, k+'_mode', statistics[k+'_mode'])
@@ -408,7 +413,7 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
             statistics[k]['R'] = regress[2]
             statistics[k]['p'] = regress[3]
 
-            if write_to_database:
+            if session:
                 setattr(avalanche_analysis, k+'_slope', statistics[k]['slope'])
                 setattr(avalanche_analysis, k+'_R', statistics[k]['R'])
                 setattr(avalanche_analysis, k+'_p', statistics[k]['p'])
@@ -441,19 +446,19 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
             statistics[k]['lognormal']['KS']=fit.lognormal_ksD
             statistics[k]['lognormal']['p']=fit.lognormal_ksP
 
-            if write_to_database:
+            if session:
                 fit_variables = ('parameter1_name', 'parameter1_value', \
                         'parameter2_name', 'parameter2_value', \
                         'parameter3_name', 'parameter3_value', \
                         'xmin', 'loglikelihood', 'KS', 'p')
 
-                power_law_fit = dc.Fit(analysis_type='avalanches',\
+                power_law_fit = db.Fit(analysis_type='avalanches',\
                         variable=k, distribution='power_law',\
                         subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
                         sensor_id=sensor_id, recording_id=recording_id, filter_id=filter_id,\
                         analysis_id=analysis_id)
 
-                lognormal_fit = dc.Fit(analysis_type='avalanches',\
+                lognormal_fit = db.Fit(analysis_type='avalanches',\
                         variable=k, distribution='lognormal',\
                         subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
                         sensor_id=sensor_id, recording_id=recording_id, filter_id=filter_id,\
@@ -476,21 +481,20 @@ def avalanche_statistics(metrics, write_to_database=False, overwrite=False, anal
                 avalanche_analysis.fits.append(power_law_fit)
                 avalanche_analysis.fits.append(lognormal_fit)
 
-    if write_to_database:
+    if session:
         session.add(avalanche_analysis)
         session.commit()
-        session.close()
     return statistics
 
 def avalanche_analyses(data,\
         bins, percentiles, event_methods, cascade_methods, \
-        spatial_samples, temporal_samples, \
-        spatial_sample_names=False, temporal_sample_names=False, \
+        spatial_samples=('all','all'), temporal_samples=('all','all'), \
+        spatial_sample_names=None, temporal_sample_names=None, \
         write_to_HDF5=False, overwrite_HDF5=False,\
-        write_to_database=False, overwrite_database=False,\
+        session=None, database_url=None, overwrite_database=False,\
         filter_id=None, subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None,\
-        data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False,\
-        verbose=False):
+        data_amplitude=None, data_displacement_aucs=None, data_amplitude_aucs=None,\
+        cluster=False, verbose=False):
 
     if spatial_sample_names:
         spatial_samples = zip(spatial_samples, spatial_sample_names)
@@ -503,71 +507,137 @@ def avalanche_analyses(data,\
         print 'Requires a list of temporal_samples AND a list of temporal_sample names, either as temporal_sample_names=list or as temporal_samples=a zipped list of tuples with indices and labels'
         return
     analysis_id=None 
-    results = {}
+    if verbose:
+        results = {}
 
-    if write_to_database:
+    if not session and database_url:
         from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        import database_classes as dc
-        engine = create_engine(write_to_database, echo=False)
-        Session = sessionmaker(bind=engine)
-        session = Session()
+        from sqlalchemy.orm.session import Session
+        engine = create_engine(database_url, echo=False)
+        session = Session(engine)
+    if session:
+        import database_classes as db
 
     parameter_space = [(b,p,e,c,s,sn,t,tn) for b in bins for p in percentiles \
             for e in event_methods for c in cascade_methods \
             for s,sn in spatial_samples \
             for t,tn in temporal_samples]
 
+    if cluster:
+        from os import listdir, system
+        swarms = [int(a) for a in listdir('/home/jja34/biowulf/swarms')]
+        if swarms:
+            new_swarm = str(max(swarms)+1)
+        else:
+            new_swarm = '1'
+        swarm_file = open('/home/jja34/biowulf/swarms/'+new_swarm, 'w')
+
     for b,p,e,c,s,sn,t,tn in parameter_space:
         parameters = str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
-        results[parameters] = {}
-
         if verbose:
+            results[parameters] = {}
             print parameters
 
-        if write_to_database:
-            analysis = session.query(dc.Avalanche).filter_by(\
+        if session:
+            analysis = session.query(db.Avalanche).filter_by(\
                     filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
                     threshold_mode='percentile', threshold_level=p, \
                     time_scale=b, event_method=e, cascade_method=c).first()
-#            import pdb; pdb.set_ttrace()
+
             #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
             if not overwrite_database and analysis and analysis.fits:
                 continue
 
-            if not analysis:
-                analysis = dc.Avalanche(\
-                    filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
-                    threshold_mode='percentile', threshold_level=p, \
-                    time_scale=b, event_method=e, cascade_method=c,\
-                    subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
-                    sensor_id=sensor_id, recording_id=recording_id,\
-                    fits = [])
+            if analysis:
+                analysis_id = analysis.id
+
+        if not cluster:
+            metrics = avalanche_analysis(data,\
+                    data_amplitude=data_amplitude, \
+                    data_displacement_aucs=data_displacement_aucs,\
+                    data_amplitude_aucs=data_amplitude_aucs,\
+                    bin_width=b, percentile=p,\
+                    event_method=e, cascade_method=c,\
+                    spatial_sample=s, spatial_sample_name=sn,\
+                    temporal_sample=t, temporal_sample_name=tn,\
+                    write_to_HDF5=write_to_HDF5, overwrite=overwrite_HDF5)
+
+            if session and not analysis: 
+                analysis = db.Avalanche(\
+                        filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
+                        threshold_mode='percentile', threshold_level=p, \
+                        time_scale=b, event_method=e, cascade_method=c,\
+                        subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
+                        sensor_id=sensor_id, recording_id=recording_id,\
+                        fits = [])
                 session.add(analysis)
                 session.commit()
+                analysis_id=analysis.id
 
-            analysis_id=analysis.id
+            statistics = avalanche_statistics(metrics, \
+                    session=session, database_url=database_url, \
+                    subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
+                    sensor_id=sensor_id, recording_id=recording_id, \
+                    filter_id=filter_id, analysis_id=analysis_id)
+            if verbose:
+                results[parameters]['metrics'] = metrics 
+                results[parameters]['statistics'] = statistics
 
-        metrics = avalanche_analysis(data,\
-            data_amplitude=data_amplitude, \
-            data_displacement_aucs=data_displacement_aucs,\
-            data_amplitude_aucs=data_amplitude_aucs,\
-            bin_width=b, percentile=p,\
-            event_method=e, cascade_method=c,\
-            spatial_sample=s, spatial_sample_name=sn,\
-            temporal_sample=t, temporal_sample_name=tn,\
-            write_to_HDF5=write_to_HDF5, overwrite=overwrite_HDF5)
+        else:
+            analyses = [int(a[:-3]) for a in listdir('/home/jja34/biowulf/analyses')]
+            if analyses:
+                new_analysis = str(max(analyses)+1)+'.py'
+            else:
+                new_analysis = '1.py'
+            analysis_file = open('/home/jja34/biowulf/analyses/'+new_analysis, 'w')
 
-        statistics = avalanche_statistics(metrics, \
-                write_to_database=write_to_database, analysis_id=analysis_id,\
-                subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
-                sensor_id=sensor_id, recording_id=recording_id, filter_id=filter_id)
+            analysis_file.write("database_url= %r\n\n" % database_url)
 
-        results[parameters]['metrics'] = metrics 
-        results[parameters]['statistics'] = statistics
+            analysis_file.writelines(['from sqlalchemy import create_engine\n',
+                'from sqlalchemy.orm.session import Session\n',
+                'engine = create_engine(database_url, echo=False)\n', 
+                'session = Session(engine)\n\n'])
 
-    if write_to_database:
-        session.close()
+            analysis_file.write('analysis_id=%s \n\n' % analysis_id)
+
+            analysis_file.writelines(['metrics = avalanche_analysis(data,\\\n',
+                '    data_amplitude=data_amplitude,\\\n',
+                '    data_displacement_aucs=data_displacement_aucs,\\\n',
+                '    data_amplitude_aucs=data_amplitude_aucs,\\\n',
+                '    bin_width=%s, percentile=%s,\\\n' % (b,p),
+                "    event_method=%r, cascade_method=%r,\\\n" % (e,c),
+                "    spatial_sample=%r, spatial_sample_name=%r,\\\n" % (s,sn),
+                '    temporal_sample=%r, temporal_sample_name=%r,\\\n' % (t,tn),
+                '    write_to_HDF5=%r, overwrite=%r)\n\n' % (write_to_HDF5, overwrite_HDF5)])
+
+            analysis_file.writelines(['if not analysis_id:\n',
+                '    import database_classes as db\n',
+                '    analysis = db.Avalanche(\\\n',
+                '        filter_id=%s,\\\n' % filter_id,
+                '        spatial_sample=%r, temporal_sample=%r,\\\n' % (sn, tn),
+                '        threshold_mode=%r, threshold_level=%r,\\\n' % ('percentile', p),
+                '        time_scale=%r, event_method=%r, cascade_method=%r,\\\n' % (b, e, c),
+                '        subject_id=%s, task_id=%s, experiment_id=%s,\\\n' % (subject_id, task_id, experiment_id),
+                '        sensor_id=%s, recording_id=%s,\\\n' % (sensor_id, recording_id),
+                '        fits = [])\n',
+                '    session.add(analysis)\n',
+                '    session.commit()\n',
+                '    analysis_id=analysis.id\n\n'])
+
+            analysis_file.writelines(['statistics = avalanche_statistics(metrics,\\\n',
+                '    session=session, database_url=database_url,\\\n',
+                '    subject_id=%s, task_id=%s, experiment_id=%s,\\\n' % (subject_id, task_id, experiment_id),
+                '    sensor_id=%s, recording_id=%s,\\\n' % (sensor_id, recording_id),
+                '    filter_id=%s, analysis_id=%s)' % (filter_id, analysis_id)])
+
+            analysis_file.close()
+
+            swarm_file.write('/usr/local/Python/2.7.2/bin/python /home/jja34/biowulf/analyses/'+new_analysis+'\n')
+
+    if cluster:
+        swarm_file.close()
+        system('swarm /home/jja34/biowulf/swarms/'+new_swarm)
+
     if verbose:
         return results
     return
