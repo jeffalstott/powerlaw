@@ -7,8 +7,13 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
         event_method='amplitude', cascade_method='grid', \
         spatial_sample='all', spatial_sample_name=False,\
         temporal_sample='all', temporal_sample_name=False,\
-        write_to_HDF5=False, overwrite=False):
+        write_to_HDF5=False, overwrite_HDF5=False,\
+        HDF5_group=None):
     """docstring for avalanche_analysis  """
+
+    if type(data)==unicode or type(data)==str):
+        import h5py
+        file = h5py.File(data)[HDF5_group]
 
     if not spatial_sample_name:
         if spatial_sample=='all':
@@ -25,7 +30,7 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
 #If that version already exists, and we're not overwriting it, then cancel the calculation
     if write_to_HDF5:
         version = 'b-'+str(bin_width)+'_p-'+str(percentile)[2:]+'_e-'+event_method + '_c-'+ cascade_method +'_s-'+spatial_sample_name+'_t-'+temporal_sample_name
-        if not overwrite and 'avalanches' in list(data) and version in list(data['avalanches']):
+        if not overwrite_HDF5 and 'avalanches' in list(data) and version in list(data['avalanches']):
             return 'Calculation aborted for version '+version+' as results already exist and the option overwrite=False'
 
     metrics = {}
@@ -91,7 +96,6 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
 def find_events(data, data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False,\
         percentile=.99, event_method='amplitude', spatial_sample='all', temporal_sample='all'):
     """find_events does things"""
-    from scipy.signal import hilbert
     from scipy.stats import scoreatpercentile
     from numpy import ndarray, transpose, diff
     import h5py
@@ -116,7 +120,7 @@ def find_events(data, data_amplitude=False, data_displacement_aucs=False, data_a
 
     #If we don't have amplitude or area_under_the_curve information yet, calculate it
     if type(data_amplitude)!=ndarray:
-        data_amplitude = abs(hilbert(data_displacement))
+        data_amplitude = fast_amplitude(data_displacement))
     if type(data_displacement_aucs)!=ndarray:
         data_displacement_aucs = area_under_the_curve(data_displacement)
     if type(data_amplitude_aucs)!=ndarray:
@@ -491,10 +495,12 @@ def avalanche_analyses(data,\
         spatial_samples=('all','all'), temporal_samples=('all','all'), \
         spatial_sample_names=None, temporal_sample_names=None, \
         write_to_HDF5=False, overwrite_HDF5=False,\
+        HDF5_group=None,\
         session=None, database_url=None, overwrite_database=False,\
         filter_id=None, subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None,\
         data_amplitude=None, data_displacement_aucs=None, data_amplitude_aucs=None,\
-        cluster=False, verbose=False):
+        cluster=False, swarms_directory=None, analyses_directory=None, python_location=None,\
+        verbose=False):
 
     if spatial_sample_names:
         spatial_samples = zip(spatial_samples, spatial_sample_names)
@@ -525,12 +531,12 @@ def avalanche_analyses(data,\
 
     if cluster:
         from os import listdir, system
-        swarms = [int(a) for a in listdir('/home/jja34/biowulf/swarms')]
+        swarms = [int(a) for a in listdir(swarms_directory)]
         if swarms:
             new_swarm = str(max(swarms)+1)
         else:
             new_swarm = '1'
-        swarm_file = open('/home/jja34/biowulf/swarms/'+new_swarm, 'w')
+        swarm_file = open(swarms_directory+new_swarm, 'w')
 
     for b,p,e,c,s,sn,t,tn in parameter_space:
         parameters = str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
@@ -560,7 +566,9 @@ def avalanche_analyses(data,\
                     event_method=e, cascade_method=c,\
                     spatial_sample=s, spatial_sample_name=sn,\
                     temporal_sample=t, temporal_sample_name=tn,\
-                    write_to_HDF5=write_to_HDF5, overwrite=overwrite_HDF5)
+                    write_to_HDF5=write_to_HDF5, overwrite_HDF5=overwrite_HDF5,\
+                    HDF5_group=HDF5_group)
+
 
             if session and not analysis: 
                 analysis = db.Avalanche(\
@@ -584,12 +592,12 @@ def avalanche_analyses(data,\
                 results[parameters]['statistics'] = statistics
 
         else:
-            analyses = [int(a[:-3]) for a in listdir('/home/jja34/biowulf/analyses')]
+            analyses = [int(a[:-3]) for a in listdir(analyses_directory)]
             if analyses:
                 new_analysis = str(max(analyses)+1)+'.py'
             else:
                 new_analysis = '1.py'
-            analysis_file = open('/home/jja34/biowulf/analyses/'+new_analysis, 'w')
+            analysis_file = open(analyses_directory+new_analysis, 'w')
 
             analysis_file.write("database_url= %r\n\n" % database_url)
 
@@ -608,7 +616,8 @@ def avalanche_analyses(data,\
                 "    event_method=%r, cascade_method=%r,\\\n" % (e,c),
                 "    spatial_sample=%r, spatial_sample_name=%r,\\\n" % (s,sn),
                 '    temporal_sample=%r, temporal_sample_name=%r,\\\n' % (t,tn),
-                '    write_to_HDF5=%r, overwrite=%r)\n\n' % (write_to_HDF5, overwrite_HDF5)])
+                '    write_to_HDF5=%r, overwrite_HDF5=%r,\\\n' % (write_to_HDF5, overwrite_HDF5),
+                '    HDF5_group=%r)\n\n' % HDF5_group])
 
             analysis_file.writelines(['if not analysis_id:\n',
                 '    import database_classes as db\n',
@@ -632,11 +641,11 @@ def avalanche_analyses(data,\
 
             analysis_file.close()
 
-            swarm_file.write('/usr/local/Python/2.7.2/bin/python /home/jja34/biowulf/analyses/'+new_analysis+'\n')
+            swarm_file.write(python_location+' '+analyses_directory+new_analysis+'\n')
 
     if cluster:
         swarm_file.close()
-        system('swarm /home/jja34/biowulf/swarms/'+new_swarm)
+        system('swarm '+swarms_directory+new_swarm)
 
     if verbose:
         return results
@@ -669,8 +678,26 @@ def energy_levels(data, time_scales):
 
     return levels
 
+def fast_amplitude(data):
+    """Uses Scipy's hilbert function to calculate the amplitude envelope of a signal.\
+            Importantly, Scipy's implementation can be very slow, depending on the factors \
+            of the length of the signal. fast_amplitude pads the signal (taking more memory) \
+            to the next factor of two to make the factorization fast!"""
+    from scipy.signal import hilbert
+    from numpy import zeros, concatenate
+    n_rows, n_columns = data.shape
+    target = next_power_of_2(n_columns) #Pad the array with zeros to the next power of 2 to speed up the Hilbert transform, which recursively calls DFT
+    shortage = target-n_columns
+    hd = abs(hilbert( \
+            concatenate((data, zeros((n_rows, shortage))), axis=-1)))
+    return hd[:,:n_columns]
 
-
-
-
-
+def next_power_of_2(x):
+    x -= 1
+    x |= x >> 1
+    x |= x >> 2
+    x |= x >> 4
+    x |= x >> 8
+    x |= x >> 16
+    x += 1
+    return x 

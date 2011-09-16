@@ -101,6 +101,9 @@ class Task_Performance(Base):
 class Recording(Base):
     duration = Column(Float)
     sampling_rate = Column(Float)
+    maxfilter = Column(Boolean)
+    transd = Column(Boolean)
+    eye_movement_removed = Column(Boolean)
 
     subject_id = Column(Integer, ForeignKey('Subject.id'))
     task_id = Column(Integer, ForeignKey('Task.id'))

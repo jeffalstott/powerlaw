@@ -1,7 +1,15 @@
 import criticality
 import h5py
 import os
-import BCNI_database as db
+
+#import BCNI_database as db
+#cluster=False
+
+import Helix_database as db
+cluster=True
+analyses_directory = '/home/alstottj/biowulf/analyses/'
+swarm_jobs_directory = '/home/alstottj/biowulf/swarms/'
+python_location= '/usr/local/Python/2.7.2/bin/python'
 
 bins = [1, 2, 4]
 percentiles = [.9921875, .984375, .96875]
@@ -15,24 +23,24 @@ visits = ['2', '3']
 tasks = ['rest']
 eyes = ['open']
 sensors = ['gradiometer']
+remicas = ['raw', 'remica']
 
-group_name ='GSK2'
-species = 'human'
-location='MRC'
-data_path = '/work/imagingA/jja34/Data/MRC/'+group_name
-#database = '/work/imagingA/jja34/Results'
-#database = 'sqlite:///:memory:'
+data_path = '/data/alstottj/MRC/'
 filter_type = 'FIR'
 taps = 513
 window = 'blackmanharris'
-
+transd = [True]
 
 dirList=os.listdir(data_path)
 for fname in dirList:
-    file = data_path+'/'+fname
-    number_in_group = int(fname[7:10])
-    session = db.Session()
+    file = data_path+fname
+    f = h5py.File(file)
+    group_name = f.attrs['group_name'] 
+    number_in_group = f.attrs['number_in_group']
+    species = f.attrs['species']
+    location = f.attrs['location']
 
+    session = db.Session()
     subject = session.query(db.Subject).\
             filter_by(species=species, group_name=group_name, number_in_group=number_in_group).first()
     if not subject:
@@ -41,11 +49,10 @@ for fname in dirList:
         session.commit()
 
     print file
-    f = h5py.File(file)
 
-    conditions = [(v,t,e,s) for v in visits for t in tasks for e in eyes for s in sensors] 
-    for visit, task_type, eye, sensor_type in conditions:
-        base = visit+'/'+task_type+'/'+eye+'/'+sensor_type
+    conditions = [(v,t,e,s,rem) for v in visits for t in tasks for e in eyes for s in sensors for rem in remicas] 
+    for visit, task_type, eye, sensor_type, rem in conditions:
+        base = visit+'/'+task_type+'/'+eye+'/'+sensor_type+'/'+rem
         base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window
         #If this particular set of conditions doesn't exist for this subject, just continue to the next set of conditions
         try:
@@ -77,11 +84,21 @@ for fname in dirList:
             session.add(experiment)
             session.commit()
 
+        if rem=='remica':
+            rem=True
+        elif rem=='raw':
+            rem=False
+        else:
+            raise KeyError("Don't know this kind of remica processing!")
+
         recording = session.query(db.Recording).\
-                filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration).first()
+                filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration, \
+                subject_id = subject.id, task_id=task.id,\
+                remica=rem, transd=transd).first()
         if not recording:
             recording = db.Recording(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration,\
-                    subject_id = subject.id, task_id=task.id)
+                    subject_id = subject.id, task_id=task.id,\
+                    remica=rem, transd=transd).first()
             session.add(recording)
             session.commit()
 
@@ -110,10 +127,10 @@ for fname in dirList:
                 session.add(filter)
                 session.commit()
 
-            criticality.avalanche_analyses(data, \
+            criticality.avalanche_analyses(f.file.filename, HDF5_group=condition=base_filtered+'/'+band, \
                     bins=bins, percentiles=percentiles, event_methods=event_methods, cascade_methods=cascade_methods, \
                     spatial_samples=spatial_samples, temporal_samples=temporal_samples,\
                     session=session, database_url=db.database_url,\
                     subject_id=subject.id, task_id=task.id, experiment_id=experiment.id,\
                     sensor_id=sensor.id, recording_id=recording.id, filter_id=filter.id,\
-                    cluster=False, verbose=True)
+                    cluster=cluster, verbose=False)
