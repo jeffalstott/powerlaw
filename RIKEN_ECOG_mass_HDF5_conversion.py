@@ -30,5 +30,3 @@ for dirname in dirList:
     #output_file = '/work/imaging8/jja34/ECoG_Study/ECoG_Data/Monkey_'+name
     output_file = '/scratch/alstottj/Monkey_'+name
     write_to_HDF5(data,output_file, task, 1000.0, bands=bands)
-
-

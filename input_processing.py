@@ -48,80 +48,87 @@ def riken_import(directory):
     return monkey_data
 
 
-def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
+def write_to_HDF5(data, file_name, condition, sampling_rate, \
+        window='blackmanharris', taps=513,\
+        group_name='', species='', location='', number_in_group='',\
+        amplitude=False, displacement_aucs=False, amplitude_aucs=False,\
+        bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
     import h5py
     from neuroscience import neuro_band_filter
-    from criticality import area_under_the_curve
-    from scipy.signal import hilbert
+    from criticality import area_under_the_curve, fast_amplitude
     from time import gmtime, strftime, clock
     from numpy import concatenate, zeros
     
     filter_type = 'FIR'
-    window = 'blackmanharris'
-    taps = 513
     version = 'filter_'+filter_type+'_'+str(taps)+'_'+window
     
     f = h5py.File(file_name+'.hdf5')
-    
+
+    try:
+        list(f[condition])
+    except KeyError:
+        f.create_group(condition)
+        pass
     
     for band in bands:
         print 'Processing '+band
         if band=='raw':
+            if 'raw' not in list(f[condition]):
+                f.create_group(condition+'/raw')
+
             tic = clock()
-            n_rows, n_columns = data.shape
-            target = next_power_of_2(n_columns) #Pad the array with zeros to the next power of 2 to speed up the Hilbert transform, which recursively calls DFT
-            shortage = target-n_columns
-            hd = abs(hilbert( \
-                concatenate((data, zeros((n_rows, shortage))), axis=-1)))
-            data_amplitude = hd[:,:n_columns]
-            data_displacement_aucs = area_under_the_curve(data)
-            data_amplitude_aucs = area_under_the_curve(data_amplitude)
-            try:
-                if 'raw' in list(f[condition]) and 'displacement' in list(f[condition+'/raw']):
-                    continue
-            except KeyError:
-                pass
-            f.create_dataset(condition+'/raw/displacement', data=data)
-            f.create_dataset(condition+'/raw/amplitude', data=data_amplitude)
-            f.create_dataset(condition+'/raw/amplitude_aucs', data=data_amplitude_aucs)
-            f.create_dataset(condition+'/raw/displacement_aucs', data=data_displacement_aucs)
+
+            if 'displacement' not in list(f[condition+'/raw']):
+                f.create_dataset(condition+'/raw/displacement', data=data)
+
+            if amplitude and 'amplitude' not in list(f[condition+'/raw']):
+                data_amplitude = fast_amplitude(data)
+                f.create_dataset(condition+'/raw/amplitude', data=data_amplitude)
+            if displacement_aucs and 'displacement_aucs' not in list(f[condition+'/raw']):
+                data_displacement_aucs = area_under_the_curve(data)
+                f.create_dataset(condition+'/raw/displacement_aucs', data=data_displacement_aucs)
+            if amplitude_aucs and 'amplitude_aucs' not in list(f[condition+'/raw']):
+                data_amplitude_aucs = area_under_the_curve(data_amplitude)
+                f.create_dataset(condition+'/raw/amplitude_aucs', data=data_amplitude_aucs)
+
             toc = clock()
             print toc-tic
             continue
-        print 'Filtering '+str(data.shape[-1])+' time points' 
-        try:
-            if 'displacement' in list(f[condition+'/'+version+'/'+band]):
-                continue
-        except KeyError:
-            pass
-        tic = clock()
-        d, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
-        f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=d)
-        toc = clock()
-        print toc-tic
-        print 'Hilbert Transform '+str(d.shape[-1])+' time points'
-        tic = clock()
-        n_rows, n_columns = d.shape
-        target = next_power_of_2(n_columns) #Pad the array with zeros to the next power of 2 to speed up the Hilbert transform, which recursively calls DFT
-        shortage = target-n_columns
-        hd = abs(hilbert( \
-                concatenate((d, zeros((n_rows, shortage))), axis=-1)))
-        hd = hd[:,:n_columns]
-        f.create_dataset(condition+'/'+version+'/'+band+'/amplitude', data=hd)
-        toc = clock()
-        print toc-tic
-        print 'Area under the curve, displacement'
-        tic = clock()
-        data_displacement_aucs = area_under_the_curve(d)
-        f.create_dataset(condition+'/'+version+'/'+band+'/displacement_aucs', data=data_displacement_aucs)
-        toc = clock()
-        print toc-tic
-        print 'Area under the curve, amplitude'
-        tic = clock()
-        data_amplitude_aucs = area_under_the_curve(hd)
-        f.create_dataset(condition+'/'+version+'/'+band+'/amplitude_aucs', data=data_amplitude_aucs)
-        toc = clock()
-        print toc-tic
+
+        print 'Filtering, '+str(data.shape[-1])+' time points' 
+        filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+
+        if version not in list(f(condition)):
+            f.create_group(condition+'/'+version)
+        
+        if 'displacement' not in list(f[condition+'/'+version]):
+            f.create_dataset(condition+'/'+version+'/displacement', data=filtered_data)
+
+        if amplitude and 'amplitude' not in list(f[condition+'/'+version]):
+            print 'Fast amplitude, '+str(d.shape[-1])+' time points'
+            tic = clock()
+            data_amplitude = fast_amplitude(filtered_data)
+            f.create_dataset(condition+'/'+version+'/amplitude', data=data_amplitude)
+            toc = clock()
+            print toc-tic
+        elif amplitude:
+            data_amplitude = f[condition+'/'+version+'/amplitude'][:,:]
+
+        if displacement_aucs and 'displacement_aucs' not in list(f[condition+'/'+version]):
+            print 'Area under the curve, displacement'
+            tic = clock()
+            data_displacement_aucs = area_under_the_curve(filtered_data)
+            f.create_dataset(condition+'/'+version+'/displacement_aucs', data=data_displacement_aucs)
+            toc = clock()
+            print toc-tic
+
+        if amplitude_aucs and 'amplitude_aucs' not in list(f[condition+'/'+version]):
+            print 'Fast amplitude, '+str(d.shape[-1])+' time points'
+            tic = clock()
+            data_amplitude_aucs = area_under_the_curve(data_amplitude)
+            f.create_dataset(condition+'/'+version+'/amplitude_aucs', data=data_amplitude_aucs)
+            toc = clock()
+            print toc-tic
         
         f[condition+'/'+version+'/'+band].attrs['frequency_range'] = frequency_range 
         f[condition+'/'+version+'/'+band].attrs['processing_date'] = strftime("%Y-%m-%d", gmtime())
@@ -129,16 +136,10 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, bands = ('raw', 'de
     f[condition+'/'+version].attrs['filter_type'] = filter_type
     f[condition+'/'+version].attrs['window'] = window
     f[condition+'/'+version].attrs['taps'] = taps
+    f.attrs['group_name']=group_name
+    f.attrs['number_in_group']=number_in_group
+    f.attrs['species'] = species
+    f.attrs['location']=location
     
     f.close()
     return
-
-def next_power_of_2(x):
-    x -= 1
-    x |= x >> 1
-    x |= x >> 2
-    x |= x >> 4
-    x |= x >> 8
-    x |= x >> 16
-    x += 1
-    return x 
