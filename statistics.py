@@ -23,19 +23,27 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
     
     else:
         if distribution=='power_law':
-            initial_parameters=[1.5]
+            if discrete:
+                initial_parameters=[1 + n/sum( log( data/(xmin-.5) ))]
+            else:
+                initial_parameters=[1 + n/sum( log( data/xmin ))]
             likelihood_function = lambda parameters:\
                     power_law_likelihoods(\
                     data, parameters[0], xmin, xmax, discrete)
 
         elif distribution=='exponential':
-            initial_parameters=[.5]
+            from numpy import mean
+            initial_parameters=[1/mean(data)]
             likelihood_function = lambda parameters:\
                     exponential_likelihoods(\
                     data, parameters[0], xmin, xmax, discrete)
 
         elif distribution=='truncated_power_law':
-            initial_parameters=[1.5, .5]
+            from numpy import mean
+            if discrete:
+                initial_parameters=[1 + n/sum( log( data/(xmin-.5) )), 1/mean(data)]
+            else:
+                initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
             likelihood_function = lambda parameters:\
                     truncated_power_law_likelihoods(\
                     data, parameters[0], parameters[1], xmin, xmax, discrete)
@@ -58,7 +66,7 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
     if not comparison_alpha:
         return parameters, loglikelihood
 
-    pl_likelihoods = power_law_likelihoods(data, comparison_alpha, xmin, xmax, discrete)
+    pl_likelihoods = power_law_likelihoods(data, alpha=comparison_alpha, xmin=xmin, xmax=xmax, discrete=discrete)
     candidate_likelihoods = likelihood_function(parameters)
     R, p = loglikelihood_ratio(pl_likelihoods, candidate_likelihoods)
     return parameters, loglikelihood, R, p
@@ -91,6 +99,8 @@ def find_xmin(data, discrete=False, xmax=None):
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code, specifically around lines 131-143 of this version: http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357  This code isn't exactly that code, though that code is MIT license. I don't know if that puts any requirements on this function.
     data = sort(data)
     xmins, xmin_indices = unique(data, return_index=True)
+    xmins = xmins[:-1]
+    xmin_indices = xmin_indices[:-1] #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
 
     alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete)
     fits  = asarray( map(alpha_MLE_function,xmins))
@@ -148,8 +158,9 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False):
 
 def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
     if alpha<0:
-        from numpy import array
-        return array([0])
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
 
     data = data[data>=xmin]
     if xmax:
@@ -160,8 +171,9 @@ def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
                 ( (alpha-1) * xmin**(alpha-1) )
     if discrete:
         if alpha<1:
-            from numpy import array
-            return array([0])
+            from numpy import tile
+            from sys import float_info
+            return tile(10**float_info.min_10_exp, len(data))
         if not xmax:
             from scipy.special import zeta
             likelihoods = (data**-alpha)/\
@@ -176,8 +188,9 @@ def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
 
 def exponential_likelihoods(data, gamma, xmin, xmax=False, discrete=False):
     if gamma<0:
-        from numpy import array
-        return array([0])
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
 
     data = data[data>=xmin]
     if xmax:
@@ -185,8 +198,9 @@ def exponential_likelihoods(data, gamma, xmin, xmax=False, discrete=False):
 
     from numpy import exp
     if not discrete:
-        likelihoods = exp(-gamma*data)*\
-                gamma*exp(gamma*xmin)
+#        likelihoods = exp(-gamma*data)*\
+#                gamma*exp(gamma*xmin)
+        likelihoods = gamma*exp(gamma*(xmin-data)) #Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
         if not xmax:
             likelihoods = exp(-gamma*data)*\
@@ -200,8 +214,9 @@ def exponential_likelihoods(data, gamma, xmin, xmax=False, discrete=False):
 
 def truncated_power_law_likelihoods(data, alpha, gamma, xmin, xmax=False, discrete=False):
     if alpha<0 or gamma<0:
-        from numpy import array
-        return array([0])
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
 
     data = data[data>=xmin]
     if xmax:
@@ -210,9 +225,11 @@ def truncated_power_law_likelihoods(data, alpha, gamma, xmin, xmax=False, discre
     from numpy import exp
     if not discrete:
         from mpmath import gammainc
-        likelihoods = (data**-alpha)*exp(-gamma*data)*\
-                (gamma**(1-alpha))/\
-                float(gammainc(1-alpha,gamma*xmin))
+#        likelihoods = (data**-alpha)*exp(-gamma*data)*\
+#                (gamma**(1-alpha))/\
+#                float(gammainc(1-alpha,gamma*xmin))
+        likelihoods = (gamma**(1-alpha))/\
+                ( (data**alpha) * exp(gamma*data) * gammainc(1-alpha,gamma*xmin) ).astype(float) #Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
         if xmax:
             from numpy import arange
@@ -225,29 +242,42 @@ def truncated_power_law_likelihoods(data, alpha, gamma, xmin, xmax=False, discre
     return likelihoods
 
 def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False, force_positive_mean=False):
-    if sigma<0:
-        from numpy import array
-        return array([0])
-    if force_positive_mean and mu<0:
-        from numpy import array
-        return array([0])
+    from numpy import log
+#    print xmin
+#    print mu
+#    print sigma
+    if sigma<=0 or mu<log(xmin): 
+        #The standard deviation can't be negative, and the mean of the logarithm of the distribution can't be smaller than the log of the smallest member of the distribution!
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
+
+    if force_positive_mean and mu<=0:
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
 
     data = data[data>=xmin]
     if xmax:
         data = data[data<=xmax]
 
     if not discrete:
-        from numpy import sqrt, exp, log
+        from numpy import sqrt, exp
+#        from mpmath import erfc
         from scipy.special import erfc
         from scipy.constants import pi
         likelihoods = (1.0/data)*exp(-( (log(data) - mu)**2 )/2*sigma**2)*\
                 sqrt(2/(pi*sigma**2))/erfc( (log(xmin)-mu) / (sqrt(2)*sigma))
+#        likelihoods = likelihoods.astype(float)
     if discrete:
         if xmax:
-            from numpy import exp, arange,log
+            from numpy import arange,asarray, exp
+#            from mpmath import exp
             X = arange(xmin, xmax+1)
+#            PDF_function = lambda x: (1.0/x)*exp(-( (log(x) - mu)**2 ) / 2*sigma**2)
+#            PDF = asarray(map(PDF_function,X))
             PDF = (1.0/X)*exp(-( (log(X) - mu)**2 ) / 2*sigma**2)
-            PDF = PDF/sum(PDF)
+            PDF = (PDF/sum(PDF)).astype(float)
             likelihoods = PDF[(data-xmin).astype(int)]
     from sys import float_info
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
