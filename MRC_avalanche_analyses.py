@@ -24,6 +24,7 @@ tasks = ['rest']
 eyes = ['open']
 sensors = ['gradiometer']
 remicas = ['raw', 'remica']
+sampling_rate = 250.0
 
 data_path = '/data/alstottj/MRC/'
 filter_type = 'FIR'
@@ -94,11 +95,11 @@ for fname in dirList:
         recording = session.query(db.Recording).\
                 filter_by(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration, \
                 subject_id = subject.id, task_id=task.id,\
-                remica=rem, transd=transd).first()
+                sampling_rate=sampling_rate, eye_movement_removed=rem, transd=transd).first()
         if not recording:
             recording = db.Recording(experiment_id=experiment.id, sensor_id=sensor.id, duration=duration,\
                     subject_id = subject.id, task_id=task.id,\
-                    remica=rem, transd=transd).first()
+                    sampling_rate=sampling_rate, eye_movement_removed=rem, transd=transd)
             session.add(recording)
             session.commit()
 
@@ -127,7 +128,7 @@ for fname in dirList:
                 session.add(filter)
                 session.commit()
 
-            criticality.avalanche_analyses(f.file.filename, HDF5_group=condition=base_filtered+'/'+band, \
+            criticality.avalanche_analyses(f.file.filename, HDF5_group=base_filtered+'/'+band,\
                     bins=bins, percentiles=percentiles, event_methods=event_methods, cascade_methods=cascade_methods, \
                     spatial_samples=spatial_samples, temporal_samples=temporal_samples,\
                     session=session, database_url=db.database_url,\

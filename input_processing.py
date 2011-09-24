@@ -98,7 +98,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
         print 'Filtering, '+str(data.shape[-1])+' time points' 
         filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
 
-        if version not in list(f(condition)):
+        if version not in list(f[condition]):
             f.create_group(condition+'/'+version)
         
         if 'displacement' not in list(f[condition+'/'+version]):

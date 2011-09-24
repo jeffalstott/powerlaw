@@ -9,7 +9,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0, taps=513.0, window_type=
             'high-gamma': (array([80.0, 100.0]), False),
             'broad': (array([1.0,100.0]), False),
             }
-    if band='raw':
+    if band=='raw':
         return data
     frequencies = bands[band][0]
     pass_zero= bands[band][1]
