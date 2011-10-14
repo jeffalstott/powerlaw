@@ -50,6 +50,7 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
     metrics['stops'] = stops
     metrics['durations'] = (stops-starts).astype(float)
     metrics['durations_silences'] = (starts[1:]-stops[:-1]).astype(float)
+    metrics['n'] = len(starts)
 
     #For every avalanche, calculate some list of metrics, then save those metrics in a dictionary
     from numpy import empty, ndarray
@@ -81,7 +82,7 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
         #as attributes of this version. All the numerical results we store as new datasets in
         #in this version group
         attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method',\
-                'spatial_sample', 'temporal_sample')
+                'spatial_sample', 'temporal_sample', 'n')
         for k in attributes:
             results_subgroup.attrs[k] = metrics[k]
         for k in metrics:
@@ -365,18 +366,22 @@ def area_under_the_curve(data, baseline='mean'):
     return data_aucs
 
 def avalanche_statistics(metrics, \
+        given_xmin_xmax=[(None,None)],\
         session=None, database_url=None, overwrite_database=False, \
         analysis_id=None, filter_id=None, \
         subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None):
     from scipy.stats import mode, linregress
-    from numpy import empty, unique, median, sqrt
+    from numpy import empty, unique, median, sqrt, sort
     import statistics as pl_statistics
     
+    close_session_at_end=False
+
     if not session and database_url:
         from sqlalchemy import create_engine
         from sqlalchemy.orm.session import Session
         engine = create_engine(database_url, echo=False)
         session = Session(engine)
+        close_session_at_end=True
 
     if session:
         import database_classes as db
@@ -387,12 +392,16 @@ def avalanche_statistics(metrics, \
         if avalanche_analysis.fits and not overwrite_database:
             return
 
+    #Various variable initializations for later
     statistics = {}
     times_within_avalanche = unique(metrics['event_times_within_avalanche'])
     j = empty(times_within_avalanche.shape)
-    number_of_channels = len(unique(metrics['event_channels']))
 
-    distributions_to_fit = [('truncated_power_law', 'alpha', 'gamma'), ('exponential', 'gamma', None), ('lognormal', 'mu', 'sigma')] 
+    number_of_channels = len(unique(metrics['event_channels']))
+    given_xmin_xmax =[(xmin, number_of_channels) if xmax=='channels' else (xmin, xmax) for xmin, xmax in given_xmin_xmax]
+
+    #This list must start with 'power_law'!
+    distributions_to_fit = [('power_law','alpha', 'error', None), ('truncated_power_law', 'alpha', 'gamma', None), ('exponential', 'gamma', None, None), ('lognormal', 'mu', 'sigma', None)] 
 
     for k in metrics:
         if k.startswith('sigma'):
@@ -427,99 +436,117 @@ def avalanche_statistics(metrics, \
 
         elif k.startswith('duration') or k.startswith('size'):
             statistics[k]={}
-            statistics[k]['power_law']={}
-            if k.startswith('duration') or k.startswith('size_events'):
+            if k.startswith('duration'):
                 discrete=True
+                xmin_xmax = [(None,None)]
+            elif k.startswith('size_events'):
+                discrete=True
+                xmin_xmax = given_xmin_xmax
             else:
                 discrete=False
+                xmin_xmax = [(None,None)]
 
-            xmin, D, alpha, loglikelihood, n, noise_flag = pl_statistics.find_xmin(metrics[k],discrete=discrete)
-            alpha_error = (alpha-1)/sqrt(n)
-            statistics[k]['power_law']['parameter1_name']='alpha'
-            statistics[k]['power_law']['parameter1_value']=alpha
-            statistics[k]['power_law']['parameter2_name']='error'
-            statistics[k]['power_law']['parameter2_value']=alpha_error
-            statistics[k]['power_law']['parameter3_name']=None
-            statistics[k]['power_law']['parameter3_value']=None
-            statistics[k]['power_law']['xmin']=xmin
-            statistics[k]['power_law']['loglikelihood']= loglikelihood
-            statistics[k]['power_law']['loglikelihood_ratio']=None
-            statistics[k]['power_law']['KS']= D
-            statistics[k]['power_law']['noise_flag']= noise_flag
-            statistics[k]['power_law']['p']=None
-            statistics[k]['power_law']['n']=n
-            statistics[k]['power_law']['discrete']=discrete
+            for xmin, xmax in xmin_xmax:
+                for distribution, parameter0, parameter1, parameter2 in distributions_to_fit:
 
-            if session:
-                fit_variables = statistics[k]['power_law'].keys()
+                    if distribution=='power_law':
+                        if xmin:
+                            parameters, loglikelihood = pl_statistics.distribution_fit(\
+                                    metrics[k], distribution, discrete=discrete, xmin=xmin, xmax=xmax)
+                            alpha = parameters[0]
+                            D = pl_statistics.power_law_ks_distance(sort(metrics[k]),\
+                                    alpha, xmin=xmin, xmax=xmax, discrete=discrete)
 
-                power_law_fit = db.Fit(analysis_type='avalanches',\
-                        variable=k, distribution='power_law',\
-                        subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
-                        sensor_id=sensor_id, recording_id=recording_id, filter_id=filter_id,\
-                        analysis_id=analysis_id)
+                            D_plus_critical_branching, D_minus_critical_branching, Kappa = pl_statistics.power_law_ks_distance(sort(metrics[k]),\
+                                    1.5, xmin=xmin, xmax=xmax, discrete=discrete, kuiper=True)
+                            noise_flag = None
+                            n_tail = sum(metrics[k]>=xmin)
+                            alpha_error = (alpha-1)/sqrt(n_tail)
+                            parameters = [alpha, alpha_error]
 
-                for variable in fit_variables:
-                    if statistics[k]['power_law'][variable]==float('inf'):
-                        setattr(power_law_fit,variable, 1*10**float_info.max_10_exp)
-                    elif statistics[k]['power_law'][variable]==-float('inf'):
-                        setattr(power_law_fit,variable, -1*10**float_info.max_10_exp)
-                    else:
-                        setattr(power_law_fit,variable, statistics[k]['power_law'][variable])
-
-                avalanche_analysis.fits.append(power_law_fit)
-
-            for distribution, parameter0, parameter1 in distributions_to_fit:
-                if discrete and (distribution=='lognormal' or distribution=='truncated_power_law'):
-                    xmax=max(metrics[k])
-                else:
-                    xmax=None
-                parameters, loglikelihood, R, p = pl_statistics.distribution_fit(metrics[k], distribution,\
-                        xmin=xmin, xmax=xmax, discrete=discrete, comparison_alpha=alpha)
-
-                statistics[k][distribution]={}
-                statistics[k][distribution]['parameter1_name']=parameter0
-                statistics[k][distribution]['parameter1_value']=parameters[0]
-                statistics[k][distribution]['parameter2_name']=parameter1
-                if parameter1:
-                    statistics[k][distribution]['parameter2_value']=parameters[1]
-                else:
-                    statistics[k][distribution]['parameter2_value']=None
-                statistics[k][distribution]['parameter3_name']=None
-                statistics[k][distribution]['parameter3_value']=None
-                statistics[k][distribution]['xmin']=xmin
-                statistics[k][distribution]['loglikelihood']=loglikelihood
-                statistics[k][distribution]['loglikelihood_ratio']=R
-                statistics[k][distribution]['p']=p
-                statistics[k][distribution]['KS']= None
-                statistics[k][distribution]['noise_flag']= noise_flag
-                statistics[k][distribution]['n']=n
-                statistics[k][distribution]['discrete']=discrete
-
-                if session:
-                    distribution_fit = db.Fit(analysis_type='avalanches',\
-                            variable=k, distribution=distribution,\
-                            subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
-                            sensor_id=sensor_id, recording_id=recording_id, filter_id=filter_id,\
-                            analysis_id=analysis_id)
-
-                    for variable in fit_variables:
-                        if statistics[k][distribution][variable]==float('inf'):
-                            setattr(distribution_fit,variable, 1*10**float_info.max_10_exp)
-                        elif statistics[k][distribution][variable]==-float('inf'):
-                            setattr(distribution_fit,variable, -1*10**float_info.max_10_exp)
+                            R=None
+                            p=None
                         else:
-                            setattr(distribution_fit,variable, statistics[k][distribution_fit][variable])
-                            avalanche_analysis.fits.append(distribution_fit)
+                            xmin, D, alpha, loglikelihood, n_tail, noise_flag = pl_statistics.find_xmin(metrics[k],discrete=discrete)
+                            D_plus_critical_branching, D_minus_critical_branching, Kappa = pl_statistics.power_law_ks_distance(sort(metrics[k]),\
+                                    1.5, xmin=xmin, xmax=xmax, discrete=discrete, kuiper=True)
+                            alpha_error = (alpha-1)/sqrt(n_tail)
+                            parameters = [alpha, alpha_error]
+                            R = None
+                            p = None
+                    elif not xmax and discrete and (distribution=='lognormal' or distribution=='truncated_power_law'):
+                        parameters, loglikelihood, R, p = pl_statistics.distribution_fit(metrics[k], distribution,\
+                                xmin=xmin, xmax=max(metrics[k]), discrete=discrete, comparison_alpha=alpha)
+                        D=None
+                        D_plus_critical_branching=None
+                        D_minus_critical_branching=None
+                        Kappa = None
+                    else:
+                        parameters, loglikelihood, R, p = pl_statistics.distribution_fit(metrics[k], distribution,\
+                                xmin=xmin, xmax=xmax, discrete=discrete, comparison_alpha=alpha)
+                        D=None
+                        D_plus_critical_branching=None
+                        D_minus_critical_branching=None
+                        Kappa = None
+
+                    statistics[k][distribution]={}
+                    statistics[k][distribution]['parameter1_name']=parameter0
+                    statistics[k][distribution]['parameter1_value']=parameters[0]
+
+                    statistics[k][distribution]['parameter2_name']=parameter1
+                    if parameter1:
+                        statistics[k][distribution]['parameter2_value']=parameters[1]
+                    else:
+                        statistics[k][distribution]['parameter2_value']=None
+
+                    statistics[k][distribution]['parameter3_name']=parameter2
+                    if parameter2:
+                        statistics[k][distribution]['parameter3_value']=parameters[2]
+                    else:
+                        statistics[k][distribution]['parameter3_value']=None
+
+                    statistics[k][distribution]['xmin']=xmin
+                    statistics[k][distribution]['xmax']=xmax
+                    statistics[k][distribution]['loglikelihood']=loglikelihood
+                    statistics[k][distribution]['loglikelihood_ratio']=R
+                    statistics[k][distribution]['p']=p
+                    statistics[k][distribution]['KS']= D
+                    statistics[k][distribution]['D_plus_critical_branching']= D_plus_critical_branching
+                    statistics[k][distribution]['D_minus_critical_branching']= D_minus_critical_branching
+                    statistics[k][distribution]['Kappa']= Kappa
+                    statistics[k][distribution]['noise_flag']= noise_flag
+                    statistics[k][distribution]['n_tail']=n_tail
+                    statistics[k][distribution]['discrete']=discrete
+
+                    if session:
+                        fit_variables = statistics[k][distribution].keys()
+                        distribution_fit = db.Fit(analysis_type='avalanches',\
+                                variable=k, distribution=distribution,\
+                                subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
+                                sensor_id=sensor_id, recording_id=recording_id, filter_id=filter_id,\
+                                analysis_id=analysis_id)
+
+                        for variable in fit_variables:
+                            if statistics[k][distribution][variable]==float('inf'):
+                                setattr(distribution_fit,variable, 1*10**float_info.max_10_exp)
+                            elif statistics[k][distribution][variable]==-float('inf'):
+                                setattr(distribution_fit,variable, -1*10**float_info.max_10_exp)
+                            else:
+                                setattr(distribution_fit,variable, statistics[k][distribution][variable])
+
+                        avalanche_analysis.fits.append(distribution_fit)
 
     if session:
         session.add(avalanche_analysis)
         session.commit()
+        if close_session_at_end:
+            session.close()
     return statistics
 
 def avalanche_analyses(data,\
         bins, percentiles, event_methods, cascade_methods, \
         spatial_samples=('all','all'), temporal_samples=('all','all'), \
+        given_xmin_xmax=[(None, None)],\
         spatial_sample_names=None, temporal_sample_names=None, \
         write_to_HDF5=False, overwrite_HDF5=False,\
         HDF5_group=None,\
@@ -604,12 +631,14 @@ def avalanche_analyses(data,\
                         time_scale=b, event_method=e, cascade_method=c,\
                         subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
                         sensor_id=sensor_id, recording_id=recording_id,\
+                        n=metrics['n'],\
                         fits = [])
                 session.add(analysis)
                 session.commit()
                 analysis_id=analysis.id
 
             statistics = avalanche_statistics(metrics, \
+                    given_xmin_xmax=given_xmin_xmax,\
                     session=session, database_url=database_url, \
                     subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
                     sensor_id=sensor_id, recording_id=recording_id, \
@@ -628,17 +657,15 @@ def avalanche_analyses(data,\
 
             analysis_file.write("database_url= %r\n\n" % database_url)
 
-            analysis_file.writelines(['from sqlalchemy import create_engine\n',
+            analysis_file.writelines(['from criticality import avalanche_analysis, avalanche_statistics\n',
+                'from sqlalchemy import create_engine\n',
                 'from sqlalchemy.orm.session import Session\n',
                 'engine = create_engine(database_url, echo=False)\n', 
                 'session = Session(engine)\n\n'])
 
             analysis_file.write('analysis_id=%s \n\n' % analysis_id)
 
-            analysis_file.writelines(['metrics = avalanche_analysis(data,\\\n',
-                '    data_amplitude=data_amplitude,\\\n',
-                '    data_displacement_aucs=data_displacement_aucs,\\\n',
-                '    data_amplitude_aucs=data_amplitude_aucs,\\\n',
+            analysis_file.writelines(["metrics = avalanche_analysis(%r,\\\n" % data,
                 '    bin_width=%s, percentile=%s,\\\n' % (b,p),
                 "    event_method=%r, cascade_method=%r,\\\n" % (e,c),
                 "    spatial_sample=%r, spatial_sample_name=%r,\\\n" % (s,sn),
@@ -655,16 +682,20 @@ def avalanche_analyses(data,\
                 '        time_scale=%r, event_method=%r, cascade_method=%r,\\\n' % (b, e, c),
                 '        subject_id=%s, task_id=%s, experiment_id=%s,\\\n' % (subject_id, task_id, experiment_id),
                 '        sensor_id=%s, recording_id=%s,\\\n' % (sensor_id, recording_id),
+                "        n=metrics['n'],\\\n",
                 '        fits = [])\n',
                 '    session.add(analysis)\n',
                 '    session.commit()\n',
                 '    analysis_id=analysis.id\n\n'])
 
             analysis_file.writelines(['statistics = avalanche_statistics(metrics,\\\n',
+                "    given_xmin_xmax=%r,\\\n" % given_xmin_xmax,
                 '    session=session, database_url=database_url,\\\n',
                 '    subject_id=%s, task_id=%s, experiment_id=%s,\\\n' % (subject_id, task_id, experiment_id),
                 '    sensor_id=%s, recording_id=%s,\\\n' % (sensor_id, recording_id),
-                '    filter_id=%s, analysis_id=%s)' % (filter_id, analysis_id)])
+                '    filter_id=%s, analysis_id=%s)\n\n' % (filter_id, analysis_id)])
+
+            analysis_file.write('session.close()')
 
             analysis_file.close()
 
@@ -672,7 +703,7 @@ def avalanche_analyses(data,\
 
     if cluster:
         swarm_file.close()
-        system('swarm -f '+swarms_directory+new_swarm)
+        system('swarm -f '+swarms_directory+new_swarm+' -m a')
 
     if verbose:
         return results

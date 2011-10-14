@@ -52,12 +52,12 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
         window='blackmanharris', taps=513,\
         group_name='', species='', location='', number_in_group='',\
         amplitude=False, displacement_aucs=False, amplitude_aucs=False,\
+        overwrite=False,\
         bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
     import h5py
     from neuroscience import neuro_band_filter
     from criticality import area_under_the_curve, fast_amplitude
     from time import gmtime, strftime, clock
-    from numpy import concatenate, zeros
     
     filter_type = 'FIR'
     version = 'filter_'+filter_type+'_'+str(taps)+'_'+window
@@ -67,7 +67,7 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
     try:
         list(f[condition])
     except KeyError:
-        f.create_group(condition)
+        f.create_group(condition+'/'+version)
         pass
     
     for band in bands:
@@ -95,38 +95,45 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
             print toc-tic
             continue
 
-        print 'Filtering, '+str(data.shape[-1])+' time points' 
-        filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
-
-        if version not in list(f[condition]):
-            f.create_group(condition+'/'+version)
+        if band not in list(f[condition+'/'+version]):
+            f.create_group(condition+'/'+version+'/'+band)
         
-        if 'displacement' not in list(f[condition+'/'+version]):
-            f.create_dataset(condition+'/'+version+'/displacement', data=filtered_data)
+        if 'displacement' not in list(f[condition+'/'+version+'/'+band]):
+            print 'Filtering, '+str(data.shape[-1])+' time points' 
+            filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+            f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=filtered_data)
+        elif overwrite:
+            print 'Filtering, '+str(data.shape[-1])+' time points' 
+            filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+            f[condition+'/'+version+'/'+band+'/displacement']=filtered_data
+        elif amplitude_aucs or amplitude or displacement_aucs:
+            filtered_data = f[condition+'/'+version+'/'+band+'/displacement'][:,:]
+        else:
+            continue
 
-        if amplitude and 'amplitude' not in list(f[condition+'/'+version]):
-            print 'Fast amplitude, '+str(d.shape[-1])+' time points'
+        if amplitude and 'amplitude' not in list(f[condition+'/'+version+'/'+band]):
+            print 'Fast amplitude, '+str(filtered_data.shape[-1])+' time points'
             tic = clock()
             data_amplitude = fast_amplitude(filtered_data)
-            f.create_dataset(condition+'/'+version+'/amplitude', data=data_amplitude)
+            f.create_dataset(condition+'/'+version+'/'+band+'/amplitude', data=data_amplitude)
             toc = clock()
             print toc-tic
         elif amplitude:
-            data_amplitude = f[condition+'/'+version+'/amplitude'][:,:]
+            data_amplitude = f[condition+'/'+version+'/'+band+'/amplitude'][:,:]
 
-        if displacement_aucs and 'displacement_aucs' not in list(f[condition+'/'+version]):
+        if displacement_aucs and 'displacement_aucs' not in list(f[condition+'/'+version+'/'+band]):
             print 'Area under the curve, displacement'
             tic = clock()
             data_displacement_aucs = area_under_the_curve(filtered_data)
-            f.create_dataset(condition+'/'+version+'/displacement_aucs', data=data_displacement_aucs)
+            f.create_dataset(condition+'/'+version+'/'+band+'/displacement_aucs', data=data_displacement_aucs)
             toc = clock()
             print toc-tic
 
-        if amplitude_aucs and 'amplitude_aucs' not in list(f[condition+'/'+version]):
-            print 'Fast amplitude, '+str(d.shape[-1])+' time points'
+        if amplitude_aucs and 'amplitude_aucs' not in list(f[condition+'/'+version+'/'+band]):
+            print 'Area under the curve, amplitude'
             tic = clock()
             data_amplitude_aucs = area_under_the_curve(data_amplitude)
-            f.create_dataset(condition+'/'+version+'/amplitude_aucs', data=data_amplitude_aucs)
+            f.create_dataset(condition+'/'+version+'/'+band+'/amplitude_aucs', data=data_amplitude_aucs)
             toc = clock()
             print toc-tic
         

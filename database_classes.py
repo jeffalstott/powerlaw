@@ -200,6 +200,8 @@ class Avalanche(HasFits,Base):
     event_method = Column(String(100))
     cascade_method = Column(String(100))
 
+    n = Column(Integer)
+
     interevent_intervals_mean = Column(Float)
     interevent_intervals_median = Column(Float)
     interevent_intervals_mode = Column(Float)
@@ -253,8 +255,15 @@ class Fit(Base):
     xmin = Column(Float) 
     xmax = Column(Float)
     loglikelihood = Column(Float) 
+    loglikelihood_ratio = Column(Float) 
     KS = Column(Float)
+    D_plus_critical_branching = Column(Float)
+    D_minus_critical_branching = Column(Float)
+    Kappa = Column(Float)
     p = Column(Float)
+    n_tail = Column(Integer)
+    noise_flag = Column(Boolean)
+    discrete = Column(Boolean)
     
     analysis_id = Column(Integer)
     subject_id = Column(Integer, ForeignKey('Subject.id'))

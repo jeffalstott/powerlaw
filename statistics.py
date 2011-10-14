@@ -97,7 +97,8 @@ def find_xmin(data, discrete=False, xmax=None):
         data = data[data<=xmax]
     noise_flag=False
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code, specifically around lines 131-143 of this version: http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357  This code isn't exactly that code, though that code is MIT license. I don't know if that puts any requirements on this function.
-    data = sort(data)
+    if not all(data[i] <= data[i+1] for i in xrange(len(data)-1)):
+        data = sort(data)
     xmins, xmin_indices = unique(data, return_index=True)
     xmins = xmins[:-1]
     xmin_indices = xmin_indices[:-1] #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
@@ -124,37 +125,65 @@ def find_xmin(data, discrete=False, xmax=None):
     D = Ds[min_D_index]
     alpha = alphas[min_D_index]
     loglikelihood = loglikelihoods[min_D_index]
-    n = sum(data>=xmin)
+    n_tail = sum(data>=xmin)
 
-    return xmin, D, alpha, loglikelihood, n, noise_flag
+    return xmin, D, alpha, loglikelihood, n_tail, noise_flag
 
-def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False):
+def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=False):
     """Data must be sorted beforehand!"""
-    from numpy import arange
+    from numpy import arange, sort, mean
     data = data[data>=xmin]
     if xmax:
         data = data[data<=xmax]
     n = float(len(data))
+    if not all(data[i] <= data[i+1] for i in arange(n-1)):
+        data = sort(data)
 
     if not discrete:
-        P = arange(n)/n
-        CDF = 1-(xmin/data)**alpha
-        D = max(abs(CDF-P))
+        Actual_CDF = arange(n)/n
+        Theoretical_CDF = 1-(xmin/data)**alpha
+#        S = survival_function(data,xmin=xmin)
+#        P = (arange(xmin,max(data)+1)/xmin)**(-alpha+1)
+
+
     if discrete:
-        from numpy import histogram, cumsum
         from scipy.special import zeta
-        S = 1-cumsum(histogram(data,arange(xmin, max(data)+2))[0]/n)
-
         if xmax:
-            P = (zeta(alpha, arange(xmin,xmax+1)) - zeta(alpha, xmax+1)) /\
-                    (zeta(alpha, xmin)-zeta(alpha,xmax+1))
+            Actual_CDF = cumulative_distribution_function(data,xmin=xmin,xmax=xmax)
+            Theoretical_CDF = 1 - ((zeta(alpha, arange(xmin,xmax+1)) - zeta(alpha, xmax+1)) /\
+                    (zeta(alpha, xmin)-zeta(alpha,xmax+1)))
         if not xmax:
-            P = zeta(alpha, arange(xmin,max(data)+1)) /\
-                    zeta(alpha, xmin)
+            Actual_CDF = cumulative_distribution_function(data,xmin=xmin)
+            Theoretical_CDF = 1 - (zeta(alpha, arange(xmin,max(data)+1)) /\
+                    zeta(alpha, xmin))
 
-        D = max(abs(S-P))
+    D_plus = max(Theoretical_CDF-Actual_CDF)
+    D_minus = max(Actual_CDF-Theoretical_CDF)
+    Kappa = 1 + mean(Theoretical_CDF-Actual_CDF)
+
+    if kuiper:
+        return D_plus, D_minus, Kappa
+
+    D = max(D_plus, D_minus)
 
     return D
+
+def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False):
+    from numpy import cumsum, histogram, arange
+    if xmin:
+        data = data[data>=xmin]
+    else:
+        xmin = min(data)
+    if xmax:
+        data = data[data<=xmax]
+    else:
+        xmax = max(data)
+
+    CDF = cumsum(histogram(data,arange(xmin-1, xmax+2), density=True)[0])[:-1]
+
+    if survival:
+        CDF = 1-CDF
+    return CDF
 
 def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
     if alpha<0:
@@ -243,9 +272,6 @@ def truncated_power_law_likelihoods(data, alpha, gamma, xmin, xmax=False, discre
 
 def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False, force_positive_mean=False):
     from numpy import log
-#    print xmin
-#    print mu
-#    print sigma
     if sigma<=0 or mu<log(xmin): 
         #The standard deviation can't be negative, and the mean of the logarithm of the distribution can't be smaller than the log of the smallest member of the distribution!
         from numpy import tile

@@ -1,7 +1,7 @@
 import os
-from input_processing import mrc_fieldtrip_import, write_to_HDF5
+from input_processing import mrc_raw_import, write_to_HDF5
 
-path = '/data/alstottj/MRC/'
+path = '/scratch/alstottj/MRC/'
 dirList=os.listdir(path)
 
 bands = ('delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'raw', 'broad')

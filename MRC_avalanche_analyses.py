@@ -6,20 +6,24 @@ import os
 #cluster=False
 
 import Helix_database as db
+session = db.Session()
 cluster=True
 analyses_directory = '/home/alstottj/biowulf/analyses/'
-swarm_jobs_directory = '/home/alstottj/biowulf/swarms/'
+swarms_directory = '/home/alstottj/biowulf/swarms/'
 python_location= '/usr/local/Python/2.7.2/bin/python'
 
-bins = [1, 2, 4]
-percentiles = [.9921875, .984375, .96875]
+bins = [1, 2, 4, 8, 16, 32]
+percentiles = [.9, .99, .995098039, .99754902, .99877451]
+#bins = [1]
+#percentiles =[.99]
+given_xmin_xmax = [(None, None), (1, None), (1, 'channels')]
 event_methods = ['amplitude']
 cascade_methods = ['grid']
 spatial_samples = [('all', 'all')]
 temporal_samples = [('all', 'all')]
 
 
-visits = ['2', '3']
+visits = [2, 3]
 tasks = ['rest']
 eyes = ['open']
 sensors = ['gradiometer']
@@ -30,7 +34,8 @@ data_path = '/data/alstottj/MRC/'
 filter_type = 'FIR'
 taps = 513
 window = 'blackmanharris'
-transd = [True]
+transd = True
+mains = 50
 
 dirList=os.listdir(data_path)
 for fname in dirList:
@@ -41,7 +46,6 @@ for fname in dirList:
     species = f.attrs['species']
     location = f.attrs['location']
 
-    session = db.Session()
     subject = session.query(db.Subject).\
             filter_by(species=species, group_name=group_name, number_in_group=number_in_group).first()
     if not subject:
@@ -53,7 +57,7 @@ for fname in dirList:
 
     conditions = [(v,t,e,s,rem) for v in visits for t in tasks for e in eyes for s in sensors for rem in remicas] 
     for visit, task_type, eye, sensor_type, rem in conditions:
-        base = visit+'/'+task_type+'/'+eye+'/'+sensor_type+'/'+rem
+        base = str(visit)+'/'+task_type+'/'+eye+'/'+sensor_type+'/'+rem
         base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window
         #If this particular set of conditions doesn't exist for this subject, just continue to the next set of conditions
         try:
@@ -61,6 +65,41 @@ for fname in dirList:
         except KeyError:
             continue
         print base
+
+        if group_name=='GSK1':
+            drug = 'none'
+            rest = 'rested'
+        elif group_name=='GSK2' and number_in_group in [21, 25, 30, 35, 37, 44, 48, 137, 148]:
+            drug = 'placebo'
+            if visit==2:
+                rest = 'sleep_deprived'
+            if visit==3:
+                rest = 'rested'
+        elif group_name=='GSK2' and number_in_group in [22, 28, 32, 34, 39, 42, 45, 49, 50]:
+            drug = 'placebo'
+            if visit==2:
+                rest = 'rested'
+            if visit==3:
+                rest = 'sleep_deprived'
+        elif group_name=='GSK2' and number_in_group in [23, 27,33, 38,46,143]:
+            drug = 'donepezil'
+            if visit==2:
+                rest = 'sleep_deprived'
+            if visit==3:
+                rest = 'rested'
+        elif group_name=='GSK2' and number_in_group in [24, 26, 31, 36, 40, 41, 231, 149]:
+            drug = 'donepezil'
+            if visit==2:
+                rest = 'rested'
+            if visit==3:
+                rest = 'sleep_deprived'
+        else: 
+            print("Couldn't find this subject!")
+            drug = 'unknown'
+            rest = 'unknown'
+        print drug
+        print rest
+
 
         duration = f[base+'/raw/displacement'].shape[1]
 
@@ -77,11 +116,11 @@ for fname in dirList:
             break
         
         experiment = session.query(db.Experiment).\
-                filter_by(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
-                rest='rested', task_id=task.id).first()
+                filter_by(location=location, subject_id=subject.id, visit_number=visit, mains=mains, drug=drug,\
+                rest=rest, task_id=task.id).first()
         if not experiment:
-            experiment = db.Experiment(location=location, subject_id=subject.id, visit_number=visit, mains=50, drug='none',\
-                rest='rested', task_id=task.id)
+            experiment = db.Experiment(location=location, subject_id=subject.id, visit_number=visit, mains=mains, drug=drug,\
+                rest=rest, task_id=task.id)
             session.add(experiment)
             session.commit()
 
@@ -130,8 +169,13 @@ for fname in dirList:
 
             criticality.avalanche_analyses(f.file.filename, HDF5_group=base_filtered+'/'+band,\
                     bins=bins, percentiles=percentiles, event_methods=event_methods, cascade_methods=cascade_methods, \
+                    given_xmin_xmax=given_xmin_xmax,\
                     spatial_samples=spatial_samples, temporal_samples=temporal_samples,\
                     session=session, database_url=db.database_url,\
                     subject_id=subject.id, task_id=task.id, experiment_id=experiment.id,\
                     sensor_id=sensor.id, recording_id=recording.id, filter_id=filter.id,\
-                    cluster=cluster, verbose=False)
+                    cluster=cluster, swarms_directory=swarms_directory, analyses_directory=analyses_directory,\
+                    python_location=python_location,\
+                    verbose=False)
+
+session.close()
