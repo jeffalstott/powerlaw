@@ -2,19 +2,23 @@ from numpy import array, where, log2
 from bisect import bisect_left
 from sys import float_info
 
-def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False, \
-        bin_width=1, percentile=.99, \
-        event_method='amplitude', cascade_method='grid', \
+def avalanche_analysis(data,\
+        data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False, \
+        event_signal='amplitude', event_detection='local',\
+        threshold_mode='percentile', threshold_level=.99, threshold_direction='both',\
+        time_scale=1, cascade_method='grid', \
         spatial_sample='all', spatial_sample_name=False,\
         temporal_sample='all', temporal_sample_name=False,\
         write_to_HDF5=False, overwrite_HDF5=False,\
         HDF5_group=None):
     """docstring for avalanche_analysis  """
 
+    import h5py
+#See if we've just been passed a reference to an HDF5 file. If so, load the relevant section.
     if type(data)==unicode or type(data)==str:
-        import h5py
         data = h5py.File(data)[HDF5_group]
 
+#If we don't have a name for the spatial or temporal samples, generate one
     if not spatial_sample_name:
         if spatial_sample=='all':
             spatial_sample_name='all'
@@ -29,22 +33,70 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
 #If we're writing to HDF5, construct the version label we will save. 
 #If that version already exists, and we're not overwriting it, then cancel the calculation
     if write_to_HDF5:
-        version = 'b-'+str(bin_width)+'_p-'+str(percentile)[2:]+'_e-'+event_method + '_c-'+ cascade_method +'_s-'+spatial_sample_name+'_t-'+temporal_sample_name
+        version = 'ts-'+str(time_scale)+'_m-'+threshold_mode+'_t-'+str(threshold_level)[2:]+'_e-'+event_signal + '_ed-'+event_detection +'_c-'+ cascade_method +'_s-'+spatial_sample_name+'_t-'+temporal_sample_name
         if not overwrite_HDF5 and 'avalanches' in list(data) and version in list(data['avalanches']):
             return 'Calculation aborted for version '+version+' as results already exist and the option overwrite=False'
 
+#If we're reading from a HDF5 file, load what data is available
+    if type(data)==h5py._hl.group.Group:
+        if 'displacement' in data:
+            data_displacement = data['displacement'][:,:]
+        else:
+            raise IOError("'When using an HDF5 input, need a dataset called 'displacement'")
+        if 'amplitude' in data:
+            data_amplitude = data['amplitude'][:,:]
+        if 'displacement_aucs' in data:
+            data_displacement_aucs = data['displacement_aucs'][:,:]
+        if 'amplitude_aucs' in data:
+            data_amplitude_aucs = data['amplitude_aucs'][:,:]
+    else:
+        data_displacement = data
+
+    n_rows, n_columns = data_displacement.shape
+    data_displacement = data_displacement-data_displacement.mean(1).reshape(n_rows,1)
+
+    from numpy import ndarray
+    #If we don't have amplitude or area_under_the_curve information yet, calculate it
+    if type(data_amplitude)!=ndarray:
+        data_amplitude = fast_amplitude(data_displacement)
+    if type(data_displacement_aucs)!=ndarray:
+        data_displacement_aucs = area_under_the_curve(data_displacement)
+    if type(data_amplitude_aucs)!=ndarray:
+        data_amplitude_aucs = area_under_the_curve(data_amplitude)
+
     metrics = {}
-    metrics['bin_width'] = bin_width
-    metrics['percentile'] = percentile
-    metrics['event_method'] = event_method
+    metrics['time_scale'] = time_scale
+    metrics['threshold_mode'] = threshold_mode
+    metrics['threshold_level'] = threshold_level
+    metrics['event_signal'] = event_signal
     metrics['cascade_method'] = cascade_method
     metrics['spatial_sample'] = spatial_sample_name 
     metrics['temporal_sample'] = temporal_sample_name 
 
-    m = find_events(data, data_amplitude, data_displacement_aucs,  data_amplitude_aucs, percentile, event_method, spatial_sample, temporal_sample)
+    if event_signal == 'amplitude':
+        signal = data_amplitude
+    elif event_signal == 'displacement':
+        signal = abs(data_displacement)
+    elif event_signal == 'displacement_up':
+        signal = data_displacement
+    elif event_signal == 'displacement_down':
+        signal = data_displacement*-1.0
+    else:
+        print 'Please select a supported event detection method (amplitude or displacement)'
+
+    thresholds_up, thresholds_down = find_thresholds(signal, threshold_mode, threshold_level, threshold_direction)
+
+    m = find_events(signal, thresholds_up=thresholds_up, thresholds_down=thresholds_down,\
+        event_detection=event_detection, spatial_sample=spatial_sample, temporal_sample=temporal_sample)
+
     metrics.update(m)
 
-    starts, stops = find_cascades(metrics['event_times'], bin_width, cascade_method)
+    metrics['event_displacements'] = data_displacement[m['event_channels'], m['event_times']]
+    metrics['event_amplitudes']= data_amplitude[m['event_channels'], m['event_times']]
+    metrics['event_amplitude_aucs'] = data_amplitude_aucs[m['event_channels'], m['event_times']]
+    metrics['event_displacement_aucs'] = data_displacement_aucs[m['event_channels'], m['event_times']]
+
+    starts, stops = find_cascades(metrics['event_times'], time_scale, cascade_method)
 
     metrics['starts'] = starts
     metrics['stops'] = stops
@@ -81,8 +133,8 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
         #Store parameters for this analysis (including some parameters formatted as strings)
         #as attributes of this version. All the numerical results we store as new datasets in
         #in this version group
-        attributes = ('bin_width', 'percentile', 'event_method', 'cascade_method',\
-                'spatial_sample', 'temporal_sample', 'n')
+        attributes = ('time_scale', 'threshold_mode', 'threshold_level', 'event_signal',\
+                'cascade_method', 'spatial_sample', 'temporal_sample', 'n')
         for k in attributes:
             results_subgroup.attrs[k] = metrics[k]
         for k in metrics:
@@ -93,105 +145,233 @@ def avalanche_analysis(data, data_amplitude=False, data_displacement_aucs=False,
                     results_subgroup.create_dataset(k, data=array([0]))
         return
 
+def find_thresholds(signal, threshold_mode='SD', threshold_level=3, threshold_direction='both'):
+    """find_thresholds does things"""
+    from numpy import tile, shape, transpose, any
 
-def find_events(data, data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False,\
-        percentile=.99, event_method='amplitude', spatial_sample='all', temporal_sample='all'):
+    s = shape(threshold_level)
+    if len(signal.shape)==1:
+        n_channels=1
+    else:
+        n_channels, n_time_points = signal.shape
+    thresholds_down = None
+    thresholds_up = None
+
+    if threshold_mode == 'percentile':
+        from scipy.stats import scoreatpercentile
+        #scoreatpercentile only computes along the first dimension, so we transpose the 
+        #(channels, times) matrix to a (times, channels) matrix, calculate the percentile value, then transpose back
+        if s==() or s==(1,):
+            if type(threshold_level)==array:
+                threshold_level = threshold_level[0]
+            if threshold_direction=='both':
+                thresholds_up = transpose(scoreatpercentile(transpose(signal), threshold_level))
+                thresholds_down = transpose(scoreatpercentile(transpose(signal), 100-threshold_level))
+            elif threshold_direction=='up':
+                thresholds_up = transpose(scoreatpercentile(transpose(signal), threshold_level))
+            elif threshold_direction=='down':
+                thresholds_down = transpose(scoreatpercentile(transpose(signal), threshold_level))
+        elif s==(2,) and threshold_direction=='both':
+            thresholds_up = transpose(scoreatpercentile(transpose(signal), threshold_level[0]))
+            thresholds_down = transpose(scoreatpercentile(transpose(signal), threshold_level[1]))
+        elif s[0]==n_channels and len(s)<2 and threshold_direction=='up':
+             thresholds_up = [scoreatpercentile(signal[x,:],threshold_level[x]) for x in range(n_channels)]
+        elif s[0]==n_channels and len(s)<2 and threshold_direction=='down':
+             thresholds_down = [scoreatpercentile(signal[x,:],threshold_level[x]) for x in range(n_channels)]
+        elif s[0]==n_channels and len(s)==2 and s[1]==2 and threshold_direction=='both':
+             thresholds_up = [scoreatpercentile(signal[x,:],threshold_level[x,0]) for x in range(n_channels)]
+             thresholds_down = [scoreatpercentile(signal[x,:],threshold_level[x,1]) for x in range(n_channels)]
+
+    elif threshold_mode == 'SD':
+        if s==() or s==(1,):
+            if threshold_direction in ['both', 'up']:
+                thresholds_up = signal.mean(-1) + signal.std(-1)*threshold_level
+            if threshold_direction in ['both', 'down']:
+                thresholds_down = signal.mean(-1) - signal.std(-1)*threshold_level
+        elif s==(2,) and threshold_direction=='both':
+            thresholds_up = signal.mean(-1) + signal.std(-1)*threshold_level[0]
+            thresholds_down = signal.mean(-1) - signal.std(-1)*threshold_level[1]
+        elif s[0]==n_channels and len(s)<2 and threshold_direction=='up':
+            thresholds_up = signal.mean(-1) + signal.std(-1)*threshold_level
+        elif s[0]==n_channels and len(s)<2 and threshold_direction=='down':
+            thresholds_down = signal.mean(-1) - signal.std(-1)*threshold_level
+        elif s[0]==n_channels and len(s)==2 and s[1]==2 and threshold_direction=='both':
+            thresholds_up = signal.mean(-1) + signal.std(-1)*threshold_level[:,0]
+            thresholds_down = signal.mean(-1) - signal.std(-1)*threshold_level[:,1]
+
+    elif threshold_mode == 'ROC':
+        raise IOError("Not supported yet (sorry)")
+        
+    elif threshold_mode == 'absolute':
+        s = shape(threshold_level)
+        if s==() or s==(1,):
+            if threshold_direction=='both': 
+                thresholds_up = tile(abs(threshold_level), n_channels)
+                thresholds_down = tile(-abs(threshold_level), n_channels)
+            elif threshold_direction=='up':
+                thresholds_up = tile(threshold_level, n_channels)
+            elif threshold_direction=='down':
+                thresholds_down = tile(threshold_level, n_channels)
+        elif s==(2,) and threshold_direction=='both':
+            thresholds_up = tile(threshold_level[0], n_channels)
+            thresholds_down = tile(threshold_level[1], n_channels)
+        elif s[0]==n_channels and len(s)<2 and threshold_direction=='up':
+            thresholds_up = threshold_level
+        elif s[0]==n_channels and len(s)<2 and threshold_direction=='down':
+            thresholds_down = threshold_level
+        elif s[0]==n_channels and len(s)==2 and s[1]==2 and threshold_direction=='both':
+            thresholds_up = threshold_level[:,0]
+            thresholds_down = threshold_level[:,1]
+
+    if not any(thresholds_up) and not any(thresholds_down):
+        raise IOError("Incoherent threshold levels array and/or threshold direction provided")
+
+    return thresholds_up, thresholds_down
+
+
+def find_events(signal, thresholds_up=None, thresholds_down=None,\
+        event_detection='local',\
+        spatial_sample='all', temporal_sample='all'):
     """find_events does things"""
-    from scipy.stats import scoreatpercentile
-    from numpy import ndarray, transpose, diff
-    import h5py
+    from numpy import diff, zeros, transpose, any, c_, r_
 
-    #See if we received a reference to section of an HDF5 file. If so, pull what data is available
-    if type(data)==h5py._hl.group.Group:
-        if 'displacement' in data:
-            data_displacement = data['displacement'][:,:]
+    if len(signal.shape)==1:
+        n_channels=1
+        n_time_points = signal.shape[0]
+    else:
+        n_channels, n_time_points = signal.shape
+
+    #If we're not using all sensors or time points, take the samples now
+    if spatial_sample=='all':
+        spatial_sample=range(n_channels)
+    spatial_mask = zeros((n_channels, n_time_points))
+    spatial_mask[spatial_sample, :]=1
+
+    if temporal_sample=='all':
+        temporal_sample=range(n_time_points)
+    temporal_mask = zeros((n_channels, n_time_points))
+    temporal_mask[:,temporal_sample]=1
+
+    sample_mask = spatial_mask*temporal_mask
+
+    #Threshold mask
+    up_mask = transpose(transpose(signal)>thresholds_up)*1
+    down_mask = transpose(transpose(signal)<thresholds_down)*1
+
+    if any(thresholds_up) and any(thresholds_down):
+        threshold_mask = up_mask+down_mask
+    elif any(thresholds_up):
+        threshold_mask = up_mask
+    elif any(thresholds_down):
+        threshold_mask = down_mask
+
+    #Event Definition
+    if event_detection=='all':
+        event_mask = threshold_mask
+    else:
+        if n_channels==1:
+            max_mask = r_[zeros(1), signal[1:] > signal[ :-1]] * r_[signal[:-1] > signal[1:], zeros(1)]
+            min_mask = r_[zeros(1), signal[1:] < signal[ :-1]] * r_[signal[:-1] < signal[1:], zeros(1)]
         else:
-            raise IOError("'When using an HDF5 input, need a dataset called 'displacement'")
-        if 'amplitude' in data:
-            data_amplitude = data['amplitude'][:,:]
-        if 'displacement_aucs' in data:
-            data_displacement_aucs = data['displacement_aucs'][:,:]
-        if 'amplitude_aucs' in data:
-            data_amplitude_aucs = data['amplitude_aucs'][:,:]
+            max_mask = c_[zeros((n_channels,1)), signal[:,1:] > signal[:, :-1]] * c_[signal[:,:-1] > signal[:,1:], zeros((n_channels,1))]
+            min_mask = c_[zeros((n_channels,1)), signal[:,1:] < signal[:, :-1]] * c_[signal[:,:-1] < signal[:,1:], zeros((n_channels,1))]
+
+        if event_detection=='local':
+            #all local minima/maxima
+            event_mask = (max_mask + min_mask)*threshold_mask
+
+        elif event_detection=='local_extrema':
+            #local maxima for up, local minima for down
+            event_mask = max_mask*up_mask + min_mask*down_mask
+
+        elif event_detection=='excursion_extrema':
+            #furthest up on any excursion above threshold_up, furthest down on any excursion below threshold_down
+            up_event_mask = zeros(signal.shape)
+            down_event_mask = zeros(signal.shape)
+            for channel in range(n_channels):
+                if any(thresholds_up):
+                    if n_channels==1:
+                        excursions = diff(up_mask)
+                    else:
+                        excursions = diff(up_mask[channel,:])
+                    excursion_starts = where(excursions==1)[0]+1
+                    excursion_stops = where(excursions==-1)[0]+1
+                    if excursion_stops[0]<excursion_starts[0]:
+                        excursion_stops = excursion_stops[1:]
+                    if len(excursion_stops)<len(excursion_starts):
+                        excursion_starts = excursion_starts[0:-1]
+                    for e in range(len(excursion_starts)):
+                        if n_channels==1:
+                            event_time = signal[excursion_starts[e]:excursion_stops[e]].argmax()
+                            up_event_mask[event_time+excursion_starts[e]] = 1
+                        else:
+                            event_time = signal[channel, excursion_starts[e]:excursion_stops[e]].argmax()
+                            up_event_mask[channel, event_time+excursion_starts[e]] = 1
+
+                if any(thresholds_down): 
+                    if n_channels==1:
+                        excursions = diff(down_mask)
+                    else:
+                        excursions = diff(down_mask[channel,:])
+                    excursion_starts = where(excursions==1)[0]+1
+                    excursion_stops = where(excursions==-1)[0]+1
+                    if excursion_stops[0]<excursion_starts[0]:
+                        excursion_stops = excursion_stops[1:]
+                    if len(excursion_stops)<len(excursion_starts):
+                        excursion_starts = excursion_starts[0:-1]
+                    for e in range(len(excursion_starts)):
+                        if n_channels==1:
+                            event_time = signal[excursion_starts[e]:excursion_stops[e]].argmax()
+                            down_event_mask[event_time+excursion_starts[e]] = 1
+                        else:
+                            event_time = signal[channel, excursion_starts[e]:excursion_stops[e]].argmax()
+                            down_event_mask[channel, event_time+excursion_starts[e]] = 1
+
+            event_mask = down_event_mask+up_event_mask
+
+    event_matrix = event_mask*sample_mask
+    #Find everywhere there is an event within the spatiotemporal sample. We want to sort these events by time
+    #(the column axis), and the "where" function sorts by the row axis, so we transpose the event_matrix before
+    #sending it to where. We just have to make sure to assign times and channels appropriately
+    if len(signal.shape)==1:
+        from numpy import zeros
+        times = where( transpose(event_matrix) )[0]
+        channels = zeros(len(times))
     else:
-        data_displacement = data
-    
-    n_rows, n_columns = data_displacement.shape
-    data_displacement = data_displacement-data_displacement.mean(1).reshape(n_rows,1)
-
-    #If we don't have amplitude or area_under_the_curve information yet, calculate it
-    if type(data_amplitude)!=ndarray:
-        data_amplitude = fast_amplitude(data_displacement)
-    if type(data_displacement_aucs)!=ndarray:
-        data_displacement_aucs = area_under_the_curve(data_displacement)
-    if type(data_amplitude_aucs)!=ndarray:
-        data_amplitude_aucs = area_under_the_curve(data_amplitude)
-
-    #If we're not using all sensors, take the spatial sample Now
-    if spatial_sample!='all':
-        data_displacement = data_displacement[spatial_sample,:]
-        data_amplitude = data_amplitude[spatial_sample,:]
-        data_displacement_aucs = data_displacement_aucs[spatial_sample,:]
-        data_amplitude_aucs = data_amplitude_aucs[spatial_sample,:]
-
-    if event_method == 'amplitude':
-        signal = data_amplitude
-    elif event_method == 'displacement':
-        signal = abs(data_displacement)
-    elif event_method == 'displacement_up':
-        signal = data_displacement
-    elif event_method == 'displacement_down':
-        signal = data_displacement*-1.0
-    else:
-        print 'Please select a supported event detection method (amplitude or displacement)'
-
-    #scoreatpercentile only computes along the first dimension, so we transpose the 
-    #(channels, times) matrix to a (times, channels) matrix. This is also useful for
-    #applying the threshold, which is #channels long. We just need to make sure to 
-    #invert back the coordinate system when we assign the results, which we do 
-    threshold = scoreatpercentile(transpose(signal), percentile*100)
-    times, channels = where(transpose(signal)>threshold)
+        times, channels = where( transpose(event_matrix) )
 
     #If we're not using all time points, take the temporal sample now
-    if temporal_sample!='all':
-        allowed_times = []
-        for i in len(times):
-            q = bisect_left(temporal_sample, times[i])
-            if q!=len(temporal_sample) and temporal_sample[q]==times[i]:
-                allowed_times.append(i)
-        times = times[allowed_times]
-        channels = channels[allowed_times]
+#    if temporal_sample!='all':
+#        allowed_times = []
+#        for i in len(times):
+#            q = bisect_left(temporal_sample, times[i])
+#            if q!=len(temporal_sample) and temporal_sample[q]==times[i]:
+#                allowed_times.append(i)
+#        times = times[allowed_times]
+#        channels = channels[allowed_times]
 
-    displacements = data_displacement[channels, times]
-    amplitudes = data_amplitude[channels,times]
     interevent_intervals = diff(times)
-
-    event_amplitude_aucs = data_amplitude_aucs[channels, times]
-    event_displacement_aucs = data_displacement_aucs[channels, times]
 
     output_metrics = { \
             'event_times': times, \
             'event_channels': channels,\
-            'event_displacements': displacements,\
-            'event_amplitudes': amplitudes,\
-            'event_amplitude_aucs': event_amplitude_aucs,\
-            'event_displacement_aucs': event_displacement_aucs,\
             'interevent_intervals': interevent_intervals,\
             }
     return output_metrics
 
-def find_cascades(event_times, bin_width=1, method='grid'):
+def find_cascades(event_times, time_scale=1, method='grid'):
     """find_events does things"""
     from numpy import diff, concatenate
 
     if method=='gap':
         starts = array([event_times[0]])
         stops = array([event_times[-1]])
-        changes = where(diff(event_times)>=bin_width+1)[0]
+        changes = where(diff(event_times)>=time_scale+1)[0]
         starts = concatenate((starts, event_times[changes+1]))
         stops = concatenate((event_times[changes], stops))
 
     elif method=='grid':
+        bin_width=time_scale
         from numpy import reshape, zeros, size, unique
         
         #Collapse the reaster into a vector of zeros and ones, indicating activity or inactivity on all channels
@@ -248,7 +428,7 @@ def avalanche_metrics(input_metrics, avalanche_number):
             input_metrics['event_amplitude_aucs'][avalanche_start:avalanche_stop]))
 #Calculate sigmas
     if input_metrics['durations'][avalanche_number] < \
-            (2*input_metrics['bin_width']):
+            (2*input_metrics['time_scale']):
                 sigma_amplitudes = sigma_events = \
                         sigma_displacements = sigma_amplitude_aucs = \
                         0
@@ -256,12 +436,12 @@ def avalanche_metrics(input_metrics, avalanche_number):
         first_bin = bisect_left( \
                 input_metrics['event_times'], \
                 (input_metrics['starts'][avalanche_number] \
-                +input_metrics['bin_width'])\
+                +input_metrics['time_scale'])\
                 )-1
         second_bin = bisect_left( \
                 input_metrics['event_times'], \
                 (input_metrics['starts'][avalanche_number] \
-                +2*input_metrics['bin_width'])\
+                +2*input_metrics['time_scale'])\
                 )
         
         sigma_events = (second_bin-first_bin)/ \
@@ -446,6 +626,8 @@ def avalanche_statistics(metrics, \
                 discrete=False
                 xmin_xmax = [(None,None)]
 
+            print k
+
             for xmin, xmax in xmin_xmax:
                 for distribution, parameter0, parameter1, parameter2 in distributions_to_fit:
 
@@ -474,13 +656,13 @@ def avalanche_statistics(metrics, \
                             parameters = [alpha, alpha_error]
                             R = None
                             p = None
-                    elif not xmax and discrete and (distribution=='lognormal' or distribution=='truncated_power_law'):
-                        parameters, loglikelihood, R, p = pl_statistics.distribution_fit(metrics[k], distribution,\
-                                xmin=xmin, xmax=max(metrics[k]), discrete=discrete, comparison_alpha=alpha)
-                        D=None
-                        D_plus_critical_branching=None
-                        D_minus_critical_branching=None
-                        Kappa = None
+                   # elif not xmax and discrete and (distribution=='lognormal' or distribution=='truncated_power_law'):
+                   #     parameters, loglikelihood, R, p = pl_statistics.distribution_fit(metrics[k], distribution,\
+                   #             xmin=xmin, xmax=max(metrics[k]), discrete=discrete, comparison_alpha=alpha)
+                   #     D=None
+                   #     D_plus_critical_branching=None
+                   #     D_minus_critical_branching=None
+                   #     Kappa = None
                     else:
                         parameters, loglikelihood, R, p = pl_statistics.distribution_fit(metrics[k], distribution,\
                                 xmin=xmin, xmax=xmax, discrete=discrete, comparison_alpha=alpha)
@@ -544,7 +726,8 @@ def avalanche_statistics(metrics, \
     return statistics
 
 def avalanche_analyses(data,\
-        bins, percentiles, event_methods, cascade_methods, \
+        threshold_mode, threshold_levels, event_signals, event_detections,\
+        time_scales, cascade_methods,\
         spatial_samples=('all','all'), temporal_samples=('all','all'), \
         given_xmin_xmax=[(None, None)],\
         spatial_sample_names=None, temporal_sample_names=None, \
@@ -577,9 +760,11 @@ def avalanche_analyses(data,\
         session = Session(engine)
     if session:
         import database_classes as db
+    from sqlalchemy import and_
 
-    parameter_space = [(b,p,e,c,s,sn,t,tn) for b in bins for p in percentiles \
-            for e in event_methods for c in cascade_methods \
+    parameter_space = [(tl, e, ed, ts, c,s,sn,t,tn) for tl in threshold_levels \
+            for e in event_signals for ed in event_detections \
+            for ts in time_scales for c in cascade_methods \
             for s,sn in spatial_samples \
             for t,tn in temporal_samples]
 
@@ -592,17 +777,22 @@ def avalanche_analyses(data,\
             new_swarm = '1'
         swarm_file = open(swarms_directory+new_swarm, 'w')
 
-    for b,p,e,c,s,sn,t,tn in parameter_space:
-        parameters = str(b)+'_'+str(p)+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
+    for tl, e, ed, ts, c,s,sn,t,tn in parameter_space:
+        parameters = str(ts)+'_'+str(tl)+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
         if verbose:
             results[parameters] = {}
             print parameters
 
         if session:
+            threshold_tolerance = .000001*tl 
+            #This is a hack to deal with storing all numbers as floats. Your database interface may (as mine does) result in switching back and forth between float32 and float64, which makes direction threshold_level=tl identification impossible.
             analysis = session.query(db.Avalanche).filter_by(\
                     filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
-                    threshold_mode='percentile', threshold_level=p, \
-                    time_scale=b, event_method=e, cascade_method=c).first()
+                    threshold_mode=threshold_mode, \
+                    time_scale=ts, event_signal=e, event_detection=ed, cascade_method=c).\
+                    filter(\
+                            and_(db.Avalanche.threshold_level>(tl-threshold_tolerance),\
+                            db.Avalanche.threshold_level<(tl+threshold_tolerance))).first()
 
             #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
             if not overwrite_database and analysis and analysis.fits:
@@ -616,8 +806,9 @@ def avalanche_analyses(data,\
                     data_amplitude=data_amplitude, \
                     data_displacement_aucs=data_displacement_aucs,\
                     data_amplitude_aucs=data_amplitude_aucs,\
-                    bin_width=b, percentile=p,\
-                    event_method=e, cascade_method=c,\
+                    threshold_mode=threshold_mode, threshold_level=tl,\
+                    event_signal=e, event_detection=ed,\
+                    time_scale=ts, cascade_method=c,\
                     spatial_sample=s, spatial_sample_name=sn,\
                     temporal_sample=t, temporal_sample_name=tn,\
                     write_to_HDF5=write_to_HDF5, overwrite_HDF5=overwrite_HDF5,\
@@ -627,8 +818,9 @@ def avalanche_analyses(data,\
             if session and not analysis: 
                 analysis = db.Avalanche(\
                         filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
-                        threshold_mode='percentile', threshold_level=p, \
-                        time_scale=b, event_method=e, cascade_method=c,\
+                        threshold_mode=threshold_mode, threshold_level=tl, \
+                        event_signal=e, event_detection=ed,\
+                        time_scale=ts, cascade_method=c,\
                         subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
                         sensor_id=sensor_id, recording_id=recording_id,\
                         n=metrics['n'],\
@@ -666,34 +858,36 @@ def avalanche_analyses(data,\
             analysis_file.write('analysis_id=%s \n\n' % analysis_id)
 
             analysis_file.writelines(["metrics = avalanche_analysis(%r,\\\n" % data,
-                '    bin_width=%s, percentile=%s,\\\n' % (b,p),
-                "    event_method=%r, cascade_method=%r,\\\n" % (e,c),
+                "    threshold_mode=%r, threshold_level=%r,\\\n" % (threshold_mode,tl),
+                "    event_signal=%r, event_detection=%r,\\\n" % (e,ed),
+                "    time_scale=%s, cascade_method=%r,\\\n" % (ts,c),
                 "    spatial_sample=%r, spatial_sample_name=%r,\\\n" % (s,sn),
-                '    temporal_sample=%r, temporal_sample_name=%r,\\\n' % (t,tn),
-                '    write_to_HDF5=%r, overwrite_HDF5=%r,\\\n' % (write_to_HDF5, overwrite_HDF5),
-                '    HDF5_group=%r)\n\n' % HDF5_group])
+                "    temporal_sample=%r, temporal_sample_name=%r,\\\n" % (t,tn),
+                "    write_to_HDF5=%r, overwrite_HDF5=%r,\\\n" % (write_to_HDF5, overwrite_HDF5),
+                "    HDF5_group=%r)\n\n" % HDF5_group])
 
-            analysis_file.writelines(['if not analysis_id:\n',
-                '    import database_classes as db\n',
-                '    analysis = db.Avalanche(\\\n',
-                '        filter_id=%s,\\\n' % filter_id,
-                '        spatial_sample=%r, temporal_sample=%r,\\\n' % (sn, tn),
-                '        threshold_mode=%r, threshold_level=%r,\\\n' % ('percentile', p),
-                '        time_scale=%r, event_method=%r, cascade_method=%r,\\\n' % (b, e, c),
-                '        subject_id=%s, task_id=%s, experiment_id=%s,\\\n' % (subject_id, task_id, experiment_id),
-                '        sensor_id=%s, recording_id=%s,\\\n' % (sensor_id, recording_id),
+            analysis_file.writelines(["if not analysis_id:\n",
+                "    import database_classes as db\n",
+                "    analysis = db.Avalanche(\\\n",
+                "        filter_id=%s,\\\n" % filter_id,
+                "        spatial_sample=%r, temporal_sample=%r,\\\n" % (sn, tn),
+                "        threshold_mode=%r, threshold_level=%r,\\\n" % (threshold_mode, tl),
+                "        event_signal=%r, event_detection=%r,\\\n" % (e, ed),
+                "        time_scale=%r, cascade_method=%r,\\\n" % (ts, c),
+                "        subject_id=%s, task_id=%s, experiment_id=%s,\\\n" % (subject_id, task_id, experiment_id),
+                "        sensor_id=%s, recording_id=%s,\\\n" % (sensor_id, recording_id),
                 "        n=metrics['n'],\\\n",
-                '        fits = [])\n',
-                '    session.add(analysis)\n',
-                '    session.commit()\n',
-                '    analysis_id=analysis.id\n\n'])
+                "        fits = [])\n",
+                "    session.add(analysis)\n",
+                "    session.commit()\n",
+                "    analysis_id=analysis.id\n\n"])
 
-            analysis_file.writelines(['statistics = avalanche_statistics(metrics,\\\n',
+            analysis_file.writelines(["statistics = avalanche_statistics(metrics,\\\n",
                 "    given_xmin_xmax=%r,\\\n" % given_xmin_xmax,
-                '    session=session, database_url=database_url,\\\n',
-                '    subject_id=%s, task_id=%s, experiment_id=%s,\\\n' % (subject_id, task_id, experiment_id),
-                '    sensor_id=%s, recording_id=%s,\\\n' % (sensor_id, recording_id),
-                '    filter_id=%s, analysis_id=%s)\n\n' % (filter_id, analysis_id)])
+                "    session=session, database_url=database_url,\\\n",
+                "    subject_id=%s, task_id=%s, experiment_id=%s,\\\n" % (subject_id, task_id, experiment_id),
+                "    sensor_id=%s, recording_id=%s,\\\n" % (sensor_id, recording_id),
+                "    filter_id=%s, analysis_id=%s)\n\n" % (filter_id, analysis_id)])
 
             analysis_file.write('session.close()')
 
