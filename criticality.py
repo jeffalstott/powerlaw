@@ -4,7 +4,7 @@ from sys import float_info
 
 def avalanche_analysis(data,\
         data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False, \
-        event_signal='amplitude', event_detection='local',\
+        event_signal='amplitude', event_detection='local_extrema',\
         threshold_mode='percentile', threshold_level=.99, threshold_direction='both',\
         time_scale=1, cascade_method='grid', \
         spatial_sample='all', spatial_sample_name=False,\
@@ -76,11 +76,7 @@ def avalanche_analysis(data,\
     if event_signal == 'amplitude':
         signal = data_amplitude
     elif event_signal == 'displacement':
-        signal = abs(data_displacement)
-    elif event_signal == 'displacement_up':
         signal = data_displacement
-    elif event_signal == 'displacement_down':
-        signal = data_displacement*-1.0
     else:
         print 'Please select a supported event detection method (amplitude or displacement)'
 
@@ -230,7 +226,7 @@ def find_thresholds(signal, threshold_mode='SD', threshold_level=3, threshold_di
 
 
 def find_events(signal, thresholds_up=None, thresholds_down=None,\
-        event_detection='local',\
+        event_detection='local_extrema',\
         spatial_sample='all', temporal_sample='all'):
     """find_events does things"""
     from numpy import diff, zeros, transpose, any, c_, r_
@@ -296,7 +292,7 @@ def find_events(signal, thresholds_up=None, thresholds_down=None,\
                         excursions = diff(up_mask[channel,:])
                     excursion_starts = where(excursions==1)[0]+1
                     excursion_stops = where(excursions==-1)[0]+1
-                    if excursion_stops[0]<excursion_starts[0]:
+                    if excursion_stops!=[] and excursion_stops[0]<excursion_starts[0]:
                         excursion_stops = excursion_stops[1:]
                     if len(excursion_stops)<len(excursion_starts):
                         excursion_starts = excursion_starts[0:-1]
@@ -315,7 +311,7 @@ def find_events(signal, thresholds_up=None, thresholds_down=None,\
                         excursions = diff(down_mask[channel,:])
                     excursion_starts = where(excursions==1)[0]+1
                     excursion_stops = where(excursions==-1)[0]+1
-                    if excursion_stops[0]<excursion_starts[0]:
+                    if excursion_stops!=[] and excursion_stops[0]<excursion_starts[0]:
                         excursion_stops = excursion_stops[1:]
                     if len(excursion_stops)<len(excursion_starts):
                         excursion_starts = excursion_starts[0:-1]
@@ -626,9 +622,9 @@ def avalanche_statistics(metrics, \
                 discrete=False
                 xmin_xmax = [(None,None)]
 
-            print k
-
             for xmin, xmax in xmin_xmax:
+                fixed_xmin=bool(xmin)
+                fixed_xmax=bool(xmax)
                 for distribution, parameter0, parameter1, parameter2 in distributions_to_fit:
 
                     if distribution=='power_law':
@@ -687,7 +683,9 @@ def avalanche_statistics(metrics, \
                     else:
                         statistics[k][distribution]['parameter3_value']=None
 
+                    statistics[k][distribution]['fixed_xmin']=fixed_xmin
                     statistics[k][distribution]['xmin']=xmin
+                    statistics[k][distribution]['fixed_xmax']=fixed_xmax
                     statistics[k][distribution]['xmax']=xmax
                     statistics[k][distribution]['loglikelihood']=loglikelihood
                     statistics[k][distribution]['loglikelihood_ratio']=R
@@ -726,7 +724,8 @@ def avalanche_statistics(metrics, \
     return statistics
 
 def avalanche_analyses(data,\
-        threshold_mode, threshold_levels, event_signals, event_detections,\
+        threshold_mode, threshold_levels, threshold_directions,\
+        event_signals, event_detections,\
         time_scales, cascade_methods,\
         spatial_samples=('all','all'), temporal_samples=('all','all'), \
         given_xmin_xmax=[(None, None)],\
@@ -762,7 +761,8 @@ def avalanche_analyses(data,\
         import database_classes as db
     from sqlalchemy import and_
 
-    parameter_space = [(tl, e, ed, ts, c,s,sn,t,tn) for tl in threshold_levels \
+    parameter_space = [(tl, td, e, ed, ts, c,s,sn,t,tn) for tl in threshold_levels \
+            for td in threshold_directions \
             for e in event_signals for ed in event_detections \
             for ts in time_scales for c in cascade_methods \
             for s,sn in spatial_samples \
@@ -777,8 +777,8 @@ def avalanche_analyses(data,\
             new_swarm = '1'
         swarm_file = open(swarms_directory+new_swarm, 'w')
 
-    for tl, e, ed, ts, c,s,sn,t,tn in parameter_space:
-        parameters = str(ts)+'_'+str(tl)+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
+    for tl, td, e, ed, ts, c,s,sn,t,tn in parameter_space:
+        parameters = str(ts)+'_'+str(tl)+'_'+td+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
         if verbose:
             results[parameters] = {}
             print parameters
@@ -788,7 +788,7 @@ def avalanche_analyses(data,\
             #This is a hack to deal with storing all numbers as floats. Your database interface may (as mine does) result in switching back and forth between float32 and float64, which makes direction threshold_level=tl identification impossible.
             analysis = session.query(db.Avalanche).filter_by(\
                     filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
-                    threshold_mode=threshold_mode, \
+                    threshold_mode=threshold_mode, threshold_direction=td,\
                     time_scale=ts, event_signal=e, event_detection=ed, cascade_method=c).\
                     filter(\
                             and_(db.Avalanche.threshold_level>(tl-threshold_tolerance),\
@@ -796,6 +796,7 @@ def avalanche_analyses(data,\
 
             #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
             if not overwrite_database and analysis and analysis.fits:
+                print("This analysis was already done. Skipping.")
                 continue
 
             if analysis:
@@ -806,7 +807,7 @@ def avalanche_analyses(data,\
                     data_amplitude=data_amplitude, \
                     data_displacement_aucs=data_displacement_aucs,\
                     data_amplitude_aucs=data_amplitude_aucs,\
-                    threshold_mode=threshold_mode, threshold_level=tl,\
+                    threshold_mode=threshold_mode, threshold_level=tl, threshold_direction=td,\
                     event_signal=e, event_detection=ed,\
                     time_scale=ts, cascade_method=c,\
                     spatial_sample=s, spatial_sample_name=sn,\
@@ -818,7 +819,7 @@ def avalanche_analyses(data,\
             if session and not analysis: 
                 analysis = db.Avalanche(\
                         filter_id=filter_id, spatial_sample=sn, temporal_sample=tn,\
-                        threshold_mode=threshold_mode, threshold_level=tl, \
+                        threshold_mode=threshold_mode, threshold_level=tl, threshold_direction=td,\
                         event_signal=e, event_detection=ed,\
                         time_scale=ts, cascade_method=c,\
                         subject_id=subject_id, task_id=task_id, experiment_id=experiment_id,\
@@ -858,7 +859,7 @@ def avalanche_analyses(data,\
             analysis_file.write('analysis_id=%s \n\n' % analysis_id)
 
             analysis_file.writelines(["metrics = avalanche_analysis(%r,\\\n" % data,
-                "    threshold_mode=%r, threshold_level=%r,\\\n" % (threshold_mode,tl),
+                "    threshold_mode=%r, threshold_level=%r, threshold_direction=%r,\\\n" % (threshold_mode,tl, td),
                 "    event_signal=%r, event_detection=%r,\\\n" % (e,ed),
                 "    time_scale=%s, cascade_method=%r,\\\n" % (ts,c),
                 "    spatial_sample=%r, spatial_sample_name=%r,\\\n" % (s,sn),
@@ -871,7 +872,7 @@ def avalanche_analyses(data,\
                 "    analysis = db.Avalanche(\\\n",
                 "        filter_id=%s,\\\n" % filter_id,
                 "        spatial_sample=%r, temporal_sample=%r,\\\n" % (sn, tn),
-                "        threshold_mode=%r, threshold_level=%r,\\\n" % (threshold_mode, tl),
+                "        threshold_mode=%r, threshold_level=%r, threshold_direction=%r,\\\n" % (threshold_mode, tl,td),
                 "        event_signal=%r, event_detection=%r,\\\n" % (e, ed),
                 "        time_scale=%r, cascade_method=%r,\\\n" % (ts, c),
                 "        subject_id=%s, task_id=%s, experiment_id=%s,\\\n" % (subject_id, task_id, experiment_id),
@@ -902,7 +903,6 @@ def avalanche_analyses(data,\
     if verbose:
         return results
     return
-
 
 def energy_levels(data, time_scales):
     """energy_levels does things"""

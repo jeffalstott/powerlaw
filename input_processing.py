@@ -49,7 +49,7 @@ def riken_import(directory):
 
 
 def write_to_HDF5(data, file_name, condition, sampling_rate, \
-        window='blackmanharris', taps=513,\
+        window='blackmanharris', taps=513, filter_type='FIR',\
         group_name='', species='', location='', number_in_group='',\
         amplitude=False, displacement_aucs=False, amplitude_aucs=False,\
         overwrite=False,\
@@ -59,7 +59,6 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
     from criticality import area_under_the_curve, fast_amplitude
     from time import gmtime, strftime, clock
     
-    filter_type = 'FIR'
     version = 'filter_'+filter_type+'_'+str(taps)+'_'+window
     
     f = h5py.File(file_name+'.hdf5')

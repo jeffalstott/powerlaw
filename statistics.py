@@ -8,6 +8,17 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
         xmax = float(xmax)
         data = data[data<=xmax]
 
+    if len(data)<2:
+        from numpy import array
+        from sys import float_info
+        parameters = array([0, 0])
+        loglikelihood = -10**float_info.max_10_exp
+        if comparison_alpha==None:
+            return parameters, loglikelihood
+        R = 10**float_info.max_10_exp
+        p = 1
+        return parameters, loglikelihood, R, p
+
     n = float(len(data))
 
     if distribution=='power_law' and not discrete and xmin and not xmax:
@@ -24,7 +35,8 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
     else:
         if distribution=='power_law':
             if discrete:
-                initial_parameters=[1 + n/sum( log( data/(xmin-.5) ))]
+                #initial_parameters=[1 + n/sum( log( data/(xmin-.5) ))]
+                initial_parameters=[1 + n/sum( log( data/(xmin) ))]
             else:
                 initial_parameters=[1 + n/sum( log( data/xmin ))]
             likelihood_function = lambda parameters:\
@@ -41,7 +53,8 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
         elif distribution=='truncated_power_law':
             from numpy import mean
             if discrete:
-                initial_parameters=[1 + n/sum( log( data/(xmin-.5) )), 1/mean(data)]
+                #initial_parameters=[1 + n/sum( log( data/(xmin-.5) )), 1/mean(data)]
+                initial_parameters=[1 + n/sum( log( data/(xmin) )), 1/mean(data)]
             else:
                 initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
             likelihood_function = lambda parameters:\
@@ -63,7 +76,7 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
                 initial_parameters, full_output=1, disp=False)
         loglikelihood =-negative_loglikelihood
 
-    if not comparison_alpha:
+    if comparison_alpha==None:
         return parameters, loglikelihood
 
     pl_likelihoods = power_law_likelihoods(data, alpha=comparison_alpha, xmin=xmin, xmax=xmax, discrete=discrete)
@@ -101,10 +114,20 @@ def find_xmin(data, discrete=False, xmax=None):
         data = sort(data)
     xmins, xmin_indices = unique(data, return_index=True)
     xmins = xmins[:-1]
+    if len(xmins)<2:
+        from sys import float_info
+        xmin = 1
+        D = 1
+        alpha = 0
+        loglikelihood = -10**float_info.max_10_exp
+        n_tail = 1
+        noise_flag = True
+        return xmin, D, alpha, loglikelihood, n_tail, noise_flag
     xmin_indices = xmin_indices[:-1] #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
 
     alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete)
     fits  = asarray( map(alpha_MLE_function,xmins))
+    #import pdb; pdb.set_trace();
     alphas = hstack(fits[:,0])
     loglikelihoods = fits[:,1]
 
@@ -136,6 +159,11 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
     if xmax:
         data = data[data<=xmax]
     n = float(len(data))
+    if n<2:
+        if kuiper:
+            return 1, 1, 2
+        return 1
+
     if not all(data[i] <= data[i+1] for i in arange(n-1)):
         data = sort(data)
 
@@ -260,6 +288,8 @@ def truncated_power_law_likelihoods(data, alpha, gamma, xmin, xmax=False, discre
         likelihoods = (gamma**(1-alpha))/\
                 ( (data**alpha) * exp(gamma*data) * gammainc(1-alpha,gamma*xmin) ).astype(float) #Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
+        if not xmax:
+            xmax = max(data)
         if xmax:
             from numpy import arange
             X = arange(xmin, xmax+1)
@@ -296,8 +326,10 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False, for
                 sqrt(2/(pi*sigma**2))/erfc( (log(xmin)-mu) / (sqrt(2)*sigma))
 #        likelihoods = likelihoods.astype(float)
     if discrete:
+        if not xmax:
+            xmax = max(data)
         if xmax:
-            from numpy import arange,asarray, exp
+            from numpy import arange, exp
 #            from mpmath import exp
             X = arange(xmin, xmax+1)
 #            PDF_function = lambda x: (1.0/x)*exp(-( (log(x) - mu)**2 ) / 2*sigma**2)
@@ -309,19 +341,24 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False, for
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
 
-def hist_log(data, max_size, min_size=1, show=True):
+def hist_log(data, max_size=False, min_size=False, plot=True, show=True):
     """hist_log does things"""
     from numpy import logspace, histogram
     from math import ceil, log10
     import pylab
+    if ~max_size:
+        max_size = max(data)
+    if ~min_size:
+        min_size = min(data)
     log_min_size = log10(min_size)
     log_max_size = log10(max_size)
     number_of_bins = ceil((log_max_size-log_min_size)*10)
     bins=logspace(log_min_size, log_max_size, num=number_of_bins)
     hist, edges = histogram(data, bins, density=True)
-    if show:
+    if plot:
         pylab.plot(edges[:-1], hist, 'o')
         pylab.gca().set_xscale("log")
         pylab.gca().set_yscale("log")
-        pylab.show()
+        if show:
+            pylab.show()
     return (hist, edges)

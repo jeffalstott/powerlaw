@@ -12,12 +12,15 @@ analyses_directory = '/home/alstottj/biowulf/analyses/'
 swarms_directory = '/home/alstottj/biowulf/swarms/'
 python_location= '/usr/local/Python/2.7.2/bin/python'
 
-bins = [1, 2, 4, 8, 16, 32]
-percentiles = [.9, .99, .995098039, .99754902, .99877451]
+time_scales = [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
+threshold_mode = 'SD'
+threshold_levels = [2, 2.5, 3, 3.5, 4]
+threshold_directions = ['both', 'up', 'down']
 #bins = [1]
-#percentiles =[.99]
-given_xmin_xmax = [(None, None), (1, None), (1, 'channels')]
-event_methods = ['amplitude']
+#percentiles =[99]
+given_xmin_xmax = [(None, None), (1, None), (1, 'channels'), (1,102)]
+event_signals = ['amplitude', 'displacement']
+event_detections = ['local_extrema', 'local', 'excursion_extrema']
 cascade_methods = ['grid']
 spatial_samples = [('all', 'all')]
 temporal_samples = [('all', 'all')]
@@ -25,8 +28,8 @@ temporal_samples = [('all', 'all')]
 
 visits = [2, 3]
 tasks = ['rest']
-eyes = ['open']
-sensors = ['gradiometer']
+eyes = ['shut', 'open']
+sensors = ['gradiometer', 'magnetometer']
 remicas = ['raw', 'remica']
 sampling_rate = 250.0
 
@@ -168,7 +171,9 @@ for fname in dirList:
                 session.commit()
 
             criticality.avalanche_analyses(f.file.filename, HDF5_group=base_filtered+'/'+band,\
-                    bins=bins, percentiles=percentiles, event_methods=event_methods, cascade_methods=cascade_methods, \
+                    threshold_mode=threshold_mode, threshold_levels=threshold_levels, threshold_directions=threshold_directions,\
+                    event_signals=event_signals, event_detections=event_detections,\
+                    time_scales=time_scales, cascade_methods=cascade_methods,\
                     given_xmin_xmax=given_xmin_xmax,\
                     spatial_samples=spatial_samples, temporal_samples=temporal_samples,\
                     session=session, database_url=db.database_url,\
@@ -176,6 +181,6 @@ for fname in dirList:
                     sensor_id=sensor.id, recording_id=recording.id, filter_id=filter.id,\
                     cluster=cluster, swarms_directory=swarms_directory, analyses_directory=analyses_directory,\
                     python_location=python_location,\
-                    verbose=False)
+                    verbose=True)
 
 session.close()
