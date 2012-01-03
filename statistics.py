@@ -170,19 +170,16 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
     if not discrete:
         Actual_CDF = arange(n)/n
         Theoretical_CDF = 1-(xmin/data)**alpha
-#        S = survival_function(data,xmin=xmin)
-#        P = (arange(xmin,max(data)+1)/xmin)**(-alpha+1)
-
 
     if discrete:
         from scipy.special import zeta
         if xmax:
-            Actual_CDF = cumulative_distribution_function(data,xmin=xmin,xmax=xmax)
-            Theoretical_CDF = 1 - ((zeta(alpha, arange(xmin,xmax+1)) - zeta(alpha, xmax+1)) /\
+            Actual_CDF, bins = cumulative_distribution_function(data,xmin=xmin,xmax=xmax)
+            Theoretical_CDF = 1 - ((zeta(alpha, bins) - zeta(alpha, xmax+1)) /\
                     (zeta(alpha, xmin)-zeta(alpha,xmax+1)))
         if not xmax:
-            Actual_CDF = cumulative_distribution_function(data,xmin=xmin)
-            Theoretical_CDF = 1 - (zeta(alpha, arange(xmin,max(data)+1)) /\
+            Actual_CDF, bins = cumulative_distribution_function(data,xmin=xmin)
+            Theoretical_CDF = 1 - (zeta(alpha, bins) /\
                     zeta(alpha, xmin))
 
     D_plus = max(Theoretical_CDF-Actual_CDF)
@@ -206,12 +203,25 @@ def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False)
         data = data[data<=xmax]
     else:
         xmax = max(data)
-
-    CDF = cumsum(histogram(data,arange(xmin-1, xmax+2), density=True)[0])[:-1]
+    
+    if discrete(data):
+        CDF = cumsum(histogram(data,arange(xmin-1, xmax+2), density=True)[0])[:-1]
+        bins = arange(xmin, xmax+1)
+    else:
+        n = float(len(data))
+        CDF = arange(n)/n
+        if not all(data[i] <= data[i+1] for i in arange(n-1)):
+            from numpy import sort
+            data = sort(data)
+        bins = data
 
     if survival:
         CDF = 1-CDF
-    return CDF
+    return CDF, bins
+
+def discrete(data):
+    from numpy import floor
+    return reduce(lambda x,y: x==True and floor(y)==float(y), data,True)
 
 def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
     if alpha<0:
@@ -362,3 +372,15 @@ def hist_log(data, max_size=False, min_size=False, plot=True, show=True):
         if show:
             pylab.show()
     return (hist, edges)
+
+def plot_cdf(variable, name=None, x_label=None, xmin=None, xmax=None, survival=True):
+    import matplotlib.pyplot as plt
+    iCDF, bins = cumulative_distribution_function(variable, survival=survival, xmin=xmin, xmax=xmax)
+    plt.plot(bins, iCDF)
+    plt.gca().set_xscale("log")
+    plt.gca().set_yscale("log")
+    if name:
+        plt.title(name +' survival function')
+    plt.xlabel(x_label)
+    plt.ylabel('P(X)>x')
+    return (iCDF, bins)
