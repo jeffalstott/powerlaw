@@ -1,4 +1,4 @@
-import criticality
+import avalanches
 import h5py
 import os
 
@@ -14,8 +14,8 @@ python_location= '/usr/local/Python/2.7.2/bin/python'
 
 time_scales = [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
 threshold_mode = 'SD'
-threshold_levels = [2, 2.5, 3, 3.5, 4]
-threshold_directions = ['both', 'up', 'down']
+threshold_levels = [3]
+threshold_directions = ['both']
 #bins = [1]
 #percentiles =[99]
 given_xmin_xmax = [(None, None), (1, None), (1, 'channels'), (1,102)]
@@ -29,13 +29,14 @@ temporal_samples = [('all', 'all')]
 visits = [2, 3]
 tasks = ['rest']
 eyes = ['shut', 'open']
-sensors = ['gradiometer', 'magnetometer']
-remicas = ['raw', 'remica']
+sensors = ['gradiometer']
+remicas = ['raw']
 sampling_rate = 250.0
 
-data_path = '/data/alstottj/MRC/'
+#data_path = '/data/alstottj/MRC/'
+data_path = '/scratch/alstottj/MRC/For_Analysis/'
 filter_type = 'FIR'
-taps = 513
+taps = 25
 window = 'blackmanharris'
 transd = True
 mains = 50
@@ -170,7 +171,7 @@ for fname in dirList:
                 session.add(filter)
                 session.commit()
 
-            criticality.avalanche_analyses(f.file.filename, HDF5_group=base_filtered+'/'+band,\
+            avalanches.avalanche_analyses(f.file.filename, HDF5_group=base_filtered+'/'+band,\
                     threshold_mode=threshold_mode, threshold_levels=threshold_levels, threshold_directions=threshold_directions,\
                     event_signals=event_signals, event_detections=event_detections,\
                     time_scales=time_scales, cascade_methods=cascade_methods,\
@@ -182,5 +183,6 @@ for fname in dirList:
                     cluster=cluster, swarms_directory=swarms_directory, analyses_directory=analyses_directory,\
                     python_location=python_location,\
                     verbose=True)
+            break
 
 session.close()

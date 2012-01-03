@@ -5,7 +5,7 @@ from sys import float_info
 def avalanche_analysis(data,\
         data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False, \
         event_signal='amplitude', event_detection='local_extrema',\
-        threshold_mode='percentile', threshold_level=.99, threshold_direction='both',\
+        threshold_mode='SD', threshold_level=3, threshold_direction='both',\
         time_scale=1, cascade_method='grid', \
         spatial_sample='all', spatial_sample_name=False,\
         temporal_sample='all', temporal_sample_name=False,\
@@ -769,16 +769,33 @@ def avalanche_analyses(data,\
             for t,tn in temporal_samples]
 
     if cluster:
-        from os import listdir, system
-        swarms = [int(a) for a in listdir(swarms_directory)]
-        if swarms:
-            new_swarm = str(max(swarms)+1)
-        else:
-            new_swarm = '1'
+        try:
+            max_swarm = int(open(swarms_directory+'max_swarm_file.txt', 'r').read())
+        except:
+            print("Constructing max_swarm_file")
+            from os import listdir
+            swarms = [int(a) for a in listdir(swarms_directory)]
+            if swarms:
+                max_swarm = max(swarms)
+            else:
+                max_swarm = 0
+        new_swarm = str(max_swarm+1)
         swarm_file = open(swarms_directory+new_swarm, 'w')
+        analyses_number = 0
+
+        try:
+            max_analysis = int(open(analyses_directory+'max_analysis_file.txt', 'r').read())
+        except:
+            print("Constructing max_analysis_file")
+            from os import listdir
+            analyses = [int(a[:-3]) for a in listdir(analyses_directory)]
+            if analyses:
+                max_analysis = max(analyses)
+            else:
+                max_analysis = 0
 
     for tl, td, e, ed, ts, c,s,sn,t,tn in parameter_space:
-        parameters = str(ts)+'_'+str(tl)+'_'+td+'_'+str(e)+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
+        parameters = str(ts)+'_'+str(tl)+'_'+td+'_'+str(e)+'_'+ed+'_'+str(c)+'_'+str(sn)+'_'+str(tn)
         if verbose:
             results[parameters] = {}
             print parameters
@@ -795,6 +812,8 @@ def avalanche_analyses(data,\
                             db.Avalanche.threshold_level<(tl+threshold_tolerance))).first()
 
             #If we're not overwriting the database, and there is a previous analysis with saved statistics, then go on to the next set of parameters
+            if analysis:
+                print("This analysis was previously started!")
             if not overwrite_database and analysis and analysis.fits:
                 print("This analysis was already done. Skipping.")
                 continue
@@ -841,12 +860,10 @@ def avalanche_analyses(data,\
                 results[parameters]['statistics'] = statistics
 
         else:
-            analyses = [int(a[:-3]) for a in listdir(analyses_directory)]
-            if analyses:
-                new_analysis = str(max(analyses)+1)+'.py'
-            else:
-                new_analysis = '1.py'
-            analysis_file = open(analyses_directory+new_analysis, 'w')
+            new_analysis = str(max_analysis+1)
+            max_analysis = max_analysis+1
+            analysis_file = open(analyses_directory+new_analysis+'.py', 'w')
+            print("Writing analysis file "+new_analysis)
 
             analysis_file.write("database_url= %r\n\n" % database_url)
 
@@ -857,6 +874,8 @@ def avalanche_analyses(data,\
                 'session = Session(engine)\n\n'])
 
             analysis_file.write('analysis_id=%s \n\n' % analysis_id)
+            analysis_file.write("""print("analysis_id=%r, threshold_mode=%r, threshold_level=%r, threshold_direction=%r, event_signal=%r, event_detection=%r, time_scale=%s, cascade_method=%r, spatial_sample=%r, spatial_sample_name=%r, temporal_sample=%r, temporal_sample_name=%r") \n\n"""\
+                % (analysis_id, threshold_mode, tl, td, e, ed, ts, c, s,sn, t, tn))
 
             analysis_file.writelines(["metrics = avalanche_analysis(%r,\\\n" % data,
                 "    threshold_mode=%r, threshold_level=%r, threshold_direction=%r,\\\n" % (threshold_mode,tl, td),
@@ -894,11 +913,21 @@ def avalanche_analyses(data,\
 
             analysis_file.close()
 
-            swarm_file.write(python_location+' '+analyses_directory+new_analysis+'\n')
+            swarm_file.write(python_location+' '+analyses_directory+new_analysis+'.py'+\
+                    ' 2>&1  > '+analyses_directory+new_analysis+'_out\n')
+            analyses_number = analyses_number+1
+            
 
     if cluster:
         swarm_file.close()
-        system('swarm -f '+swarms_directory+new_swarm+' -m a')
+        if analyses_number==0:
+            print("No new analyses, not submitting swarm file "+new_swarm)
+        else:
+            from os import system
+            print("Submitting "+analyses_number+" analyses with swarm file "+new_swarm)
+            system('swarm -f '+swarms_directory+new_swarm+' -m a')
+            open(swarms_directory+'max_swarm_file.txt', 'w').write(str(max_swarm+1))
+            open(analyses_directory+'max_analysis_file.txt', 'w').write(str(max_analysis))
 
     if verbose:
         return results
@@ -953,3 +982,54 @@ def next_power_of_2(x):
     x |= x >> 16
     x += 1
     return x 
+
+def signal_variability(data, subplots=False, title=None, density_limits=(-20,0)):
+
+    import h5py
+    if type(data)==h5py._hl.dataset.Dataset:
+        title = data.name
+        data = data[:,:]
+
+    from numpy import histogram, log, arange
+    from scipy.stats import norm
+    import matplotlib.pyplot as plt
+
+    plt.figure()
+    if subplots:
+        rows = subplots[0]
+        columns = subplots[1]
+        channelNum = 0
+    else:
+        rows = 1
+        columns = 1
+        channelNum = arange(data.shape[0])
+
+    for row in range(rows):
+        for column in range(columns):
+            if type(channelNum)==int and channelNum>=data.shape[0]:
+                continue
+            print("Calculating Channel"+str(channelNum))
+
+            if type(channelNum)==int:
+                ax = plt.subplot(rows, columns, channelNum+1)
+            else:
+                ax = plt.subplot(rows, columns, 1)
+
+            d = data[channelNum,:]
+            ye, xe = histogram(d, bins=100, normed=True)
+            yf = norm.pdf(xe[1:],d.mean(), d.std())
+
+            x = (xe[1:]-d.mean())/d.std()
+            ax.plot(x, log(ye), 'b-', x ,log(yf), 'r-')
+#            ax.set_ylabel('Density')
+#            ax.set_xlabel('STD')
+            if rows!=1 or columns!=1:
+                ax.set_title(str(channelNum))
+                ax.set_yticklabels([])
+                ax.set_xticklabels([])
+            if density_limits:
+                ax.set_ylim(density_limits)
+            channelNum += 1
+
+    if title:
+        plt.suptitle(title)

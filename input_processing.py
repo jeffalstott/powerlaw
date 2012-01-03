@@ -32,7 +32,7 @@ def riken_import(directory):
     directory_files = listdir(directory)
     n_channels =len([s for s in directory_files if 'ECoG_ch' in s])
 
-    file_base = directory+'/ECoG_ch'
+    file_base = directory+'ECoG_ch'
     variable_base = 'ECoGData_ch'
 
     f = str.format('{0}{1}.mat', file_base, 1)
@@ -50,13 +50,13 @@ def riken_import(directory):
 
 def write_to_HDF5(data, file_name, condition, sampling_rate, \
         window='blackmanharris', taps=513, filter_type='FIR',\
-        group_name='', species='', location='', number_in_group='',\
+        group_name='', species='', location='', number_in_group='', name='', date='',\
         amplitude=False, displacement_aucs=False, amplitude_aucs=False,\
         overwrite=False,\
         bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
     import h5py
     from neuroscience import neuro_band_filter
-    from criticality import area_under_the_curve, fast_amplitude
+    from avalanches import area_under_the_curve, fast_amplitude
     from time import gmtime, strftime, clock
     
     version = 'filter_'+filter_type+'_'+str(taps)+'_'+window
@@ -146,6 +146,8 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
     f.attrs['number_in_group']=number_in_group
     f.attrs['species'] = species
     f.attrs['location']=location
+    f.attrs['name']=name
+    f.attrs['date']=date
     
     f.close()
     return
