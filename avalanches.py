@@ -4,7 +4,7 @@ from sys import float_info
 
 def avalanche_analysis(data,\
         data_amplitude=False, data_displacement_aucs=False, data_amplitude_aucs=False, \
-        event_signal='amplitude', event_detection='local_extrema',\
+        event_signal='displacement', event_detection='local_extrema',\
         threshold_mode='SD', threshold_level=3, threshold_direction='both',\
         time_scale=1, cascade_method='grid', \
         spatial_sample='all', spatial_sample_name=False,\
@@ -195,9 +195,36 @@ def find_thresholds(signal, threshold_mode='SD', threshold_level=3, threshold_di
             thresholds_up = signal.mean(-1) + signal.std(-1)*threshold_level[:,0]
             thresholds_down = signal.mean(-1) - signal.std(-1)*threshold_level[:,1]
 
-    elif threshold_mode == 'ROC':
-        raise IOError("Not supported yet (sorry)")
-        
+    elif threshold_mode == 'Likelihood':
+        from statistics import likelihood_threshold
+        from numpy import zeros
+        if threshold_direction in ['both', 'up']:
+            thresholds_up = zeros(len(signal))
+        if threshold_direction in ['both', 'down']:
+            thresholds_down = zeros(len(signal))
+
+        for i in range(len(signal)):
+            if s==() or s==(1,):
+                left_threshold, right_threshold = likelihood_threshold(signal[i], threshold_level)
+                if threshold_direction in ['both', 'up']:
+                    thresholds_up[i] = right_threshold
+                if threshold_direction in ['both', 'down']:
+                    thresholds_down[i] = left_threshold
+            elif s==(2,) and threshold_direction=='both':
+                left_threshold, right_threshold = likelihood_threshold(signal[i], threshold_level)
+                thresholds_up[i] = right_threshold
+                thresholds_down[i] = left_threshold
+            elif s[0]==n_channels and len(s)<2:
+                left_threshold, right_threshold = likelihood_threshold(signal[i], threshold_level[i])
+                if threshold_direction in ['both', 'up']:
+                    thresholds_up[i] = right_threshold
+                if threshold_direction in ['both', 'down']:
+                    thresholds_down[i] = left_threshold
+            elif s[0]==n_channels and len(s)==2 and s[1]==2 and threshold_direction=='both':
+                left_threshold, right_threshold = likelihood_threshold(signal[i], threshold_level[i])
+                thresholds_up[i] = right_threshold
+                thresholds_down[i] = left_threshold
+
     elif threshold_mode == 'absolute':
         s = shape(threshold_level)
         if s==() or s==(1,):
@@ -982,54 +1009,3 @@ def next_power_of_2(x):
     x |= x >> 16
     x += 1
     return x 
-
-def signal_variability(data, subplots=False, title=None, density_limits=(-20,0)):
-
-    import h5py
-    if type(data)==h5py._hl.dataset.Dataset:
-        title = data.name
-        data = data[:,:]
-
-    from numpy import histogram, log, arange
-    from scipy.stats import norm
-    import matplotlib.pyplot as plt
-
-    plt.figure()
-    if subplots:
-        rows = subplots[0]
-        columns = subplots[1]
-        channelNum = 0
-    else:
-        rows = 1
-        columns = 1
-        channelNum = arange(data.shape[0])
-
-    for row in range(rows):
-        for column in range(columns):
-            if type(channelNum)==int and channelNum>=data.shape[0]:
-                continue
-            print("Calculating Channel"+str(channelNum))
-
-            if type(channelNum)==int:
-                ax = plt.subplot(rows, columns, channelNum+1)
-            else:
-                ax = plt.subplot(rows, columns, 1)
-
-            d = data[channelNum,:]
-            ye, xe = histogram(d, bins=100, normed=True)
-            yf = norm.pdf(xe[1:],d.mean(), d.std())
-
-            x = (xe[1:]-d.mean())/d.std()
-            ax.plot(x, log(ye), 'b-', x ,log(yf), 'r-')
-#            ax.set_ylabel('Density')
-#            ax.set_xlabel('STD')
-            if rows!=1 or columns!=1:
-                ax.set_title(str(channelNum))
-                ax.set_yticklabels([])
-                ax.set_xticklabels([])
-            if density_limits:
-                ax.set_ylim(density_limits)
-            channelNum += 1
-
-    if title:
-        plt.suptitle(title)

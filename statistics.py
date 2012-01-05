@@ -194,7 +194,9 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
     return D
 
 def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False):
-    from numpy import cumsum, histogram, arange
+    from numpy import cumsum, histogram, arange, array
+    if type(data)==list:
+        data = array(data)
     if xmin:
         data = data[data>=xmin]
     else:
@@ -379,8 +381,135 @@ def plot_cdf(variable, name=None, x_label=None, xmin=None, xmax=None, survival=T
     plt.plot(bins, iCDF)
     plt.gca().set_xscale("log")
     plt.gca().set_yscale("log")
-    if name:
+    if name and survival:
         plt.title(name +' survival function')
+    elif name:
+        plt.title(name +' CDF')
+
     plt.xlabel(x_label)
-    plt.ylabel('P(X)>x')
+    if survival:
+        plt.ylabel('P(X>x)')
+    else:
+        plt.ylabel('P(X<x)')
     return (iCDF, bins)
+
+def signal_variability(data, subplots=False, title=None, density_limits=(-20,0), threshold_level=10):
+
+    import h5py
+    if type(data)==h5py._hl.dataset.Dataset:
+        title = data.file.filename+data.name
+        data = data[:,:]
+
+    from numpy import histogram, log, arange, sign
+    import matplotlib.pyplot as plt
+
+    plt.figure()
+#   plt.figure(1)
+    if subplots:
+        rows = subplots[0]
+        columns = subplots[1]
+        channelNum = 0
+    else:
+        rows = 1
+        columns = 1
+        channelNum = arange(data.shape[0])
+
+    for row in range(rows):
+        for column in range(columns):
+            if type(channelNum)==int and channelNum>=data.shape[0]:
+                continue
+            print("Calculating Channel "+str(channelNum))
+
+            if type(channelNum)==int:
+                ax = plt.subplot(rows, columns, channelNum+1)
+            else:
+                ax = plt.subplot(rows, columns, 1)
+
+            d = data[channelNum,:]
+            dmean = d.mean()
+            dstd = d.std()
+            ye, xe = histogram(d, bins=100, normed=True)
+            if (sign(d)>0).all():
+                from scipy.stats import expon
+                expon_parameters = expon.fit(d)
+                yf = expon.pdf(xe[1:], *expon_parameters)
+             #   left_threshold, right_threshold = likelihood_threshold(d, threshold_level, comparison_distribution='expon', comparison_parameters=expon_parameters)
+                left_threshold = 0
+                right_threshold = 0
+            else:
+                from scipy.stats import norm
+                yf = norm.pdf(xe[1:],dmean, dstd)
+                left_threshold, right_threshold = likelihood_threshold(d, threshold_level, comparison_distribution='norm', comparison_parameters=(dmean, dstd))
+
+            x = (xe[1:]-dmean)/dstd
+            ax.plot(x, log(ye), 'b-', x ,log(yf), 'r-')
+#            ax.set_ylabel('Density')
+#            ax.set_xlabel('STD')
+            if rows!=1 or columns!=1:
+                ax.set_title(str(channelNum))
+                ax.set_yticklabels([])
+                ax.set_xticklabels([])
+            if density_limits:
+                ax.set_ylim(density_limits)
+            if (sign(d)>0).all():
+                ax.plot(((right_threshold-dmean)/dstd, (right_threshold-dmean)/dstd), plt.ylim())
+            else:
+                ax.plot(((left_threshold-dmean)/dstd, (left_threshold-dmean)/dstd), plt.ylim())
+                ax.plot(((right_threshold-dmean)/dstd, (right_threshold-dmean)/dstd), plt.ylim())
+            channelNum += 1
+
+    if title:
+        plt.suptitle(title)
+
+def likelihood_threshold(d, threshold_level=10, comparison_distribution='norm', comparison_parameters=False):
+    from numpy import shape
+    if shape(threshold_level)==(2,):
+        left_threshold_level = threshold_level[0]
+        right_threshold_level = threshold_level[1]
+    elif shape(threshold_level)==(1,):
+        left_threshold_level = threshold_level[0]
+        right_threshold_level = threshold_level[0]
+    else:
+        left_threshold_level = threshold_level
+        right_threshold_level = threshold_level
+
+    d = d.flatten()
+
+    if comparison_distribution=='expon':
+        print("Not implemented yet. Sorry.")
+        return
+    elif comparison_distribution=='norm':
+        if not comparison_parameters:
+            comparison_parameters = (d.mean(), d.std())
+        from scipy.stats import norm
+        from numpy import where
+
+        dmean = comparison_parameters[0]
+        dstd = comparison_parameters[1]
+        n = float(len(d))
+        n_below_mean = sum(d<=dmean)
+        n_above_mean = sum(d>dmean)
+
+        left_pX, left_x = cumulative_distribution_function(d[d<dmean], survival=False)
+        left_pX = (left_pX*n_below_mean)/n
+        left_likelihood_ratio = left_pX[1:]/norm.cdf(left_x[1:], dmean, dstd)
+        left_below_threshold = where(left_likelihood_ratio<left_threshold_level)[0]
+        if left_below_threshold==[]:
+            left_threshold = left_x[-1]
+        elif left_below_threshold[0]==0:
+            left_threshold = left_x[0]-1
+        else:
+            left_threshold = left_x[left_below_threshold[0]]
+
+        right_pX, right_x = cumulative_distribution_function(d[d>dmean], survival=True)
+        right_pX = (right_pX*n_above_mean)/n
+        right_likelihood_ratio = right_pX/norm.sf(right_x, dmean, dstd)
+        right_below_threshold = where(right_likelihood_ratio<right_threshold_level)[0]
+        if right_below_threshold==[]:
+            right_threshold = right_x[0]
+        elif right_below_threshold[-1]==len(right_x):
+            right_threshold = right_x[-1]+1
+        else:
+            right_threshold = right_x[right_below_threshold[-1]]
+
+        return left_threshold, right_threshold
