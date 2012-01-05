@@ -10,37 +10,37 @@ swarms_directory = '/home/alstottj/biowulf/swarms/'
 python_location= '/usr/local/Python/2.7.2/bin/python'
 
 time_scales = [1, 2, 3, 4, 5, 6, 7, 8, 16, 32]
-threshold_mode = 'SD'
-threshold_levels = [3]
+threshold_mode = 'Likelihood'
+threshold_levels = [2, 5, 10]
 threshold_directions = ['both']
 given_xmin_xmax = [(None, None), (1, None), (1, 'channels')]
-event_signals = ['amplitude', 'displacement']
+event_signals = ['displacement']
 event_detections = ['local_extrema', 'local', 'excursion_extrema']
 cascade_methods = ['grid']
 spatial_samples = [('all', 'all')]
 temporal_samples = [('all', 'all')]
 
 
-tasks = ['rest']
-eyes = ['shut', 'open']
-sensors = ['gradiometer', 'magnetometer']
 sampling_rate = 1000.0
 
-data_path = '/data/alstottj/RIKEN/'
+data_path = '/data/alstottj/RIKEN/For_Analysis/'
 filter_type = 'FIR'
-taps = 513
-window = 'blackmanharris'
+taps = 25
+window = 'hamming'
 transd = True
 mains = 50
 
-monkeys =[('A',5), ('K1', 4), ('K2',3)]
-tasks = [('food_tracking0', 3), ('food_tracking1', 3), ('food_tracking2', 3), ('food_tracking3', 3),\
-        ('food_tracking4', 3), ('visual_grating', 6), ('emotional_movie', 7), ('rest', 5), ('anesthesia', 4)]
+visits = ['','1','2','3','4','5','6','7','8']
+tasks = ['food_tracking', \
+        'visual_grating',\
+        'visual_grating',
+        'emotional_movie', \
+        'social_competition',\
+        'rest', 'anesthetized', 'sleep_wake_transition']
 
 rem=False
 rest='rested'
 drug='none'
-visit=0
 
 dirList=os.listdir(data_path)
 for fname in dirList:
@@ -60,9 +60,9 @@ for fname in dirList:
 
     print file
 
-    conditions = [(t) for t in tasks] 
-    for t in conditions:
-        base = t
+    conditions = [(t,v) for t in tasks for v in visits] 
+    for task_type, visit in conditions:
+        base = task_type+visit
         base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window
         #If this particular set of conditions doesn't exist for this subject, just continue to the next set of conditions
         try:
@@ -76,20 +76,28 @@ for fname in dirList:
         task = session.query(db.Task).\
                 filter_by(type=task_type).first()
         if not task:
-            print('Task not found!')
-            break
+            print('Task not found! Adding.')
+            task = db.Task(task=task_type)
+            session.add(task)
+            session.commit()
 
         sensor = session.query(db.Sensor).\
-                filter_by(location=location, sensor_type=sensor_type).first()
+                filter_by(location=number_in_group, sensor_type='ECoG').first()
         if not sensor:
-            print('Sensor not found!')
-            break
+            print('Sensor not found! Adding.')
+            sensor = db.Sensor(location=number_in_group, sensor_type='ECoG')
+            session.add(sensor)
+            session.commit()
         
+        if visit=='':
+            visit_number=None
+        else:
+            visit_number=int(visit)
         experiment = session.query(db.Experiment).\
-                filter_by(location=location, subject_id=subject.id, visit_number=visit, mains=mains, drug=drug,\
+                filter_by(location=location, subject_id=subject.id, visit_number=visit_number, mains=mains, drug=drug,\
                 rest=rest, task_id=task.id).first()
         if not experiment:
-            experiment = db.Experiment(location=location, subject_id=subject.id, visit_number=visit, mains=mains, drug=drug,\
+            experiment = db.Experiment(location=location, subject_id=subject.id, visit_number=visit_number, mains=mains, drug=drug,\
                 rest=rest, task_id=task.id)
             session.add(experiment)
             session.commit()
