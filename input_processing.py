@@ -30,22 +30,31 @@ def riken_import(directory):
     from os import listdir
     
     directory_files = listdir(directory)
-    n_channels =len([s for s in directory_files if 'ECoG_ch' in s])
+    if 'ECoG_and_Event.mat' in directory_files:
+        mat = loadmat(directory+'ECoG_and_Event.mat')
+        monkey_data = mat['ECoG'].astype(float)
+        return monkey_data
 
-    file_base = directory+'ECoG_ch'
-    variable_base = 'ECoGData_ch'
+    elif 'ECoG_ch1.mat' in directory_files:
+        n_channels =len([s for s in directory_files if 'ECoG_ch' in s])
 
-    f = str.format('{0}{1}.mat', file_base, 1)
-    v = str.format('{0}{1}', variable_base, 1)
-    n_datapoints = loadmat(f)[v].shape[1]
+        file_base = directory+'ECoG_ch'
+        variable_base = 'ECoGData_ch'
 
-    monkey_data = empty((n_channels,n_datapoints))
+        f = str.format('{0}{1}.mat', file_base, 1)
+        v = str.format('{0}{1}', variable_base, 1)
+        n_datapoints = loadmat(f)[v].shape[1]
 
-    for i in range(n_channels):
-        f = str.format('{0}{1}.mat', file_base, i+1)
-	v = str.format('{0}{1}', variable_base, i+1)
-	monkey_data[i,:] = loadmat(f)[v]
-    return monkey_data
+        monkey_data = empty((n_channels,n_datapoints))
+
+        for i in range(n_channels):
+            f = str.format('{0}{1}.mat', file_base, i+1)
+            v = str.format('{0}{1}', variable_base, i+1)
+            monkey_data[i,:] = loadmat(f)[v]
+        return monkey_data
+    else:
+        print("Unsupported data format")
+        return
 
 
 def write_to_HDF5(data, file_name, condition, sampling_rate, \
@@ -53,13 +62,14 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
         group_name='', species='', location='', number_in_group='', name='', date='',\
         amplitude=False, displacement_aucs=False, amplitude_aucs=False,\
         overwrite=False,\
-        bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad')):
+        bands = ('raw', 'delta', 'theta', 'alpha', 'beta', 'gamma', 'high-gamma', 'broad'),
+        downsample='nyquist'):
     import h5py
     from neuroscience import neuro_band_filter
     from avalanches import area_under_the_curve, fast_amplitude
     from time import gmtime, strftime, clock
     
-    version = 'filter_'+filter_type+'_'+str(taps)+'_'+window
+    version = 'filter_'+filter_type+'_'+str(taps)+'_'+window+'_ds-'+str(downsample)
     
     f = h5py.File(file_name+'.hdf5')
 
@@ -99,11 +109,11 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
         
         if 'displacement' not in list(f[condition+'/'+version+'/'+band]):
             print 'Filtering, '+str(data.shape[-1])+' time points' 
-            filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+            filtered_data, frequency_range, downsampled_rate = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window, downsample=downsample)
             f.create_dataset(condition+'/'+version+'/'+band+'/displacement', data=filtered_data)
         elif overwrite:
             print 'Filtering, '+str(data.shape[-1])+' time points' 
-            filtered_data, frequency_range = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window)
+            filtered_data, frequency_range, downsampled_rate = neuro_band_filter(data, band, sampling_rate=sampling_rate, taps=taps, window_type=window, downsample=downsample)
             f[condition+'/'+version+'/'+band+'/displacement']=filtered_data
         elif amplitude_aucs or amplitude or displacement_aucs:
             filtered_data = f[condition+'/'+version+'/'+band+'/displacement'][:,:]
@@ -136,7 +146,8 @@ def write_to_HDF5(data, file_name, condition, sampling_rate, \
             toc = clock()
             print toc-tic
         
-        f[condition+'/'+version+'/'+band].attrs['frequency_range'] = frequency_range 
+        f[condition+'/'+version+'/'+band].attrs['frequency_range'] = frequency_range
+        f[condition+'/'+version+'/'+band].attrs['downsampled_rate'] = downsampled_rate
         f[condition+'/'+version+'/'+band].attrs['processing_date'] = strftime("%Y-%m-%d", gmtime())
     
     f[condition+'/'+version].attrs['filter_type'] = filter_type

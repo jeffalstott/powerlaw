@@ -10,7 +10,7 @@ dirList=os.listdir(path)
 bands = ('delta', 'theta', 'alpha', 'beta', 'raw', 'gamma', 'high-gamma', 'broad')
 window='hamming'
 taps=25
-downsample=False
+downsample=100.0
 
 tasks = {'FTT': 'food_tracking', 'EMT': 'emotional_movie', 'VGT': 'visual_grating', \
         'SCT': 'social_competition', 'ST': 'sleep_task'}

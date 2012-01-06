@@ -127,6 +127,7 @@ class Filter(Base):
     band_min = Column(Float)
     band_max = Column(Float)
     duration = Column(Float)
+    downsampled_rate = Column(Float)
     notch = Column(Boolean)
     phase_shuffled = Column(Boolean)
 

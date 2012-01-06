@@ -7,7 +7,7 @@ def neuro_band_filter(data, band, sampling_rate=1000.0, taps=513.0, window_type=
             'beta': (array([12.0,30.0]), False),
             'gamma': (array([30.0,80.0]), False),
             'high-gamma': (array([80.0, 100.0]), False),
-            'broad': (array([1.0,100.0]), False),
+            'broad': (array([100.0]), True),
             }
     if band=='raw':
         return data
@@ -17,7 +17,13 @@ def neuro_band_filter(data, band, sampling_rate=1000.0, taps=513.0, window_type=
     nyquist = sampling_rate/2.0
     kernel= firwin(taps, frequencies/nyquist, pass_zero=pass_zero, window = window_type)
     data = lfilter(kernel, 1.0, data)
-    if downsample:
-        downsampling_rate = floor(( 1.0/ (2.0*frequencies.max()) )*sampling_rate)
-        data = data[:,::downsampling_rate]
-    return data, frequencies
+    if downsample==True or downsample=='nyquist':
+        downsampling_interval = floor(( 1.0/ (2.0*frequencies.max()) )*sampling_rate)
+    elif downsample:
+        downsampling_interval = floor(sampling_rate/float(downsample))
+    else:
+        return data, frequencies, sampling_rate
+
+    data = data[:,::downsampling_interval]
+    downsampled_rate=sampling_rate/downsampling_interval
+    return data, frequencies, downsampled_rate

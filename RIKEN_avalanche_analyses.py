@@ -4,7 +4,7 @@ import os
 
 import Helix_database as db
 session = db.Session()
-cluster=True
+cluster=False
 analyses_directory = '/home/alstottj/biowulf/analyses/'
 swarms_directory = '/home/alstottj/biowulf/swarms/'
 python_location= '/usr/local/Python/2.7.2/bin/python'
@@ -27,10 +27,11 @@ data_path = '/data/alstottj/RIKEN/For_Analysis/'
 filter_type = 'FIR'
 taps = 25
 window = 'hamming'
+ds_rate = 100.0
 transd = True
 mains = 50
 
-visits = ['','1','2','3','4','5','6','7','8']
+visits = ['', '0', '1','2','3','4','5','6','7','8']
 tasks = ['food_tracking', \
         'visual_grating',\
         'visual_grating',
@@ -63,7 +64,7 @@ for fname in dirList:
     conditions = [(t,v) for t in tasks for v in visits] 
     for task_type, visit in conditions:
         base = task_type+visit
-        base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window
+        base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window+'_ds-'+ds_rate
         #If this particular set of conditions doesn't exist for this subject, just continue to the next set of conditions
         try:
             f[base_filtered]
@@ -77,7 +78,7 @@ for fname in dirList:
                 filter_by(type=task_type).first()
         if not task:
             print('Task not found! Adding.')
-            task = db.Task(task=task_type)
+            task = db.Task(type=task_type)
             session.add(task)
             session.commit()
 
@@ -118,6 +119,7 @@ for fname in dirList:
             print band
             data = f[base_filtered+'/'+band]
             band_range = data.attrs['frequency_range']
+            downsampled_rate = data.attrs['downsampled_rate']
             if band_range.shape[0]==1:
                 band_min=0.
                 band_max=band_range[0]
@@ -128,12 +130,12 @@ for fname in dirList:
             filter = session.query(db.Filter).\
                     filter_by(recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
                     band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
-                    notch=False,phase_shuffled=False).first()
+                    downsampled_rate=downsampled_rate, notch=False,phase_shuffled=False).first()
             if not filter:
                 filter = db.Filter(\
                     recording_id=recording.id, filter_type=filter_type, poles=taps-1, window=window,\
                     band_name=band, band_min=band_min, band_max=band_max, duration=data['displacement'].shape[1],\
-                    notch=False,phase_shuffled=False,\
+                    downsampled_rate=downsampled_rate, notch=False,phase_shuffled=False,\
                     subject_id = subject.id, task_id=task.id, experiment_id=experiment.id, sensor_id=sensor.id)
 
                 session.add(filter)
@@ -151,4 +153,5 @@ for fname in dirList:
                     cluster=cluster, swarms_directory=swarms_directory, analyses_directory=analyses_directory,\
                     python_location=python_location,\
                     verbose=True)
+            break
 session.close()
