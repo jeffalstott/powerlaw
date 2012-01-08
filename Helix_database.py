@@ -69,6 +69,4 @@ def compare(*args, **kwargs):
         types.append((name, t))
     
     from numpy import array
-    #return asarray(data.all())
     return array(d, dtype = types) 
-#    return data

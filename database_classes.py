@@ -8,7 +8,6 @@ from sqlalchemy.ext.associationproxy import association_proxy
 class Base(object):
     """Base class which provides automated table name
     and surrogate primary key column.
-    
     """
     @declared_attr
     def __tablename__(cls):
@@ -57,8 +56,8 @@ class Experiment(Base):
     subject_id = Column(Integer, ForeignKey('Subject.id'))
     task_id = Column(Integer, ForeignKey('Task.id'))
 
-    subject = relationship(Subject, backref=backref('experiments')) #, order_by=id))
-    task = relationship(Task, backref=backref('experiments')) #, order_by=id))
+    subject = relationship(Subject, cascade="all, delete-orphan", backref=backref('experiments')) #, order_by=id))
+    task = relationship(Task, cascade="all, delete-orphan", backref=backref('experiments')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', visit='%s', task='%s')>" % \
@@ -90,9 +89,9 @@ class Task_Performance(Base):
     task_id = Column(Integer, ForeignKey('Task.id'))
     experiment_id = Column(Integer, ForeignKey('Experiment.id'))
 
-    subject = relationship(Subject, backref=backref('task_performances')) #, order_by=id))
-    task = relationship(Task, backref=backref('task_performances')) #, order_by=id))
-    experiment = relationship(Experiment, backref=backref('task_performances')) #, order_by=id))
+    subject = relationship(Subject, cascade="all, delete-orphan", backref=backref('task_performances')) #, order_by=id))
+    task = relationship(Task, cascade="all, delete-orphan", backref=backref('task_performances')) #, order_by=id))
+    experiment = relationship(Experiment, cascade="all, delete-orphan", backref=backref('task_performances')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s')>" % \
@@ -110,10 +109,10 @@ class Recording(Base):
     experiment_id = Column(Integer, ForeignKey('Experiment.id'))
     sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
-    subject = relationship(Subject, backref=backref('recordings')) #, order_by=id))
-    task = relationship(Task, backref=backref('recordings')) #, order_by=id))
-    experiment = relationship(Experiment, backref=backref('recordings')) #, order_by=id))
-    sensor = relationship(Sensor, backref=backref('recordings')) #, order_by=id))
+    subject = relationship(Subject, cascade="all, delete-orphan", backref=backref('recordings')) #, order_by=id))
+    task = relationship(Task, cascade="all, delete-orphan", backref=backref('recordings')) #, order_by=id))
+    experiment = relationship(Experiment, cascade="all, delete-orphan", backref=backref('recordings')) #, order_by=id))
+    sensor = relationship(Sensor, cascade="all, delete-orphan", backref=backref('recordings')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s')>" % \
@@ -137,11 +136,11 @@ class Filter(Base):
     recording_id = Column(Integer, ForeignKey('Recording.id'))
     sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
-    subject = relationship(Subject, backref=backref('filters')) #, order_by=id))
-    task = relationship(Task, backref=backref('filters')) #, order_by=id))
-    experiment = relationship(Experiment, backref=backref('filters')) #, order_by=id))
-    sensor = relationship(Sensor, backref=backref('filters')) #, order_by=id))
-    recording = relationship(Recording, backref=backref('filters')) #, order_by=id))
+    subject = relationship(Subject, cascade="all, delete-orphan", backref=backref('filters')) #, order_by=id))
+    task = relationship(Task, cascade="all, delete-orphan", backref=backref('filters')) #, order_by=id))
+    experiment = relationship(Experiment, cascade="all, delete-orphan", backref=backref('filters')) #, order_by=id))
+    sensor = relationship(Sensor, cascade="all, delete-orphan", backref=backref('filters')) #, order_by=id))
+    recording = relationship(Recording, cascade="all, delete-orphan", backref=backref('filters')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s', band='%s')>" % \
@@ -189,7 +188,7 @@ class HasFits(object):
                     creator=Fit_Association.creator(discriminator)
                 )
         return relationship(Fit_Association, 
-                    backref=backref("%s_analysis" % discriminator, 
+                    cascade="all, delete-orphan", backref=backref("%s_analysis" % discriminator, 
                                         uselist=False))
 
 class Avalanche(HasFits,Base):
@@ -234,12 +233,12 @@ class Avalanche(HasFits,Base):
     filter_id = Column(Integer, ForeignKey('Filter.id'))
     sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
-    subject = relationship(Subject, backref=backref('avalanches')) #, order_by=id))
-    task = relationship(Task, backref=backref('avalanches')) #, order_by=id))
-    experiment = relationship(Experiment, backref=backref('avalanches')) #, order_by=id))
-    sensor = relationship(Sensor, backref=backref('avalanches')) #, order_by=id))
-    recording = relationship(Recording, backref=backref('avalanches')) #, order_by=id))
-    filter = relationship(Filter, backref=backref('avalanches')) #, order_by=id))
+    subject = relationship(Subject, cascade="all, delete-orphan", backref=backref('avalanches')) #, order_by=id))
+    task = relationship(Task, cascade="all, delete-orphan", backref=backref('avalanches')) #, order_by=id))
+    experiment = relationship(Experiment, cascade="all, delete-orphan", backref=backref('avalanches')) #, order_by=id))
+    sensor = relationship(Sensor, cascade="all, delete-orphan", backref=backref('avalanches')) #, order_by=id))
+    recording = relationship(Recording, cascade="all, delete-orphan", backref=backref('avalanches')) #, order_by=id))
+    filter = relationship(Filter, cascade="all, delete-orphan", backref=backref('avalanches')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s', threshold='%s', timescale='%s')>" % \
@@ -279,15 +278,15 @@ class Fit(Base):
     sensor_id = Column(Integer, ForeignKey('Sensor.id'))
 
     association_id = Column(Integer, ForeignKey("Fit_Association.id"))
-    association = relationship(Fit_Association, backref="fits")
+    association = relationship(Fit_Association, cascade="all, delete-orphan", backref="fits")
     analysis = association_proxy("association", "analysis")
 
-    subject = relationship(Subject, backref=backref('fits')) #, order_by=id))
-    task = relationship(Task, backref=backref('fits')) #, order_by=id))
-    experiment = relationship(Experiment, backref=backref('fits')) #, order_by=id))
-    sensor = relationship(Sensor, backref=backref('fits')) #, order_by=id))
-    recording = relationship(Recording, backref=backref('fits')) #, order_by=id))
-    filter = relationship(Filter, backref=backref('fits')) #, order_by=id))
+    subject = relationship(Subject, cascade="all, delete-orphan", backref=backref('fits')) #, order_by=id))
+    task = relationship(Task, cascade="all, delete-orphan", backref=backref('fits')) #, order_by=id))
+    experiment = relationship(Experiment, cascade="all, delete-orphan", backref=backref('fits')) #, order_by=id))
+    sensor = relationship(Sensor, cascade="all, delete-orphan", backref=backref('fits')) #, order_by=id))
+    recording = relationship(Recording, cascade="all, delete-orphan", backref=backref('fits')) #, order_by=id))
+    filter = relationship(Filter, cascade="all, delete-orphan", backref=backref('fits')) #, order_by=id))
 
     def __repr__(self):
         return "<%s(subject='%s', experiment='%s', task='%s', sensor='%s', variable='%s', distribution='%s')>" % \
