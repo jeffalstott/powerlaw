@@ -186,3 +186,4 @@ for fname in dirList:
             break
 
 session.close()
+session.bind.dispose()

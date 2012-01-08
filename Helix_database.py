@@ -1,11 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database_classes import *
+import database_classes
 
 database_url = 'mysql://alstottj:RusduOv4@biobase/alstottj'
 
 engine = create_engine(database_url, echo=False)
-Base.metadata.create_all(engine) 
+Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 def compare(*args, **kwargs):
@@ -27,6 +28,7 @@ def compare(*args, **kwargs):
         'Task.eyes': 'open',\
         'Experiment.visit_number': None,\
         'Filter.band_name': 'broad',\
+        'Filter.downsampled_rate': '1000',\
         'Subject.group_name': None,\
         'Avalanche.spatial_sample': 'all',\
         'Avalanche.temporal_sample': 'all',\
@@ -35,12 +37,13 @@ def compare(*args, **kwargs):
         'Avalanche.threshold_direction': 'both',\
         'Avalanche.event_signal': 'displacement',\
         'Avalanche.event_detection': 'local_extrema',\
-        'Avalanche.threshold_direction': 'both',\
         'Avalanche.cascade_method': 'grid',\
         'Fit.analysis_type':  'avalanches',\
         'Fit.variable':  'size_events',\
         'Fit.distribution':  'power_law',\
+        'Fit.fixed_xmin':  True,\
         'Fit.xmin': 1,\
+        'Fit.fixed_xmax':  True,\
         'Fit.xmax': 204,\
         'Avalanche.time_scale': 2,\
         }
@@ -52,10 +55,20 @@ def compare(*args, **kwargs):
         if filters[key]==None:
             continue
         table, variable = key.split('.')
-        data = data.filter(getattr(getattr( table),variable)==filters[key])
+        data = data.filter(getattr(getattr(database_classes,table),variable)==filters[key])
 
+    d = data.all()
     session.close()
+    session.bind.dispose()
+    types = []
+    for a in range(len(args)):
+        name = str(args[a]).split('.')[-1]
+        t = type(d[0][a])
+        if t==str:
+            t = '|S100'
+        types.append((name, t))
     
-    from numpy import asarray
-    return asarray(data.all())
+    from numpy import array
+    #return asarray(data.all())
+    return array(d, dtype = types) 
 #    return data

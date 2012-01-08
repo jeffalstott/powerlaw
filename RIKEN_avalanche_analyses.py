@@ -4,7 +4,7 @@ import os
 
 import Helix_database as db
 session = db.Session()
-cluster=False
+cluster=True
 analyses_directory = '/home/alstottj/biowulf/analyses/'
 swarms_directory = '/home/alstottj/biowulf/swarms/'
 python_location= '/usr/local/Python/2.7.2/bin/python'
@@ -15,7 +15,7 @@ threshold_levels = [2, 5, 10]
 threshold_directions = ['both']
 given_xmin_xmax = [(None, None), (1, None), (1, 'channels')]
 event_signals = ['displacement']
-event_detections = ['local_extrema', 'local', 'excursion_extrema']
+event_detections = ['local_extrema']#, 'local', 'excursion_extrema']
 cascade_methods = ['grid']
 spatial_samples = [('all', 'all')]
 temporal_samples = [('all', 'all')]
@@ -27,17 +27,18 @@ data_path = '/data/alstottj/RIKEN/For_Analysis/'
 filter_type = 'FIR'
 taps = 25
 window = 'hamming'
-ds_rate = 100.0
+ds_rate = 200.0
 transd = True
 mains = 50
 
 visits = ['', '0', '1','2','3','4','5','6','7','8']
+#visits = ['']
 tasks = ['food_tracking', \
         'visual_grating',\
         'visual_grating',
         'emotional_movie', \
-        'social_competition',\
-        'rest', 'anesthetized', 'sleep_wake_transition']
+        'social_competition']
+#tasks = ['rest'] #, 'anesthetized', 'sleep_wake_transition']
 
 rem=False
 rest='rested'
@@ -51,11 +52,13 @@ for fname in dirList:
     number_in_group = f.attrs['number_in_group']
     species = f.attrs['species']
     location = f.attrs['location']
+    if number_in_group=='K2':
+        continue
 
     subject = session.query(db.Subject).\
-            filter_by(species=species, group_name=group_name, number_in_group=number_in_group).first()
+            filter_by(species=species, group_name=group_name, name=number_in_group).first()
     if not subject:
-        subject = db.Subject(species=species, group_name=group_name, number_in_group=number_in_group)
+        subject = db.Subject(species=species, group_name=group_name, name=number_in_group)
         session.add(subject)
         session.commit()
 
@@ -64,7 +67,8 @@ for fname in dirList:
     conditions = [(t,v) for t in tasks for v in visits] 
     for task_type, visit in conditions:
         base = task_type+visit
-        base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window+'_ds-'+ds_rate
+        base_filtered = base+'/filter_'+filter_type+'_'+str(taps)+'_'+window+'_ds-'+str(ds_rate)
+        print base_filtered 
         #If this particular set of conditions doesn't exist for this subject, just continue to the next set of conditions
         try:
             f[base_filtered]
@@ -153,5 +157,5 @@ for fname in dirList:
                     cluster=cluster, swarms_directory=swarms_directory, analyses_directory=analyses_directory,\
                     python_location=python_location,\
                     verbose=True)
-            break
 session.close()
+session.bind.dispose()

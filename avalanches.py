@@ -572,12 +572,12 @@ def avalanche_statistics(metrics, \
         given_xmin_xmax=[(None,None)],\
         session=None, database_url=None, overwrite_database=False, \
         analysis_id=None, filter_id=None, \
-        subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None):
+        subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None,\
+        close_session_at_end=False):
     from scipy.stats import mode, linregress
     from numpy import empty, unique, median, sqrt, sort
     import statistics as pl_statistics
     
-    close_session_at_end=False
 
     if not session and database_url:
         from sqlalchemy import create_engine
@@ -594,6 +594,9 @@ def avalanche_statistics(metrics, \
 	#If there are statistics already calculated, and we're not overwriting, then end.
         if avalanche_analysis.fits and not overwrite_database:
             return
+        #Throw away the connection until we need it again, which will be awhile
+        session.close()
+        session.bind.dispose()
 
     #Various variable initializations for later
     statistics = {}
@@ -748,6 +751,7 @@ def avalanche_statistics(metrics, \
         session.commit()
         if close_session_at_end:
             session.close()
+            session.bind.dispose()
     return statistics
 
 def avalanche_analyses(data,\
@@ -763,7 +767,7 @@ def avalanche_analyses(data,\
         filter_id=None, subject_id=None, task_id=None, experiment_id=None, sensor_id=None, recording_id=None,\
         data_amplitude=None, data_displacement_aucs=None, data_amplitude_aucs=None,\
         cluster=False, swarms_directory=None, analyses_directory=None, python_location=None,\
-        verbose=False):
+        close_session_at_end=False, verbose=False):
 
     if spatial_sample_names:
         spatial_samples = zip(spatial_samples, spatial_sample_names)
@@ -849,6 +853,12 @@ def avalanche_analyses(data,\
                 analysis_id = analysis.id
 
         if not cluster:
+            if session:
+                session.commit()
+                session.close()
+                session.bind.dispose()
+                #Throw away the connection until we need it again, which could be awhile
+
             metrics = avalanche_analysis(data,\
                     data_amplitude=data_amplitude, \
                     data_displacement_aucs=data_displacement_aucs,\
@@ -894,7 +904,7 @@ def avalanche_analyses(data,\
 
             analysis_file.write("database_url= %r\n\n" % database_url)
 
-            analysis_file.writelines(['from criticality import avalanche_analysis, avalanche_statistics\n',
+            analysis_file.writelines(['from avalanches import avalanche_analysis, avalanche_statistics\n',
                 'from sqlalchemy import create_engine\n',
                 'from sqlalchemy.orm.session import Session\n',
                 'engine = create_engine(database_url, echo=False)\n', 
@@ -937,6 +947,7 @@ def avalanche_analyses(data,\
                 "    filter_id=%s, analysis_id=%s)\n\n" % (filter_id, analysis_id)])
 
             analysis_file.write('session.close()')
+            analysis_file.write('session.bind.dispose()')
 
             analysis_file.close()
 
@@ -951,10 +962,16 @@ def avalanche_analyses(data,\
             print("No new analyses, not submitting swarm file "+new_swarm)
         else:
             from os import system
-            print("Submitting "+analyses_number+" analyses with swarm file "+new_swarm)
-            system('swarm -f '+swarms_directory+new_swarm+' -m a')
+            print("Submitting "+str(analyses_number)+" analyses with swarm file "+new_swarm)
+            system('swarm -f '+swarms_directory+new_swarm+' -g 8 -m a')
             open(swarms_directory+'max_swarm_file.txt', 'w').write(str(max_swarm+1))
             open(analyses_directory+'max_analysis_file.txt', 'w').write(str(max_analysis))
+
+    if session:
+        session.commit()
+        if close_session_at_end:
+            session.close()
+            session.bind.dispose()
 
     if verbose:
         return results
@@ -1009,3 +1026,50 @@ def next_power_of_2(x):
     x |= x >> 16
     x += 1
     return x 
+
+def tgrowth_graph(data, measure='amplitudes', time_steps=50, x_min=-2, x_max=2):
+
+    from mpl_toolkits.mplot3d import Axes3D
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import PolyCollection
+    from matplotlib.colors import colorConverter
+    from numpy import unique, histogram, where, arange
+    fig = plt.figure()
+    ax = fig.add_subplot(121, projection='3d')
+
+    if measure[-1]!='s':
+        measure = measure+'s'
+
+    verts = []
+    times = unique(data['event_times_within_avalanche'])
+    valid_times = []
+    prob_mean = []
+    prob_std = []
+
+    for z in arange(time_steps)+1:
+        if z not in times:
+            continue
+        d = data['t_ratio_'+measure][where(data['event_times_within_avalanche']==z)[0]]
+        probs, bins = histogram(d, normed=True)
+        verts.append([(bins[0], 0)] + zip(bins[:-1], probs) + [(bins[-2],0)])
+        valid_times.append(z)
+        prob_mean.append(d.mean())
+        prob_std.append(d.std())
+
+    poly = PolyCollection(verts)
+
+    poly.set_alpha(0.7)
+    ax.add_collection3d(poly, zs=valid_times, zdir='y')
+    ax.set_xlabel('Log(Event Size Ratio)')
+    ax.set_xlim3d(x_min,x_max)
+    ax.set_zlabel('P(Event Size Ratio)')
+    ax.set_zlim3d(0,1)
+    ax.set_ylabel('Timestep in Avalanche')
+    ax.set_ylim3d(1,time_steps)
+
+    ax = fig.add_subplot(122)
+    ax.errorbar(valid_times, prob_mean, yerr=prob_std)
+    ax.set_ylabel('Log(Event Size Ratio)')
+    ax.set_ylim(x_min,x_max)
+    ax.set_xlabel('Timestep in Avalanche')
+    plt.show()
