@@ -169,7 +169,7 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
 
     if not discrete:
         Actual_CDF = arange(n)/n
-        Theoretical_CDF = 1-(xmin/data)**alpha
+        Theoretical_CDF = 1-(data/xmin)**(-alpha+1)
 
     if discrete:
         from scipy.special import zeta
