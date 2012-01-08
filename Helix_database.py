@@ -6,7 +6,7 @@ import database_classes
 database_url = 'mysql://alstottj:RusduOv4@biobase/alstottj'
 
 engine = create_engine(database_url, echo=False)
-Base.metadata.create_all(engine)
+#Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 def compare(*args, **kwargs):
