@@ -53,7 +53,6 @@ def avalanche_analysis(data,\
         data_displacement = data
 
     n_rows, n_columns = data_displacement.shape
-    data_displacement = data_displacement-data_displacement.mean(1).reshape(n_rows,1)
 
     from numpy import ndarray
     #If we don't have amplitude or area_under_the_curve information yet, calculate it
@@ -91,6 +90,7 @@ def avalanche_analysis(data,\
     metrics['event_amplitudes']= data_amplitude[m['event_channels'], m['event_times']]
     metrics['event_amplitude_aucs'] = data_amplitude_aucs[m['event_channels'], m['event_times']]
     metrics['event_displacement_aucs'] = data_displacement_aucs[m['event_channels'], m['event_times']]
+    
 
     starts, stops = find_cascades(metrics['event_times'], time_scale, cascade_method)
 
@@ -903,12 +903,12 @@ def avalanche_analyses(data,\
             print("Writing analysis file "+new_analysis)
 
             analysis_file.write("database_url= %r\n\n" % database_url)
+            analysis_file.write("session=False\n\n")
 
             analysis_file.writelines(['from avalanches import avalanche_analysis, avalanche_statistics\n',
                 'from sqlalchemy import create_engine\n',
                 'from sqlalchemy.orm.session import Session\n',
-                'engine = create_engine(database_url, echo=False)\n', 
-                'session = Session(engine)\n\n'])
+                'engine = create_engine(database_url, echo=False)\n\n'])
 
             analysis_file.write('analysis_id=%s \n\n' % analysis_id)
             analysis_file.write("""print("analysis_id=%r, threshold_mode=%r, threshold_level=%r, threshold_direction=%r, event_signal=%r, event_detection=%r, time_scale=%s, cascade_method=%r, spatial_sample=%r, spatial_sample_name=%r, temporal_sample=%r, temporal_sample_name=%r") \n\n"""\
@@ -934,7 +934,8 @@ def avalanche_analyses(data,\
                 "        subject_id=%s, task_id=%s, experiment_id=%s,\\\n" % (subject_id, task_id, experiment_id),
                 "        sensor_id=%s, recording_id=%s,\\\n" % (sensor_id, recording_id),
                 "        n=metrics['n'],\\\n",
-                "        fits = [])\n",
+                "        fits = [])\n\n",
+                "    session = Session(engine)\n",
                 "    session.add(analysis)\n",
                 "    session.commit()\n",
                 "    analysis_id=analysis.id\n\n"])
@@ -946,8 +947,9 @@ def avalanche_analyses(data,\
                 "    sensor_id=%s, recording_id=%s,\\\n" % (sensor_id, recording_id),
                 "    filter_id=%s, analysis_id=%s)\n\n" % (filter_id, analysis_id)])
 
-            analysis_file.write('session.close()')
-            analysis_file.write('session.bind.dispose()')
+            analysis_file.writelines(["if session:\n",
+                "    session.close()\n",
+                "    session.bind.dispose()\n"])
 
             analysis_file.close()
 
