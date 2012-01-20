@@ -460,7 +460,7 @@ def avalanche_metrics(input_metrics, avalanche_number):
                 input_metrics['event_times'], \
                 (input_metrics['starts'][avalanche_number] \
                 +input_metrics['time_scale'])\
-                )-1
+                )
         second_bin = bisect_left( \
                 input_metrics['event_times'], \
                 (input_metrics['starts'][avalanche_number] \
@@ -468,16 +468,16 @@ def avalanche_metrics(input_metrics, avalanche_number):
                 )
         
         sigma_events = (second_bin-first_bin)/ \
-                (first_bin-avalanche_start+1.0)
+                (first_bin-avalanche_start)
         sigma_displacements = \
                 sum(abs(input_metrics['event_displacements'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_displacements'][avalanche_start:first_bin+1]))
+                sum(abs(input_metrics['event_displacements'][avalanche_start:first_bin]))
         sigma_amplitudes = \
                 sum(abs(input_metrics['event_amplitudes'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin+1]))
+                sum(abs(input_metrics['event_amplitudes'][avalanche_start:first_bin]))
         sigma_amplitude_aucs = \
                 sum(abs(input_metrics['event_amplitude_aucs'][first_bin:second_bin]))/  \
-                sum(abs(input_metrics['event_amplitude_aucs'][avalanche_start:first_bin+1]))
+                sum(abs(input_metrics['event_amplitude_aucs'][avalanche_start:first_bin]))
 
 #Calculate Tara's growth ratio
     event_times_within_avalanche = (\
