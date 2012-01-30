@@ -7,6 +7,7 @@ setup(
         author='Jeff Alstott',
         author_email = 'jeffalstott@gmail.com',
         url = 'https://github.com/jeffalstott/',
+        requires = ['scipy', 'numpy'],
         classifiers = [
             'License :: OSI Approved :: MIT License',
             'Programming Language :: Python',
