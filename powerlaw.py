@@ -197,6 +197,8 @@ def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False)
     from numpy import cumsum, histogram, arange, array
     if type(data)==list:
         data = array(data)
+    if not data.any():
+        return array([0]), array([0])
     if xmin:
         data = data[data>=xmin]
     else:
