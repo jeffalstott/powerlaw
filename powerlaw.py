@@ -1,18 +1,52 @@
-def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, find_xmin=False, find_xmax=False, comparison_alpha=None, force_positive_mean=False):
+def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None, \
+        comparison_alpha=None, search_method='Likelihood'):
     """distribution_fit does things"""
     from numpy import log
-    if xmin:
-        xmin = float(xmin)
-        data = data[data>=xmin]
+
+    #If we aren't given an xmin, calculate the best possible one for a power law. This can take awhile!
+    if not xmin or xmin=='find':
+        xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method)
+
+    xmin = float(xmin)
+    data = data[data>=xmin]
+
     if xmax:
         xmax = float(xmax)
         data = data[data<=xmax]
 
+    #Special case where we call distribution_fit multiple times to do all comparisons
+    if distribution=='all':
+        if alpha:
+            pl_parameters = [alpha]
+        else:
+            pl_parameters, loglikelihood = distribution_fit(data, 'power_law', discrete, xmin, xmax, search_method=search_method)
+        results = {}
+        results['fits']={}
+        results['fits']['power_law'] = (pl_parameters, loglikelihood)
+
+        tpl_parameters, loglikelihood, R, p = distribution_fit(data, 'truncated_power_law', discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method)
+        results['fits']['truncated_power_law'] = (tpl_parameters, loglikelihood)
+        results['power_law_comparison']['truncated_power_law'] = (R, p)
+
+        supported_distributions = ['exponential', 'lognormal']
+        
+        for i in supported_distributions:
+            parameters, loglikelihood, R, p = distribution_fit(data, i, discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method)
+            results['fits'][i] = (parameters, loglikelihood)
+            results['power_law_comparison'][i] = (R, p)
+
+            R, p = distribution_compare(data, 'truncated_power_law', tpl_parameters, i, parameters, discrete, xmin, xmax)
+            results['truncated_power_law_comparison'][i] = (R, p)
+
+    #Handle edge case where we don't have enough data
     if len(data)<2:
         from numpy import array
         from sys import float_info
         parameters = array([0, 0])
-        loglikelihood = -10**float_info.max_10_exp
+        if search_method=='Likelihood':
+            loglikelihood = -10**float_info.max_10_exp
+        if search_method=='KS':
+            loglikelihood= 1
         if comparison_alpha==None:
             return parameters, loglikelihood
         R = 10**float_info.max_10_exp
@@ -21,68 +55,109 @@ def distribution_fit(data, distribution, discrete=False, xmin=None, xmax=None, f
 
     n = float(len(data))
 
-    if distribution=='power_law' and not discrete and xmin and not xmax:
-        from numpy import array, nan
-        alpha = 1+n/\
-                sum(log(data/xmin))
-        loglikelihood = n*log(alpha-1.0) - n*log(xmin) - alpha*sum(log(data/xmin))
-        if loglikelihood == nan:
-            loglikelihood=0
+    #Initial search parameters, estimated from the data
+    if distribution=='power_law' and not alpha:
+        if discrete:
+            #initial_parameters=[1 + n/sum( log( data/(xmin-.5) ))]
+            initial_parameters=[1 + n/sum( log( data/(xmin) ))]
+        else:
+            initial_parameters=[1 + n/sum( log( data/xmin ))]
+    elif distribution=='exponential':
+        from numpy import mean
+        initial_parameters=[1/mean(data)]
+    elif distribution=='truncated_power_law':
+        from numpy import mean
+        if discrete:
+            #initial_parameters=[1 + n/sum( log( data/(xmin-.5) )), 1/mean(data)]
+            initial_parameters=[1 + n/sum( log( data/(xmin) )), 1/mean(data)]
+        else:
+            initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
+    elif distribution=='lognormal':
+        from numpy import mean, std
+        logdata = log(data)
+        initial_parameters=[mean(logdata), std(logdata)]
 
-        parameters = array([alpha])
-        return parameters, loglikelihood
-    
-    else:
-        if distribution=='power_law':
-            if discrete:
-                #initial_parameters=[1 + n/sum( log( data/(xmin-.5) ))]
-                initial_parameters=[1 + n/sum( log( data/(xmin) ))]
-            else:
-                initial_parameters=[1 + n/sum( log( data/xmin ))]
-            likelihood_function = lambda parameters:\
-                    power_law_likelihoods(\
-                    data, parameters[0], xmin, xmax, discrete)
+    if search_method=='Likelihood':
+        #If the distribution is a continuous power law without an xmax, and we're using the maximum likelihood method, we can compute the parameters and likelihood directly
+        if distribution=='power_law' and not discrete and not xmax and not alpha:
+            from numpy import array, nan
+            alpha = 1+n/\
+                    sum(log(data/xmin))
+            loglikelihood = n*log(alpha-1.0) - n*log(xmin) - alpha*sum(log(data/xmin))
+            if loglikelihood == nan:
+                loglikelihood=0
+            parameters = array([alpha])
+            return parameters, loglikelihood
 
-        elif distribution=='exponential':
-            from numpy import mean
-            initial_parameters=[1/mean(data)]
-            likelihood_function = lambda parameters:\
-                    exponential_likelihoods(\
-                    data, parameters[0], xmin, xmax, discrete)
+        #Otherwise, we set up a likelihood function
+        likelihood_function = likelihood_function_generator(distribution, discrete=discrete, xmin=xmin, xmax=xmax)
 
-        elif distribution=='truncated_power_law':
-            from numpy import mean
-            if discrete:
-                #initial_parameters=[1 + n/sum( log( data/(xmin-.5) )), 1/mean(data)]
-                initial_parameters=[1 + n/sum( log( data/(xmin) )), 1/mean(data)]
-            else:
-                initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
-            likelihood_function = lambda parameters:\
-                    truncated_power_law_likelihoods(\
-                    data, parameters[0], parameters[1], xmin, xmax, discrete)
-
-        elif distribution=='lognormal':
-            from numpy import mean, std
-            logdata = log(data)
-            initial_parameters=[mean(logdata), std(logdata)]
-            likelihood_function = lambda parameters:\
-                    lognormal_likelihoods(\
-                    data, parameters[0], parameters[1], xmin, xmax, discrete, force_positive_mean=force_positive_mean)
-
+        #Search for the best fit parameters for the target distribution, on this data
         from scipy.optimize import fmin
         parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
                 fmin(\
-                lambda p: -sum(log(likelihood_function(p))),\
+                lambda p: -sum(log(likelihood_function(p, data))),\
                 initial_parameters, full_output=1, disp=False)
         loglikelihood =-negative_loglikelihood
 
-    if comparison_alpha==None:
-        return parameters, loglikelihood
+        if comparison_alpha:
+            R, p = distribution_compare(data, 'power_law',[comparison_alpha], distribution, parameters, discrete, xmin, xmax) 
+            return parameters, loglikelihood, R, p
+        else:
+            return parameters, loglikelihood
 
-    pl_likelihoods = power_law_likelihoods(data, alpha=comparison_alpha, xmin=xmin, xmax=xmax, discrete=discrete)
-    candidate_likelihoods = likelihood_function(parameters)
-    R, p = loglikelihood_ratio(pl_likelihoods, candidate_likelihoods)
-    return parameters, loglikelihood, R, p
+    elif search_method=='KS':
+        #Search for the best fit parameters for the target distribution, on this data
+        from scipy.optimize import fmin
+        parameters, KS, iter, funcalls, warnflag, = \
+                fmin(\
+                lambda p: -sum(log(likelihood_function(p, data))),\
+                initial_parameters, full_output=1, disp=False)
+        loglikelihood =-negative_loglikelihood
+
+        if comparison_alpha:
+            R, p = distribution_compare(data, 'power_law',[comparison_alpha], distribution, parameters, discrete, xmin, xmax) 
+            return parameters, loglikelihood, R, p
+        else:
+            return parameters, loglikelihood
+
+
+def distribution_compare(data, distribution1, parameters1, distribution2, parameters2, discrete, xmin, xmax,):
+
+    likelihood_function1 = likelihood_function_generator(distribution1, discrete, xmin, xmax)
+    likelihood_function2 = likelihood_function_generator(distribution2, discrete, xmin, xmax)
+
+    likelihoods1 = likelihood_function1(parameters1, data)
+    likelihoods2 = likelihood_function2(parameters2, data)
+
+    R, p = loglikelihood_ratio(likelihoods1, likelihoods2)
+
+    return R, p
+
+def likelihood_function_generator(distribution_name, discrete=False, xmin=1, xmax=None):
+
+    if distribution_name=='power_law':
+        likelihood_function = lambda parameters, data:\
+                power_law_likelihoods(\
+                data, parameters[0], xmin, xmax, discrete)
+
+    elif distribution_name=='exponential':
+        likelihood_function = lambda parameters, data:\
+                exponential_likelihoods(\
+                data, parameters[0], xmin, xmax, discrete)
+
+    elif distribution_name=='truncated_power_law':
+        likelihood_function = lambda parameters, data:\
+                truncated_power_law_likelihoods(\
+                data, parameters[0], parameters[1], xmin, xmax, discrete)
+
+    elif distribution_name=='lognormal':
+        likelihood_function = lambda parameters, data:\
+                lognormal_likelihoods(\
+                data, parameters[0], parameters[1], xmin, xmax, discrete)
+
+    return likelihood_function
+
 
 def loglikelihood_ratio(likelihoods1, likelihoods2):
     from numpy import sqrt,log
@@ -104,7 +179,7 @@ def loglikelihood_ratio(likelihoods1, likelihoods2):
     p = erfc( abs(R) / (sqrt(2*n)*sigma) ) 
     return R, p
 
-def find_xmin(data, discrete=False, xmax=None):
+def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood'):
     from numpy import sort, unique, asarray, argmin, hstack, arange, sqrt
     if xmax:
         data = data[data<=xmax]
@@ -125,9 +200,13 @@ def find_xmin(data, discrete=False, xmax=None):
         return xmin, D, alpha, loglikelihood, n_tail, noise_flag
     xmin_indices = xmin_indices[:-1] #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
 
-    alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete)
-    fits  = asarray( map(alpha_MLE_function,xmins))
-    #import pdb; pdb.set_trace();
+    if search_method=='Likelihood':
+        alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='Likelihood')
+        fits  = asarray( map(alpha_MLE_function,xmins))
+    elif search_method=='KS':
+        alpha_KS_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='KS')
+        fits  = asarray( map(alpha_KS_function,xmins))
+
     alphas = hstack(fits[:,0])
     loglikelihoods = fits[:,1]
 
@@ -153,7 +232,7 @@ def find_xmin(data, discrete=False, xmax=None):
     return xmin, D, alpha, loglikelihood, n_tail, noise_flag
 
 def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=False):
-    """Data must be sorted beforehand!"""
+    """Helps if all data is sorted beforehand!"""
     from numpy import arange, sort, mean
     data = data[data>=xmin]
     if xmax:
@@ -194,21 +273,22 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
     return D
 
 def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False):
-    from numpy import cumsum, histogram, arange, array
+    from numpy import cumsum, histogram, arange, array, floor
     if type(data)==list:
         data = array(data)
     if not data.any():
         return array([0]), array([0])
-    if xmin:
-        data = data[data>=xmin]
-    else:
-        xmin = min(data)
-    if xmax:
-        data = data[data<=xmax]
-    else:
-        xmax = max(data)
     
-    if discrete(data):
+    if (floor(data)==data.astype(float)).all():
+        if xmin:
+            data = data[data>=xmin]
+        else:
+            xmin = min(data)
+        if xmax:
+            data = data[data<=xmax]
+        else:
+            xmax = max(data)
+
         CDF = cumsum(histogram(data,arange(xmin-1, xmax+2), density=True)[0])[:-1]
         bins = arange(xmin, xmax+1)
     else:
@@ -225,7 +305,7 @@ def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False)
 
 def discrete(data):
     from numpy import floor
-    return reduce(lambda x,y: x==True and floor(y)==float(y), data,True)
+    return (floor(data)==data.astype(float)).all()
 
 def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
     if alpha<0:
@@ -233,6 +313,7 @@ def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
         from sys import float_info
         return tile(10**float_info.min_10_exp, len(data))
 
+    xmin = float(xmin)
     data = data[data>=xmin]
     if xmax:
         data = data[data<=xmax]
@@ -314,15 +395,10 @@ def truncated_power_law_likelihoods(data, alpha, gamma, xmin, xmax=False, discre
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
 
-def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False, force_positive_mean=False):
+def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
     from numpy import log
     if sigma<=0 or mu<log(xmin): 
         #The standard deviation can't be negative, and the mean of the logarithm of the distribution can't be smaller than the log of the smallest member of the distribution!
-        from numpy import tile
-        from sys import float_info
-        return tile(10**float_info.min_10_exp, len(data))
-
-    if force_positive_mean and mu<=0:
         from numpy import tile
         from sys import float_info
         return tile(10**float_info.min_10_exp, len(data))
