@@ -93,7 +93,6 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         from numpy import mean, std
         logdata = log(data)
         initial_parameters=[mean(logdata), std(logdata)]
-    print initial_parameters
 
     if search_method=='Likelihood':
 #        print("Searching using maximum likelihood method")
