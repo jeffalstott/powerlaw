@@ -5,7 +5,13 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 
     #If we aren't given an xmin, calculate the best possible one for a power law. This can take awhile!
     if not xmin or xmin=='find':
+        print("Calculating best minimal value")
         xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method)
+    else:
+        alpha = None
+
+    if distribution=='power_law' and alpha:
+        return (alpha,), loglikelihood
 
     xmin = float(xmin)
     data = data[data>=xmin]
@@ -16,27 +22,37 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 
     #Special case where we call distribution_fit multiple times to do all comparisons
     if distribution=='all':
+        print("Analyzing all distributions")
+        print("Calculating power law fit")
         if alpha:
             pl_parameters = [alpha]
         else:
             pl_parameters, loglikelihood = distribution_fit(data, 'power_law', discrete, xmin, xmax, search_method=search_method)
         results = {}
+        results['xmin'] = xmin
+        results['xmax'] = xmax
+        results['discrete'] = discrete
         results['fits']={}
         results['fits']['power_law'] = (pl_parameters, loglikelihood)
 
+        print("Calculating truncated power law fit")
         tpl_parameters, loglikelihood, R, p = distribution_fit(data, 'truncated_power_law', discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method)
         results['fits']['truncated_power_law'] = (tpl_parameters, loglikelihood)
+        results['power_law_comparison'] = {}
         results['power_law_comparison']['truncated_power_law'] = (R, p)
+        results['truncated_power_law_comparison'] = {}
 
         supported_distributions = ['exponential', 'lognormal']
         
         for i in supported_distributions:
+            print("Calculating %s fit" % i)
             parameters, loglikelihood, R, p = distribution_fit(data, i, discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method)
             results['fits'][i] = (parameters, loglikelihood)
             results['power_law_comparison'][i] = (R, p)
 
             R, p = distribution_compare(data, 'truncated_power_law', tpl_parameters, i, parameters, discrete, xmin, xmax)
             results['truncated_power_law_comparison'][i] = (R, p)
+        return results
 
     #Handle edge case where we don't have enough data
     if len(data)<2:
@@ -56,6 +72,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     n = float(len(data))
 
     #Initial search parameters, estimated from the data
+#    print("Calculating initial parameters for search")
     if distribution=='power_law' and not alpha:
         if discrete:
             #initial_parameters=[1 + n/sum( log( data/(xmin-.5) ))]
@@ -76,8 +93,10 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         from numpy import mean, std
         logdata = log(data)
         initial_parameters=[mean(logdata), std(logdata)]
+    print initial_parameters
 
     if search_method=='Likelihood':
+#        print("Searching using maximum likelihood method")
         #If the distribution is a continuous power law without an xmax, and we're using the maximum likelihood method, we can compute the parameters and likelihood directly
         if distribution=='power_law' and not discrete and not xmax and not alpha:
             from numpy import array, nan
@@ -292,6 +311,8 @@ def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False)
         CDF = cumsum(histogram(data,arange(xmin-1, xmax+2), density=True)[0])[:-1]
         bins = arange(xmin, xmax+1)
     else:
+        if xmin:
+            data = data[data>=xmin]
         n = float(len(data))
         CDF = arange(n)/n
         if not all(data[i] <= data[i+1] for i in arange(n-1)):
@@ -431,14 +452,14 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
 
-def hist_log(data, max_size=False, min_size=False, plot=True, show=True):
+def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True):
     """hist_log does things"""
     from numpy import logspace, histogram
     from math import ceil, log10
     import pylab
-    if ~max_size:
+    if ~xmax:
         max_size = max(data)
-    if ~min_size:
+    if ~xmin:
         min_size = min(data)
     log_min_size = log10(min_size)
     log_max_size = log10(max_size)
