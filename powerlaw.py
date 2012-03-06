@@ -1,5 +1,4 @@
 class Fit(object):
-
     def __init__(self, data, discrete=False, xmin=None, xmax=None, method='Likelihood'):
         self.data = data
         self.discrete = discrete
@@ -14,6 +13,7 @@ class Fit(object):
             self.noise_flag = False
         else:
             self.fixed_xmin=False
+            print("Calculating best minimal value")
             self.xmin, self.D, self.alpha, loglikelihood, self.n_tail, self.noise_flag = find_xmin(data, discrete=self.discrete, xmax=self.xmax, search_method=self.method)
         self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law']
 
@@ -32,13 +32,13 @@ class Fit(object):
                 'power_law_loglikelihood_ratio', 
                 'power_law_p',
                 'truncated_power_law_loglikelihood_ratio', 
-                'truncated_power_law_p'
-                'D',
-                'D_plus_critical_branching',
-                'D_minus_critical_branching',
-                'Kappa',
-                'p']
-                )
+                'truncated_power_law_p',
+                'D'])
+#                'D_plus_critical_branching',
+#                'D_minus_critical_branching',
+#                'Kappa',
+#                'p']
+#                )
 
         if name in self.supported_distributions:
             parameters, loglikelihood = distribution_fit(self.data, distribution=name, discrete=self.discrete,\
@@ -50,17 +50,22 @@ class Fit(object):
                     'truncated_power_law': ('alpha', 'lambda', None),
                     'power_law': ('alpha', None, None)}
 
-            setattr(self, name) = Distribution(name, param_names[name][0], parameters[0],\
-                    param_names[name][1], parameters[1], param_names[name][2], parameters[2],
-                    loglikelihood, None, None, None, None, None, None, None, None, None)
+            setattr(self, name,\
+                    Distribution(name, parameters, \
+                    param_names[name][0], parameters[0],\
+                    param_names[name][1], parameters[1],\
+                    param_names[name][2], parameters[2],\
+                    loglikelihood,\
+                    None, None, None, None, None))
 
             if name=='power_law':
                 D = power_law_ks_distance(self.data, parameters[0], xmin=self.xmin, xmax=self.xmax, discrete=self.discrete)
-                D_plus_critical_branching, D_minus_critical_branching, Kappa = power_law_ks_distance(self.data,\
-                        1.5, xmin=self.xmin, xmax=self.xmax, discrete=self.discrete, kuiper=True)
-
-                self.power_law._replace(D=D, D_plus_critical_branching=D_plus_critical_branching,\
-                        D_minus_critical_branching=D_minus_critical_branching, Kappa=Kappa)
+#                D_plus_critical_branching, D_minus_critical_branching, Kappa = power_law_ks_distance(self.data,\
+#                        1.5, xmin=self.xmin, xmax=self.xmax, discrete=self.discrete, kuiper=True)
+#
+#                self.power_law._replace(D=D, D_plus_critical_branching=D_plus_critical_branching,\
+#                        D_minus_critical_branching=D_minus_critical_branching, Kappa=Kappa)
+                self.power_law._replace(D=D)
 
             pl_R, pl_p = distribution_compare(self.data, 'power_law', self.power_law.parameters, name, parameters, self.discrete, self.xmin, self.xmax)
             tpl_R, tpl_p = distribution_compare(self.data, 'truncated_power_law', self.truncated_power_law.parameters, name, parameters, self.discrete, self.xmin, self.xmax)
@@ -106,6 +111,93 @@ class Fit(object):
                 session.add(f)
             session.commit()
             return
+class Distribution_Fit(object):
+    
+    def __init__(self, data, name, xmin, discrete=False, xmax=None, method='Likelihood'):
+        self.data = data
+        self.discrete = discrete
+        self.xmin = xmin
+        self.xmax = xmax
+        self.method = method
+        self.name = name
+
+        return
+    def __getattr__(self, name):
+        param_names = {'lognormal': ('mu','sigma',None),
+                'exponential': ('lambda', None, None),
+                'truncated_power_law': ('alpha', 'lambda', None),
+                'power_law': ('alpha', None, None)}
+        param_names = param_names[self.name]
+
+        if name in param_names:
+            if name==param_names[0]:
+                setattr(self, name, self.parameter1)
+            elif name==param_names[1]:
+                setattr(self, name, self.parameter2)
+            elif name==param_names[2]:
+                setattr(self, name, self.parameter3)
+            return getattr(self, name)
+        elif name in ['parameters', 
+                'parameter1_name', 
+                'parameter1',
+                'parameter2_name', 
+                'parameter2', 
+                'parameter3_name',
+                'parameter3',
+                'loglikelihood']:
+
+            self.parameters, self.loglikelihood = distribution_fit(self.data, distribution=self.name, discrete=self.discrete,\
+                    xmin=self.xmin, xmax=self.xmax, search_method=self.method)
+            self.parameter1 = self.parameters[0]
+            self.parameter2 = self.parameters[1]
+            self.parameter3 = self.parameters[2]
+            self.parameter1_name = param_names[0]
+            self.parameter2_name = param_names[1]
+            self.parameter3_name = param_names[2]
+
+            if name=='parameters':
+                return self.parameters
+            elif name=='parameter1_name':
+                return self.parameter1_name
+            elif name=='parameter2_name':
+                return self.parameter2_name
+            elif name=='parameter3_name':
+                return self.parameter3_name
+            elif name=='parameter1':
+                return self.parameter1
+            elif name=='parameter2':
+                return self.parameter2
+            elif name=='parameter3':
+                return self.parameter3
+            elif name=='loglikelihood':
+                return self.loglikelihood
+        if name=='D':
+            if self.name!='power_law':
+                self.D=None
+            else:
+                self.D = power_law_ks_distance(self.data, self.parameter1, xmin=self.xmin, xmax=self.xmax, discrete=self.discrete)
+            return self.D
+#
+#        elif name in ['power_law_loglikelihood_ratio', 
+#                'power_law_p']:
+#            pl_R, pl_p = distribution_compare(self.data, 'power_law', self.power_law.parameters, name, self.parameters, self.discrete, self.xmin, self.xmax)
+#            self.power_law_loglikelihood_ratio = pl_R
+#            self.power_law_p = pl_p
+#            if name=='power_law_loglikelihood_ratio':
+#                return self.power_law_loglikelihood_ratio
+#            if name=='power_law_p':
+#                return self.power_law_p
+#        elif name in ['truncated_power_law_loglikelihood_ratio', 
+#                'truncated_power_law_p']:
+#            tpl_R, tpl_p = distribution_compare(self.data, 'truncated_power_law', self.truncated_power_law.parameters, name, self.parameters, self.discrete, self.xmin, self.xmax)
+#            self.truncated_power_law_loglikelihood_ratio = tpl_R
+#            self.truncated_power_law_p = tpl_p
+#            if name=='truncated_power_law_loglikelihood_ratio':
+#                return self.truncated_power_law_loglikelihood_ratio
+#            if name=='truncated_power_law_p':
+#                return self.truncated_power_law_p
+        else:  raise AttributeError, name
+
 
 def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None, \
         comparison_alpha=None, search_method='Likelihood'):
@@ -123,7 +215,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         alpha = None
 
     if distribution=='power_law' and alpha:
-        return (alpha,), loglikelihood
+        return [alpha, None, None], loglikelihood
 
     xmin = float(xmin)
     data = data[data>=xmin]
@@ -170,7 +262,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     if len(data)<2:
         from numpy import array
         from sys import float_info
-        parameters = array([None, None, None])
+        parameters = array([0, 0, 0])
         if search_method=='Likelihood':
             loglikelihood = -10**float_info.max_10_exp
         if search_method=='KS':
@@ -308,7 +400,7 @@ def loglikelihood_ratio(likelihoods1, likelihoods2):
     return R, p
 
 def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood'):
-    from numpy import sort, unique, asarray, argmin, hstack, arange, sqrt
+    from numpy import sort, unique, asarray, argmin, vstack, arange, sqrt
     if xmax:
         data = data[data<=xmax]
     noise_flag=False
@@ -332,10 +424,11 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood'):
         alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='Likelihood')
         fits  = asarray( map(alpha_MLE_function,xmins))
     elif search_method=='KS':
-        alpha_KS_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='KS')
+        alpha_KS_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='KS')[0]
         fits  = asarray( map(alpha_KS_function,xmins))
 
-    alphas = hstack(fits[:,0])
+    params = fits[:,0]
+    alphas = vstack(params)[:,0]
     loglikelihoods = fits[:,1]
 
     ks_function = lambda index: power_law_ks_distance(data, alphas[index], xmins[index], xmax=xmax, discrete=discrete)
