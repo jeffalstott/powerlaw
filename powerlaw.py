@@ -24,43 +24,6 @@ class Fit(object):
             return getattr(self, name)
         else:  raise AttributeError, name
 
-    def write_to_database(self, session, analysis_id, association_id, distribution_to_write=None):
-        import database as db
-
-        if not distribution_to_write:
-            distribution_to_write = self.supported_distributions
-
-        for i in distribution_to_write:
-            f = db.Fit()
-            f.method = self.method
-            f.n_tail = self.n_tail
-            f.noise_flag = self.noise_flag
-            f.discrete = self.discrete
-            f.fixed_xmin = self.fixed_xmin
-            f.xmin = self.xmin
-            f.fixed_xmax = self.fixed_xmax
-            f.xmax = self.xmax
-            f.analysis_id = self.analysis_id
-            f.association_id = self.association_id
-
-#                f.distribution = getattr(self, i).name
-#                f.parameter1_name = getattr(self, i).parameter1_name
-#                f.parameter1_value = getattr(self, i).parameter2_value
-#                f.parameter2_name = getattr(self, i).parameter2_name
-#                f.parameter2_value = getattr(self, i).Float
-#                f.parameter3_name = getattr(self, i).String(100))
-#                f.parameter3_value = getattr(self, i).Float)
-#                f.loglikelihood = getattr(self, i).Float) 
-#                f.power_law_loglikelihood_ratio = getattr(self, i).Float) 
-#                f.truncated_power_law_loglikelihood_ratio = getattr(self, i).Float) 
-#                f.KS = getattr(self, i).Float)
-#                f.D_plus_critical_branching = getattr(self, i).Float)
-#                f.D_minus_critical_branching = getattr(self, i).Float)
-#                f.Kappa = getattr(self, i).Float)
-#                f.p = getattr(self, i).Float)
-            session.add(f)
-        session.commit()
-        return
     def loglikelihood_ratio(self, dist1, dist2):
         return distribution_compare(self.data, dist1, getattr(self, dist1).parameters, dist2,\
                 getattr(self, dist2).parameters, self.discrete, self.xmin, self.xmax)
