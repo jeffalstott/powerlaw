@@ -8,90 +8,40 @@ class Fit(object):
         self.method = method
 
         if xmin:
+            self.xmin = xmin
             self.fixed_xmin=True
             self.n_tail = None
             self.noise_flag = False
         else:
             self.fixed_xmin=False
-            print("Calculating best minimal value")
+            print("Calculating best minimal value for power law fit")
             self.xmin, self.D, self.alpha, loglikelihood, self.n_tail, self.noise_flag = find_xmin(data, discrete=self.discrete, xmax=self.xmax, search_method=self.method)
         self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law']
 
     def __getattr__(self, name):
-        from collections import namedtuple
-        Distribution = namedtuple('Distribution', \
-                ['name',
-                'parameters',
-                'parameter1_name',
-                'parameter1_value', 
-                'parameter2_name', 
-                'parameter2_value', 
-                'parameter3_name',
-                'parameter3_value',
-                'loglikelihood', 
-                'power_law_loglikelihood_ratio', 
-                'power_law_p',
-                'truncated_power_law_loglikelihood_ratio', 
-                'truncated_power_law_p',
-                'D'])
-#                'D_plus_critical_branching',
-#                'D_minus_critical_branching',
-#                'Kappa',
-#                'p']
-#                )
-
         if name in self.supported_distributions:
-            parameters, loglikelihood = distribution_fit(self.data, distribution=name, discrete=self.discrete,\
-                    xmin=self.xmin, xmax=self.xmax, \
-                    search_method=self.method)
-
-            param_names = {'lognormal': ('mu','sigma',None),
-                    'exponential': ('lambda', None, None),
-                    'truncated_power_law': ('alpha', 'lambda', None),
-                    'power_law': ('alpha', None, None)}
-
-            setattr(self, name,\
-                    Distribution(name, parameters, \
-                    param_names[name][0], parameters[0],\
-                    param_names[name][1], parameters[1],\
-                    param_names[name][2], parameters[2],\
-                    loglikelihood,\
-                    None, None, None, None, None))
-
-            if name=='power_law':
-                D = power_law_ks_distance(self.data, parameters[0], xmin=self.xmin, xmax=self.xmax, discrete=self.discrete)
-#                D_plus_critical_branching, D_minus_critical_branching, Kappa = power_law_ks_distance(self.data,\
-#                        1.5, xmin=self.xmin, xmax=self.xmax, discrete=self.discrete, kuiper=True)
-#
-#                self.power_law._replace(D=D, D_plus_critical_branching=D_plus_critical_branching,\
-#                        D_minus_critical_branching=D_minus_critical_branching, Kappa=Kappa)
-                self.power_law._replace(D=D)
-
-            pl_R, pl_p = distribution_compare(self.data, 'power_law', self.power_law.parameters, name, parameters, self.discrete, self.xmin, self.xmax)
-            tpl_R, tpl_p = distribution_compare(self.data, 'truncated_power_law', self.truncated_power_law.parameters, name, parameters, self.discrete, self.xmin, self.xmax)
-            getattr(self,name)._replace(power_law_loglikelihood_ratio=pl_R, power_law_p=pl_p,\
-                    truncated_power_law_loglikelihood_ratio=tpl_R, truncated_power_law_p=tpl_p)
+            setattr(self, name, Distribution_Fit(self.data, name, self.xmin, self.discrete, self.xmax, self.method))
             return getattr(self, name)
         else:  raise AttributeError, name
 
-        def write_to_database(self, session, analysis_id, association_id, distribution_to_write=None):
-            import database as db
+    def write_to_database(self, session, analysis_id, association_id, distribution_to_write=None):
+        import database as db
 
-            if not distribution_to_write:
-                distribution_to_write = self.supported_distributions
+        if not distribution_to_write:
+            distribution_to_write = self.supported_distributions
 
-            for i in distribution_to_write:
-                f = db.Fit()
-                f.method = self.method
-                f.n_tail = self.n_tail
-                f.noise_flag = self.noise_flag
-                f.discrete = self.discrete
-                f.fixed_xmin = self.fixed_xmin
-                f.xmin = self.xmin
-                f.fixed_xmax = self.fixed_xmax
-                f.xmax = self.xmax
-                f.analysis_id = self.analysis_id
-                f.association_id = self.association_id
+        for i in distribution_to_write:
+            f = db.Fit()
+            f.method = self.method
+            f.n_tail = self.n_tail
+            f.noise_flag = self.noise_flag
+            f.discrete = self.discrete
+            f.fixed_xmin = self.fixed_xmin
+            f.xmin = self.xmin
+            f.fixed_xmax = self.fixed_xmax
+            f.xmax = self.xmax
+            f.analysis_id = self.analysis_id
+            f.association_id = self.association_id
 
 #                f.distribution = getattr(self, i).name
 #                f.parameter1_name = getattr(self, i).parameter1_name
@@ -108,11 +58,15 @@ class Fit(object):
 #                f.D_minus_critical_branching = getattr(self, i).Float)
 #                f.Kappa = getattr(self, i).Float)
 #                f.p = getattr(self, i).Float)
-                session.add(f)
-            session.commit()
-            return
+            session.add(f)
+        session.commit()
+        return
+    def loglikelihood_ratio(self, dist1, dist2):
+        return distribution_compare(self.data, dist1, getattr(self, dist1).parameters, dist2,\
+                getattr(self, dist2).parameters, self.discrete, self.xmin, self.xmax)
+
+
 class Distribution_Fit(object):
-    
     def __init__(self, data, name, xmin, discrete=False, xmax=None, method='Likelihood'):
         self.data = data
         self.discrete = discrete
@@ -124,7 +78,7 @@ class Distribution_Fit(object):
         return
     def __getattr__(self, name):
         param_names = {'lognormal': ('mu','sigma',None),
-                'exponential': ('lambda', None, None),
+                'exponential': ('Lambda', None, None),
                 'truncated_power_law': ('alpha', 'lambda', None),
                 'power_law': ('alpha', None, None)}
         param_names = param_names[self.name]
@@ -149,8 +103,15 @@ class Distribution_Fit(object):
             self.parameters, self.loglikelihood = distribution_fit(self.data, distribution=self.name, discrete=self.discrete,\
                     xmin=self.xmin, xmax=self.xmax, search_method=self.method)
             self.parameter1 = self.parameters[0]
-            self.parameter2 = self.parameters[1]
-            self.parameter3 = self.parameters[2]
+            if len(self.parameters)<2:
+                self.parameter2 = None
+            else:
+                self.parameter2 = self.parameters[1]
+            if len(self.parameters)<3:
+                self.parameter3 = None
+            else:
+                self.parameter3 = self.parameters[2]
+            
             self.parameter1_name = param_names[0]
             self.parameter2_name = param_names[1]
             self.parameter3_name = param_names[2]
@@ -215,7 +176,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         alpha = None
 
     if distribution=='power_law' and alpha:
-        return [alpha, None, None], loglikelihood
+        return [alpha], loglikelihood
 
     xmin = float(xmin)
     data = data[data>=xmin]
@@ -229,7 +190,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         print("Analyzing all distributions")
         print("Calculating power law fit")
         if alpha:
-            pl_parameters = [alpha, None, None]
+            pl_parameters = [alpha]
         else:
             pl_parameters, loglikelihood = distribution_fit(data, 'power_law', discrete, xmin, xmax, search_method=search_method)
         results = {}
@@ -279,22 +240,22 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 #    print("Calculating initial parameters for search")
     if distribution=='power_law' and not alpha:
         if discrete:
-            initial_parameters=[1 + n/sum( log( data/(xmin) )), None, None]
+            initial_parameters=[1 + n/sum( log( data/(xmin) ))]
         else:
-            initial_parameters=[1 + n/sum( log( data/xmin )), None, None]
+            initial_parameters=[1 + n/sum( log( data/xmin ))]
     elif distribution=='exponential':
         from numpy import mean
-        initial_parameters=[1/mean(data), None, None]
+        initial_parameters=[1/mean(data)]
     elif distribution=='truncated_power_law':
         from numpy import mean
         if discrete:
-            initial_parameters=[1 + n/sum( log( data/(xmin) )), 1/mean(data), None]
+            initial_parameters=[1 + n/sum( log( data/(xmin) )), 1/mean(data)]
         else:
-            initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data), None]
+            initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
     elif distribution=='lognormal':
         from numpy import mean, std
         logdata = log(data)
-        initial_parameters=[mean(logdata), std(logdata), None]
+        initial_parameters=[mean(logdata), std(logdata)]
 
     if search_method=='Likelihood':
 #        print("Searching using maximum likelihood method")
@@ -306,7 +267,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
             loglikelihood = n*log(alpha-1.0) - n*log(xmin) - alpha*sum(log(data/xmin))
             if loglikelihood == nan:
                 loglikelihood=0
-            parameters = array([alpha, None, None])
+            parameters = array([alpha])
             return parameters, loglikelihood
 
         #Otherwise, we set up a likelihood function
@@ -327,19 +288,21 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
             return parameters, loglikelihood
 
     elif search_method=='KS':
-        #Search for the best fit parameters for the target distribution, on this data
-        from scipy.optimize import fmin
-        parameters, KS, iter, funcalls, warnflag, = \
-                fmin(\
-                lambda p: -sum(log(likelihood_function(p, data))),\
-                initial_parameters, full_output=1, disp=False)
-        loglikelihood =-negative_loglikelihood
-
-        if comparison_alpha:
-            R, p = distribution_compare(data, 'power_law',[comparison_alpha], distribution, parameters, discrete, xmin, xmax) 
-            return parameters, loglikelihood, R, p
-        else:
-            return parameters, loglikelihood
+        print("Not yet supported. Sorry.")
+        return
+#        #Search for the best fit parameters for the target distribution, on this data
+#        from scipy.optimize import fmin
+#        parameters, KS, iter, funcalls, warnflag, = \
+#                fmin(\
+#                lambda p: -sum(log(likelihood_function(p, data))),\
+#                initial_parameters, full_output=1, disp=False)
+#        loglikelihood =-negative_loglikelihood
+#
+#        if comparison_alpha:
+#            R, p = distribution_compare(data, 'power_law',[comparison_alpha], distribution, parameters, discrete, xmin, xmax) 
+#            return parameters, loglikelihood, R, p
+#        else:
+#            return parameters, loglikelihood
 
 
 def distribution_compare(data, distribution1, parameters1, distribution2, parameters2, discrete, xmin, xmax,):
@@ -654,7 +617,7 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
 
-def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True):
+def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True, linear_bins=False):
     """hist_log does things"""
     from numpy import logspace, histogram
     from math import ceil, log10
@@ -663,10 +626,13 @@ def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True):
         xmax = max(data)
     if not xmin:
         xmin = min(data)
-    log_min_size = log10(xmin)
-    log_max_size = log10(xmax)
-    number_of_bins = ceil((log_max_size-log_min_size)*10)
-    bins=logspace(log_min_size, log_max_size, num=number_of_bins)
+    if linear_bins:
+        bins = range(int(xmin), int(xmax))
+    else:
+        log_min_size = log10(xmin)
+        log_max_size = log10(xmax)
+        number_of_bins = ceil((log_max_size-log_min_size)*10)
+        bins=logspace(log_min_size, log_max_size, num=number_of_bins)
     hist, edges = histogram(data, bins, density=True)
     if plot:
         pylab.plot(edges[:-1], hist, 'o')

@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
         name = 'powerlaw',
         py_modules = ['powerlaw'],
-        version = '.1',
+        version = '.3',
         description = 'Toolbox for testing if a probability distribution fits a power law',
         author='Jeff Alstott',
         author_email = 'jeffalstott@gmail.com',
