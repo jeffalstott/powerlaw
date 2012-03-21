@@ -226,6 +226,9 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     elif distribution=='exponential':
         from numpy import mean
         initial_parameters=[1/mean(data)]
+    elif distribution=='stretched_exponential':
+        from numpy import mean
+        initial_parameters=[1/mean(data), 1]
     elif distribution=='truncated_power_law':
         from numpy import mean
         if discrete:
