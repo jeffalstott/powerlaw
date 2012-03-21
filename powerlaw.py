@@ -1,11 +1,15 @@
 class Fit(object):
-    def __init__(self, data, discrete=False, xmin=None, xmax=None, method='Likelihood'):
+    def __init__(self, data, discrete=False, xmin=None, xmax=None, method='Likelihood', estimate_discrete=False):
         self.data = data
         self.discrete = discrete
         self.given_xmin = xmin
         self.xmax = xmax
         self.fixed_xmax = False
         self.method = method
+        self.estimate_discrete = estimate_discrete
+        if 0 in self.data:
+            print("Value 0 in data. Throwing out 0 values")
+            self.data = self.data[self.data!=0]
 
         if xmin:
             self.xmin = xmin
@@ -15,12 +19,15 @@ class Fit(object):
         else:
             self.fixed_xmin=False
             print("Calculating best minimal value for power law fit")
-            self.xmin, self.D, self.alpha, loglikelihood, self.n_tail, self.noise_flag = find_xmin(data, discrete=self.discrete, xmax=self.xmax, search_method=self.method)
-        self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law']
+            self.xmin, self.D, self.alpha, loglikelihood, self.n_tail, self.noise_flag,\
+            self.xmins, self.Ds, self.alphas, self.sigmas \
+            = find_xmin(self.data, discrete=self.discrete, xmax=self.xmax, search_method=self.method, return_all=True, estimate_discrete=self.estimate_discrete)
+
+        self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law', 'negative_binomial']
 
     def __getattr__(self, name):
         if name in self.supported_distributions:
-            setattr(self, name, Distribution_Fit(self.data, name, self.xmin, self.discrete, self.xmax, self.method))
+            setattr(self, name, Distribution_Fit(self.data, name, self.xmin, self.discrete, self.xmax, self.method, self.estimate_discrete))
             return getattr(self, name)
         else:  raise AttributeError, name
 
@@ -30,20 +37,22 @@ class Fit(object):
 
 
 class Distribution_Fit(object):
-    def __init__(self, data, name, xmin, discrete=False, xmax=None, method='Likelihood'):
+    def __init__(self, data, name, xmin, discrete=False, xmax=None, method='Likelihood', estimate_discrete=False):
         self.data = data
         self.discrete = discrete
         self.xmin = xmin
         self.xmax = xmax
         self.method = method
         self.name = name
+        self.estimate_discrete = estimate_discrete
 
         return
     def __getattr__(self, name):
         param_names = {'lognormal': ('mu','sigma',None),
                 'exponential': ('Lambda', None, None),
                 'truncated_power_law': ('alpha', 'lambda', None),
-                'power_law': ('alpha', None, None)}
+                'power_law': ('alpha', None, None),
+                'negative_binomial': ('r', 'p', None)}
         param_names = param_names[self.name]
 
         if name in param_names:
@@ -64,7 +73,7 @@ class Distribution_Fit(object):
                 'loglikelihood']:
 
             self.parameters, self.loglikelihood = distribution_fit(self.data, distribution=self.name, discrete=self.discrete,\
-                    xmin=self.xmin, xmax=self.xmax, search_method=self.method)
+                    xmin=self.xmin, xmax=self.xmax, search_method=self.method, estimate_discrete=self.estimate_discrete)
             self.parameter1 = self.parameters[0]
             if len(self.parameters)<2:
                 self.parameter2 = None
@@ -101,6 +110,16 @@ class Distribution_Fit(object):
             else:
                 self.D = power_law_ks_distance(self.data, self.parameter1, xmin=self.xmin, xmax=self.xmax, discrete=self.discrete)
             return self.D
+        if name=='p':
+            print("A p value outside of a loglihood ratio comparison to another candidate distribution is not currently supported.\n \
+                    If your data set is particularly large and has any noise in it at all, using such statistical tools as the Monte Carlo method\n\
+                    can lead to erroneous results anyway; the presence of the noise means the distribution will obviously not perfectly fit the\n\
+                    candidate distribution, and the very large number of samples will make the Monte Carlo simulations very close to a perfect\n\
+                    fit. As such, such a test will always fail, unless your candidate distribution perfectly describes all elements of the\n\
+                    system, including the noise. A more helpful analysis is the comparison between multiple, specific candidate distributions\n\
+                    (the loglikelihood ratio test), which tells you which is the best fit of these distributions.")
+            self.p=None
+            return self.p
 #
 #        elif name in ['power_law_loglikelihood_ratio', 
 #                'power_law_p']:
@@ -124,17 +143,17 @@ class Distribution_Fit(object):
 
 
 def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None, \
-        comparison_alpha=None, search_method='Likelihood'):
+        comparison_alpha=None, search_method='Likelihood', estimate_discrete=False):
     """distribution_fit does things"""
     from numpy import log
 
     #If we aren't given an xmin, calculate the best possible one for a power law. This can take awhile!
-    if not xmin or xmin=='find':
+    if xmin==None or xmin=='find':
         print("Calculating best minimal value")
         if 0 in data:
             print("Value 0 in data. Throwing out 0 values")
             data = data[data!=0]
-        xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method)
+        xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method, estimate_discrete=estimate_discrete)
     else:
         alpha = None
 
@@ -155,7 +174,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         if alpha:
             pl_parameters = [alpha]
         else:
-            pl_parameters, loglikelihood = distribution_fit(data, 'power_law', discrete, xmin, xmax, search_method=search_method)
+            pl_parameters, loglikelihood = distribution_fit(data, 'power_law', discrete, xmin, xmax, search_method=search_method, estimate_discrete=estimate_discrete)
         results = {}
         results['xmin'] = xmin
         results['xmax'] = xmax
@@ -164,7 +183,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         results['fits']['power_law'] = (pl_parameters, loglikelihood)
 
         print("Calculating truncated power law fit")
-        tpl_parameters, loglikelihood, R, p = distribution_fit(data, 'truncated_power_law', discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method)
+        tpl_parameters, loglikelihood, R, p = distribution_fit(data, 'truncated_power_law', discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method, estimate_discrete=estimate_discrete)
         results['fits']['truncated_power_law'] = (tpl_parameters, loglikelihood)
         results['power_law_comparison'] = {}
         results['power_law_comparison']['truncated_power_law'] = (R, p)
@@ -174,7 +193,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         
         for i in supported_distributions:
             print("Calculating %s fit" % i)
-            parameters, loglikelihood, R, p = distribution_fit(data, i, discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method)
+            parameters, loglikelihood, R, p = distribution_fit(data, i, discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method, estimate_discrete=estimate_discrete)
             results['fits'][i] = (parameters, loglikelihood)
             results['power_law_comparison'][i] = (R, p)
 
@@ -202,10 +221,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     #Initial search parameters, estimated from the data
 #    print("Calculating initial parameters for search")
     if distribution=='power_law' and not alpha:
-        if discrete:
-            initial_parameters=[1 + n/sum( log( data/(xmin) ))]
-        else:
-            initial_parameters=[1 + n/sum( log( data/xmin ))]
+        initial_parameters=[1 + n/sum( log( data/(xmin) ))]
     elif distribution=='exponential':
         from numpy import mean
         initial_parameters=[1/mean(data)]
@@ -219,6 +235,8 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         from numpy import mean, std
         logdata = log(data)
         initial_parameters=[mean(logdata), std(logdata)]
+    elif distribution == 'negative_binomial':
+        initial_parameters = [1, .5]
 
     if search_method=='Likelihood':
 #        print("Searching using maximum likelihood method")
@@ -227,6 +245,15 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
             from numpy import array, nan
             alpha = 1+n/\
                     sum(log(data/xmin))
+            loglikelihood = n*log(alpha-1.0) - n*log(xmin) - alpha*sum(log(data/xmin))
+            if loglikelihood == nan:
+                loglikelihood=0
+            parameters = array([alpha])
+            return parameters, loglikelihood
+        elif distribution=='power_law' and discrete and not xmax and not alpha and estimate_discrete:
+            from numpy import array, nan
+            alpha = 1+n/\
+                    sum(log(data/(xmin-.5)))
             loglikelihood = n*log(alpha-1.0) - n*log(xmin) - alpha*sum(log(data/xmin))
             if loglikelihood == nan:
                 loglikelihood=0
@@ -302,6 +329,11 @@ def likelihood_function_generator(distribution_name, discrete=False, xmin=1, xma
                 lognormal_likelihoods(\
                 data, parameters[0], parameters[1], xmin, xmax, discrete)
 
+    elif distribution_name=='negative_binomial':
+        likelihood_function = lambda parameters, data:\
+                negative_binomial_likelihoods(\
+                data, parameters[0], parameters[1], xmin, xmax)
+
     return likelihood_function
 
 
@@ -325,11 +357,13 @@ def loglikelihood_ratio(likelihoods1, likelihoods2):
     p = erfc( abs(R) / (sqrt(2*n)*sigma) ) 
     return R, p
 
-def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood'):
+def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', return_all=False, estimate_discrete=False):
     from numpy import sort, unique, asarray, argmin, vstack, arange, sqrt
+    if 0 in data:
+        print("Value 0 in data. Throwing out 0 values")
+        data = data[data!=0]
     if xmax:
         data = data[data<=xmax]
-    noise_flag=False
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code, specifically around lines 131-143 of this version: http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
     if not all(data[i] <= data[i+1] for i in xrange(len(data)-1)):
         data = sort(data)
@@ -347,10 +381,10 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood'):
     xmin_indices = xmin_indices[:-1] #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
 
     if search_method=='Likelihood':
-        alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='Likelihood')
+        alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='Likelihood', estimate_discrete=estimate_discrete)
         fits  = asarray( map(alpha_MLE_function,xmins))
     elif search_method=='KS':
-        alpha_KS_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='KS')[0]
+        alpha_KS_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='KS', estimate_discrete=estimate_discrete)[0]
         fits  = asarray( map(alpha_KS_function,xmins))
 
     params = fits[:,0]
@@ -362,21 +396,28 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood'):
 
     sigmas = (alphas-1)/sqrt(len(data)-xmin_indices+1)
     good_values = sigmas<.1
+    #Find the last good value (The first False, where sigma > .1):
     xmin_max = argmin(good_values)
-    if xmin_max>0 and not good_values[-1]==True:
-        Ds = Ds[:xmin_max]
-        alphas = alphas[:xmin_max]
+    if good_values.all(): #If there are no fits beyond the noise threshold
+        min_D_index = argmin(Ds)
+        noise_flag = False
+    elif xmin_max>0:
+        min_D_index = argmin(Ds[:xmin_max])
+        noise_flag = False
     else:
+        min_D_index = argmin(Ds)
         noise_flag = True
 
-    min_D_index = argmin(Ds)
-    xmin = xmins[argmin(Ds)]
+    xmin = xmins[min_D_index]
     D = Ds[min_D_index]
     alpha = alphas[min_D_index]
     loglikelihood = loglikelihoods[min_D_index]
     n_tail = sum(data>=xmin)
 
-    return xmin, D, alpha, loglikelihood, n_tail, noise_flag
+    if not return_all:
+        return xmin, D, alpha, loglikelihood, n_tail, noise_flag
+    else:
+        return xmin, D, alpha, loglikelihood, n_tail, noise_flag, xmins, Ds, alphas, sigmas
 
 def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=False):
     """Helps if all data is sorted beforehand!"""
@@ -487,8 +528,35 @@ def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
 
-def exponential_likelihoods(data, gamma, xmin, xmax=False, discrete=False):
-    if gamma<0:
+def negative_binomial_likelihoods(data, r, p, xmin=0, xmax=False):
+
+    #if not discrete(data):
+    #    print("Rounding to nearest integer values.")
+    #    from numpy import floor
+    #    data = floor(data)
+
+    xmin = float(xmin)
+    data = data[data>=xmin]
+    if xmax:
+        data = data[data<=xmax]
+
+    from numpy import asarray
+    from scipy.misc import comb
+    pmf = lambda k: comb(k+r-1, k) * (1-p)**r * p**k
+    likelihoods = asarray(map(pmf, data)).flatten()
+
+    if xmin!=0 or xmax:
+        xmax = max(data)
+        from numpy import arange
+        normalization_constant = sum(map(pmf, arange(xmin,xmax+1)))
+        likelihoods = likelihoods/normalization_constant
+
+    from sys import float_info
+    likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+    return likelihoods
+
+def exponential_likelihoods(data, Lambda, xmin, xmax=False, discrete=False):
+    if Lambda<0:
         from numpy import tile
         from sys import float_info
         return tile(10**float_info.min_10_exp, len(data))
@@ -499,16 +567,48 @@ def exponential_likelihoods(data, gamma, xmin, xmax=False, discrete=False):
 
     from numpy import exp
     if not discrete:
-#        likelihoods = exp(-gamma*data)*\
-#                gamma*exp(gamma*xmin)
-        likelihoods = gamma*exp(gamma*(xmin-data)) #Simplified so as not to throw a nan from infs being divided by each other
+#        likelihoods = exp(-Lambda*data)*\
+#                Lambda*exp(Lambda*xmin)
+        likelihoods = Lambda*exp(Lambda*(xmin-data)) #Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
         if not xmax:
-            likelihoods = exp(-gamma*data)*\
-                    (1-exp(-gamma))*exp(gamma*xmin)
+            likelihoods = exp(-Lambda*data)*\
+                    (1-exp(-Lambda))*exp(Lambda*xmin)
         if xmax:
-            likelihoods = exp(-gamma*data)*\
-                    (1-exp(-gamma))/(exp(-gamma*xmin)-exp(-gamma*(xmax+1)))
+            likelihoods = exp(-Lambda*data)*\
+                    (1-exp(-Lambda))/(exp(-Lambda*xmin)-exp(-Lambda*(xmax+1)))
+    from sys import float_info
+    likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+    return likelihoods
+
+def stretched_exponential_likelihoods(data, Lambda, beta, xmin, xmax=False, discrete=False):
+    if Lambda<0:
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
+
+    data = data[data>=xmin]
+    if xmax:
+        data = data[data<=xmax]
+
+    from numpy import exp
+    if not discrete:
+        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))/\
+            (beta*Lambda*exp(Lambda*(xmin**beta)))
+#        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
+#                (Lambda**(1-alpha))/\
+#                float(Lambdainc(1-alpha,Lambda*xmin))
+        likelihoods = (Lambda**(1-alpha))/\
+                ( (data**alpha) * exp(Lambda*data) * Lambdainc(1-alpha,Lambda*xmin) ).astype(float) #Simplified so as not to throw a nan from infs being divided by each other
+    if discrete:
+        if not xmax:
+            xmax = max(data)
+        if xmax:
+            from numpy import arange
+            X = arange(xmin, xmax+1)
+            PDF = (X**-alpha)*exp(-Lambda*X)
+            PDF = PDF/sum(PDF)
+            likelihoods = PDF[(data-xmin).astype(int)]
     from sys import float_info
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
