@@ -23,7 +23,7 @@ class Fit(object):
             self.xmins, self.Ds, self.alphas, self.sigmas \
             = find_xmin(self.data, discrete=self.discrete, xmax=self.xmax, search_method=self.method, return_all=True, estimate_discrete=self.estimate_discrete)
 
-        self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law', 'negative_binomial', 'stretched_exponential']
+        self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law', 'negative_binomial', 'stretched_exponential', 'gamma']
 
     def __getattr__(self, name):
         if name in self.supported_distributions:
@@ -53,7 +53,8 @@ class Distribution_Fit(object):
                 'truncated_power_law': ('alpha', 'Lambda', None),
                 'power_law': ('alpha', None, None),
                 'negative_binomial': ('r', 'p', None),
-                'stretched_exponential': ('Lambda', 'beta', None)}
+                'stretched_exponential': ('Lambda', 'beta', None),
+                'gamma': ('k', 'theta', None)}
         param_names = param_names[self.name]
 
         if name in param_names:
@@ -190,7 +191,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         results['power_law_comparison']['truncated_power_law'] = (R, p)
         results['truncated_power_law_comparison'] = {}
 
-        supported_distributions = ['exponential', 'lognormal', 'stretched_exponential']
+        supported_distributions = ['exponential', 'lognormal', 'stretched_exponential', 'gamma']
         
         for i in supported_distributions:
             print("Calculating %s fit" % i)
@@ -231,16 +232,16 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         initial_parameters=[1/mean(data), 1]
     elif distribution=='truncated_power_law':
         from numpy import mean
-        if discrete:
-            initial_parameters=[1 + n/sum( log( data/(xmin) )), 1/mean(data)]
-        else:
-            initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
+        initial_parameters=[1 + n/sum( log( data/xmin )), 1/mean(data)]
     elif distribution=='lognormal':
         from numpy import mean, std
         logdata = log(data)
         initial_parameters=[mean(logdata), std(logdata)]
     elif distribution == 'negative_binomial':
         initial_parameters = [1, .5]
+    elif distribution == 'gamma':
+        from numpy import mean
+        initial_parameters = [n/sum(log(data/xmin)), mean(data)]
 
     if search_method=='Likelihood':
 #        print("Searching using maximum likelihood method")
@@ -341,6 +342,11 @@ def likelihood_function_generator(distribution_name, discrete=False, xmin=1, xma
     elif distribution_name=='negative_binomial':
         likelihood_function = lambda parameters, data:\
                 negative_binomial_likelihoods(\
+                data, parameters[0], parameters[1], xmin, xmax)
+
+    elif distribution_name=='gamma':
+        likelihood_function = lambda parameters, data:\
+                gamma_likelihoods(\
                 data, parameters[0], parameters[1], xmin, xmax)
 
     return likelihood_function
@@ -618,6 +624,36 @@ def stretched_exponential_likelihoods(data, Lambda, beta, xmin, xmax=False, disc
     likelihoods[likelihoods==0] = 10**float_info.min_10_exp
     return likelihoods
 
+def gamma_likelihoods(data, k, theta, xmin, xmax=False, discrete=False):
+    if k<=0 or theta<=0:
+        from numpy import tile
+        from sys import float_info
+        return tile(10**float_info.min_10_exp, len(data))
+
+    data = data[data>=xmin]
+    if xmax:
+        data = data[data<=xmax]
+
+    from numpy import exp
+    from scipy.special import gamma, gammainc
+    if not discrete:
+        likelihoods = (data**(k-1)) / (exp(data/theta) * (theta**k) * gamma(k))
+        #Calculate how much probability mass is beyond xmin, and normalize by it
+        normalization_constant = 1 - gammainc(k, xmin/theta)/gamma(k)
+        likelihoods = likelihoods/normalization_constant
+    if discrete:
+        if not xmax:
+            xmax = max(data)
+        if xmax:
+            from numpy import arange
+            X = arange(xmin, xmax+1)
+            PDF = (X**(k-1)) / (exp(X/theta) * (theta**k) * gamma(k))
+            PDF = PDF/sum(PDF)
+            likelihoods = PDF[(data-xmin).astype(int)]
+    from sys import float_info
+    likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+    return likelihoods
+
 def truncated_power_law_likelihoods(data, alpha, Lambda, xmin, xmax=False, discrete=False):
     if alpha<0 or Lambda<0:
         from numpy import tile
@@ -630,12 +666,12 @@ def truncated_power_law_likelihoods(data, alpha, Lambda, xmin, xmax=False, discr
 
     from numpy import exp
     if not discrete:
-        from mpmath import gammainc
+        from mpmath import gammaincc
 #        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
 #                (Lambda**(1-alpha))/\
-#                float(gammainc(1-alpha,Lambda*xmin))
+#                float(gammaincc(1-alpha,Lambda*xmin))
         likelihoods = (Lambda**(1-alpha))/\
-                ( (data**alpha) * exp(Lambda*data) * gammainc(1-alpha,Lambda*xmin) ).astype(float) #Simplified so as not to throw a nan from infs being divided by each other
+                ( (data**alpha) * exp(Lambda*data) * gammaincc(1-alpha,Lambda*xmin) ).astype(float) #Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
         if not xmax:
             xmax = max(data)
