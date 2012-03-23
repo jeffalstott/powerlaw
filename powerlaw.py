@@ -11,7 +11,7 @@ class Fit(object):
             print("Value 0 in data. Throwing out 0 values")
             self.data = self.data[self.data!=0]
 
-        if xmin:
+        if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.xmin = xmin
             self.fixed_xmin=True
             self.n_tail = None
@@ -21,7 +21,7 @@ class Fit(object):
             print("Calculating best minimal value for power law fit")
             self.xmin, self.D, self.alpha, loglikelihood, self.n_tail, self.noise_flag,\
             self.xmins, self.Ds, self.alphas, self.sigmas \
-            = find_xmin(self.data, discrete=self.discrete, xmax=self.xmax, search_method=self.method, return_all=True, estimate_discrete=self.estimate_discrete)
+            = find_xmin(self.data, discrete=self.discrete, xmax=self.xmax, search_method=self.method, return_all=True, estimate_discrete=self.estimate_discrete, xmin_range=xmin)
 
         self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law', 'negative_binomial', 'stretched_exponential', 'gamma']
 
@@ -149,13 +149,19 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     """distribution_fit does things"""
     from numpy import log
 
+    if distribution=='negative_binomial' and not is_discrete(data):
+        print("Rounding to nearest integer values for negative binomial fit.")
+        from numpy import around
+        data = around(data)
+        discrete = True
+
     #If we aren't given an xmin, calculate the best possible one for a power law. This can take awhile!
-    if xmin==None or xmin=='find':
+    if xmin==None or xmin=='find' or type(xmin)==tuple or type(xmin)==list:
         print("Calculating best minimal value")
         if 0 in data:
             print("Value 0 in data. Throwing out 0 values")
             data = data[data!=0]
-        xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method, estimate_discrete=estimate_discrete)
+        xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method, estimate_discrete=estimate_discrete, xmin_range = xmin)
     else:
         alpha = None
 
@@ -372,7 +378,7 @@ def loglikelihood_ratio(likelihoods1, likelihoods2):
     p = erfc( abs(R) / (sqrt(2*n)*sigma) ) 
     return R, p
 
-def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', return_all=False, estimate_discrete=False):
+def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', return_all=False, estimate_discrete=False, xmin_range=None):
     from numpy import sort, unique, asarray, argmin, vstack, arange, sqrt
     if 0 in data:
         print("Value 0 in data. Throwing out 0 values")
@@ -382,7 +388,12 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', retur
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code, specifically around lines 131-143 of this version: http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
     if not all(data[i] <= data[i+1] for i in xrange(len(data)-1)):
         data = sort(data)
-    xmins, xmin_indices = unique(data, return_index=True)
+    if xmin_range=='find' or xmin_range==None:
+        possible_xmins = data
+    else:
+        possible_xmins = data[data<=max(xmin_range)]
+        possible_xmins = possible_xmins[possible_xmins>=min(xmin_range)]
+    xmins, xmin_indices = unique(possible_xmins, return_index=True)
     xmins = xmins[:-1]
     if len(xmins)<2:
         from sys import float_info
@@ -508,7 +519,7 @@ def cumulative_distribution_function(data, xmin=None, xmax=None, survival=False)
         CDF = 1-CDF
     return CDF, bins
 
-def discrete(data):
+def is_discrete(data):
     from numpy import floor
     return (floor(data)==data.astype(float)).all()
 
@@ -544,11 +555,12 @@ def power_law_likelihoods(data, alpha, xmin, xmax=False, discrete=False):
     return likelihoods
 
 def negative_binomial_likelihoods(data, r, p, xmin=0, xmax=False):
-
-    #if not discrete(data):
-    #    print("Rounding to nearest integer values.")
-    #    from numpy import floor
-    #    data = floor(data)
+    
+    #Better to make this correction earlier on in distribution_fit, so as to not recheck for discreteness and reround every time fmin is used.
+    #if not is_discrete(data):
+    #    print("Rounding to nearest integer values for negative binomial fit.")
+    #    from numpy import around
+    #    data = around(data)
 
     xmin = float(xmin)
     data = data[data>=xmin]
@@ -635,11 +647,12 @@ def gamma_likelihoods(data, k, theta, xmin, xmax=False, discrete=False):
         data = data[data<=xmax]
 
     from numpy import exp
-    from scipy.special import gamma, gammainc
+    from mpmath import gammainc
+#    from scipy.special import gamma, gammainc #Not NEARLY numerically accurate enough for the job
     if not discrete:
-        likelihoods = (data**(k-1)) / (exp(data/theta) * (theta**k) * gamma(k))
+        likelihoods = (data**(k-1)) / (exp(data/theta) * (theta**k) * float(gammainc(k)))
         #Calculate how much probability mass is beyond xmin, and normalize by it
-        normalization_constant = 1 - gammainc(k, xmin/theta)/gamma(k)
+        normalization_constant = 1 - float(gammainc(k, 0, xmin/theta, regularized=True)) #Mpmath's regularized option divides by gamma(k)
         likelihoods = likelihoods/normalization_constant
     if discrete:
         if not xmax:
@@ -647,7 +660,7 @@ def gamma_likelihoods(data, k, theta, xmin, xmax=False, discrete=False):
         if xmax:
             from numpy import arange
             X = arange(xmin, xmax+1)
-            PDF = (X**(k-1)) / (exp(X/theta) * (theta**k) * gamma(k))
+            PDF = (X**(k-1)) / (exp(X/theta) * (theta**k) * float(gammainc(k)))
             PDF = PDF/sum(PDF)
             likelihoods = PDF[(data-xmin).astype(int)]
     from sys import float_info
@@ -666,12 +679,14 @@ def truncated_power_law_likelihoods(data, alpha, Lambda, xmin, xmax=False, discr
 
     from numpy import exp
     if not discrete:
-        from mpmath import gammaincc
+        from mpmath import gammainc
+#        from scipy.special import gamma, gammaincc #Not NEARLY accurate enough to do the job
 #        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
 #                (Lambda**(1-alpha))/\
 #                float(gammaincc(1-alpha,Lambda*xmin))
+        #Simplified so as not to throw a nan from infs being divided by each other
         likelihoods = (Lambda**(1-alpha))/\
-                ( (data**alpha) * exp(Lambda*data) * gammaincc(1-alpha,Lambda*xmin) ).astype(float) #Simplified so as not to throw a nan from infs being divided by each other
+                ((data**alpha) * exp(Lambda*data) * gammainc(1-alpha,Lambda*xmin)).astype(float)
     if discrete:
         if not xmax:
             xmax = max(data)
@@ -711,11 +726,10 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
         if xmax:
             from numpy import arange, exp
 #            from mpmath import exp
-            from scipy.constants import pi
             X = arange(xmin, xmax+1)
 #            PDF_function = lambda x: (1.0/x)*exp(-( (log(x) - mu)**2 ) / 2*sigma**2)
 #            PDF = asarray(map(PDF_function,X))
-            PDF = (1.0/(X*sqrt(2*pi)*sigma))*exp(-( (log(X) - mu)**2 ) / (2*(sigma**2)))
+            PDF = (1.0/X)*exp(-( (log(X) - mu)**2 ) / (2*(sigma**2)))
             PDF = (PDF/sum(PDF)).astype(float)
             likelihoods = PDF[(data-xmin).astype(int)]
     from sys import float_info
