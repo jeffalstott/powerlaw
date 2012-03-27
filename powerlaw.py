@@ -23,7 +23,7 @@ class Fit(object):
             self.xmins, self.Ds, self.alphas, self.sigmas \
             = find_xmin(self.data, discrete=self.discrete, xmax=self.xmax, search_method=self.method, return_all=True, estimate_discrete=self.estimate_discrete, xmin_range=xmin)
 
-        self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law', 'negative_binomial', 'stretched_exponential', 'gamma']
+        self.supported_distributions = ['power_law', 'lognormal', 'exponential', 'truncated_power_law', 'stretched_exponential', 'gamma']
 
     def __getattr__(self, name):
         if name in self.supported_distributions:
@@ -150,7 +150,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     from numpy import log
 
     if distribution=='negative_binomial' and not is_discrete(data):
-        print("Rounding to nearest integer values for negative binomial fit.")
+        print("Rounding to integer values for negative binomial fit.")
         from numpy import around
         data = around(data)
         discrete = True
@@ -210,7 +210,15 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         return results
 
     #Handle edge case where we don't have enough data
+    no_data = False
+    if xmax and all((data>xmax)+(data<xmin)):
+        #Everything is beyond the bounds of the xmax and xmin 
+        no_data = True
+    if all(data<xmin):
+        no_data = True
     if len(data)<2:
+        no_data = True
+    if no_data :
         from numpy import array
         from sys import float_info
         parameters = array([0, 0, 0])
@@ -306,7 +314,18 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 #            return parameters, loglikelihood
 
 
-def distribution_compare(data, distribution1, parameters1, distribution2, parameters2, discrete, xmin, xmax,):
+def distribution_compare(data, distribution1, parameters1, distribution2, parameters2, discrete, xmin, xmax):
+    no_data = False
+    if xmax and all((data>xmax)+(data<xmin)):
+        #Everything is beyond the bounds of the xmax and xmin 
+        no_data = True
+    if all(data<xmin):
+        no_data = True
+
+    if no_data:
+        R = 0
+        p = 1
+        return R, p
 
     likelihood_function1 = likelihood_function_generator(distribution1, discrete, xmin, xmax)
     likelihood_function2 = likelihood_function_generator(distribution2, discrete, xmin, xmax)
@@ -403,7 +422,15 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', retur
         loglikelihood = -10**float_info.max_10_exp
         n_tail = 1
         noise_flag = True
-        return xmin, D, alpha, loglikelihood, n_tail, noise_flag
+        Ds = 1
+        alphas = 0
+        sigmas = 1
+
+        if not return_all:
+            return xmin, D, alpha, loglikelihood, n_tail, noise_flag
+        else:
+            return xmin, D, alpha, loglikelihood, n_tail, noise_flag, xmins, Ds, alphas, sigmas
+
     xmin_indices = xmin_indices[:-1] #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
 
     if search_method=='Likelihood':
