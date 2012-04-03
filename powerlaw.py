@@ -4,7 +4,10 @@ class Fit(object):
         self.discrete = discrete
         self.given_xmin = xmin
         self.xmax = xmax
-        self.fixed_xmax = False
+        if self.xmax:
+            self.fixed_xmax = True
+        else:
+            self.fixed_xmax = False
         self.method = method
         self.estimate_discrete = estimate_discrete
         if 0 in self.data:
@@ -14,8 +17,8 @@ class Fit(object):
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.xmin = xmin
             self.fixed_xmin=True
-            self.n_tail = None
-            self.noise_flag = False
+            self.n_tail = sum(data>=xmin)
+            self.noise_flag = None
         else:
             self.fixed_xmin=False
             print("Calculating best minimal value for power law fit")
@@ -764,8 +767,8 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
     return likelihoods
 
 def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True, linear_bins=False):
-    """hist_log does things"""
-    from numpy import logspace, histogram
+    """plot_pdf does things"""
+    from numpy import logspace, histogram, floor, unique
     from math import ceil, log10
     import pylab
     if not xmax:
@@ -778,7 +781,7 @@ def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True, linear_bins=Fal
         log_min_size = log10(xmin)
         log_max_size = log10(xmax)
         number_of_bins = ceil((log_max_size-log_min_size)*10)
-        bins=logspace(log_min_size, log_max_size, num=number_of_bins)
+        bins=unique(floor(logspace(log_min_size, log_max_size, num=number_of_bins)))
     hist, edges = histogram(data, bins, density=True)
     if plot:
         pylab.plot(edges[:-1], hist, 'o')
@@ -786,7 +789,7 @@ def plot_pdf(data, xmin=False, xmax=False, plot=True, show=True, linear_bins=Fal
         pylab.gca().set_yscale("log")
         if show:
             pylab.show()
-    return (hist, edges)
+    return (edges, hist)
 
 def plot_cdf(variable, name=None, x_label=None, xmin=None, xmax=None, survival=True):
     import matplotlib.pyplot as plt
