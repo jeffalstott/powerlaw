@@ -747,7 +747,7 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
 #        from mpmath import erfc
         from scipy.special import erfc
         from scipy.constants import pi
-        likelihoods = (1.0/data)*exp(-( (log(data) - mu)**2 )/2*sigma**2)*\
+        likelihoods = (1.0/data)*exp(-( (log(data) - mu)**2 )/(2*sigma**2))*\
                 sqrt(2/(pi*sigma**2))/erfc( (log(xmin)-mu) / (sqrt(2)*sigma))
 #        likelihoods = likelihoods.astype(float)
     if discrete:
