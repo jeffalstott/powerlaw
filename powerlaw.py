@@ -321,7 +321,9 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 #            return parameters, loglikelihood
 
 
-def distribution_compare(data, distribution1, parameters1, distribution2, parameters2, discrete, xmin, xmax):
+def distribution_compare(data, distribution1, parameters1,
+        distribution2, parameters2,
+        discrete, xmin, xmax, nested=None):
     no_data = False
     if xmax and all((data > xmax) + (data < xmin)):
         #Everything is beyond the bounds of the xmax and xmin
@@ -340,7 +342,15 @@ def distribution_compare(data, distribution1, parameters1, distribution2, parame
     likelihoods1 = likelihood_function1(parameters1, data)
     likelihoods2 = likelihood_function2(parameters2, data)
 
-    R, p = loglikelihood_ratio(likelihoods1, likelihoods2)
+    if nested:
+        R, p = nested_loglikelihood_ratio(likelihoods1, likelihoods2)
+    elif nested==False:
+        R, p = loglikelihood_ratio(likelihoods1, likelihoods2)
+    elif (distribution1 in distribution2) or (distribution2 in distribution1):
+        print "Assuming nested distributions"
+        R, p = nested_loglikelihood_ratio(likelihoods1, likelihoods2)
+    else:
+        R, p = loglikelihood_ratio(likelihoods1, likelihoods2)
 
     return R, p
 
@@ -385,6 +395,18 @@ def likelihood_function_generator(distribution_name, discrete=False, xmin=1, xma
     return likelihood_function
 
 
+def nested_loglikelihood_ratio(likelihoods1, likelihoods2):
+    from numpy import log
+
+    loglikelihoods1 = log(likelihoods1)
+    loglikelihoods2 = log(likelihoods2)
+
+    R = sum(loglikelihoods1-loglikelihoods2)
+
+    from scipy.stats import chi2
+    p = 1 - chi2.cdf(abs(2*R), 1)
+    return R, p
+
 def loglikelihood_ratio(likelihoods1, likelihoods2):
     from numpy import sqrt, log
     from scipy.special import erfc
@@ -396,13 +418,13 @@ def loglikelihood_ratio(likelihoods1, likelihoods2):
 
     R = sum(loglikelihoods1 - loglikelihoods2)
 
-    sigma = sqrt(
-        sum(
-            ((loglikelihoods1 - loglikelihoods2) -
-                (loglikelihoods1.mean() - loglikelihoods2.mean())) ** 2
-        ) / n)
-
-    p = erfc(abs(R) / (sqrt(2 * n) * sigma))
+    from numpy import mean
+    mean_diff = mean(loglikelihoods1)-mean(loglikelihoods2)
+    variance = sum(
+            ( (loglikelihoods1-loglikelihoods2) - mean_diff)**2
+            )/n
+    p = erfc( abs(R) / sqrt(2*n*variance))
+    p = abs(erfc( R / sqrt(2*n*variance)))
     return R, p
 
 
