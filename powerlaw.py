@@ -36,9 +36,11 @@ class Fit(object):
         else:
             raise AttributeError(name)
 
-    def loglikelihood_ratio(self, dist1, dist2):
-        return distribution_compare(self.data, dist1, getattr(self, dist1).parameters, dist2,
-                                    getattr(self, dist2).parameters, self.discrete, self.xmin, self.xmax)
+    def loglikelihood_ratio(self, dist1, dist2, **kwargs):
+        return distribution_compare(self.data,
+                dist1, getattr(self, dist1).parameters,
+                dist2, getattr(self, dist2).parameters,
+                self.discrete, self.xmin, self.xmax, **kwargs)
 
 
 class Distribution_Fit(object):
@@ -323,7 +325,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 
 def distribution_compare(data, distribution1, parameters1,
         distribution2, parameters2,
-        discrete, xmin, xmax, nested=None):
+        discrete, xmin, xmax, nested=None, **kwargs):
     no_data = False
     if xmax and all((data > xmax) + (data < xmin)):
         #Everything is beyond the bounds of the xmax and xmin
@@ -342,15 +344,13 @@ def distribution_compare(data, distribution1, parameters1,
     likelihoods1 = likelihood_function1(parameters1, data)
     likelihoods2 = likelihood_function2(parameters2, data)
 
-    if nested:
-        R, p = nested_loglikelihood_ratio(likelihoods1, likelihoods2)
-    elif nested==False:
-        R, p = loglikelihood_ratio(likelihoods1, likelihoods2)
-    elif (distribution1 in distribution2) or (distribution2 in distribution1):
+    if (distribution1 in distribution2) or (distribution2 in distribution1)\
+        and nested==None:
         print "Assuming nested distributions"
-        R, p = nested_loglikelihood_ratio(likelihoods1, likelihoods2)
-    else:
-        R, p = loglikelihood_ratio(likelihoods1, likelihoods2)
+        nested = True
+
+    R, p = loglikelihood_ratio(likelihoods1, likelihoods2,
+            nested=nested, **kwargs)
 
     return R, p
 
@@ -407,8 +407,9 @@ def nested_loglikelihood_ratio(likelihoods1, likelihoods2):
     p = 1 - chi2.cdf(abs(2*R), 1)
     return R, p
 
-def loglikelihood_ratio(likelihoods1, likelihoods2):
-    from numpy import sqrt, log
+def loglikelihood_ratio(likelihoods1, likelihoods2,
+        nested=False, normalized_ratio=False):
+    from numpy import sqrt,log
     from scipy.special import erfc
 
     n = float(len(likelihoods1))
@@ -418,13 +419,19 @@ def loglikelihood_ratio(likelihoods1, likelihoods2):
 
     R = sum(loglikelihoods1 - loglikelihoods2)
 
-    from numpy import mean
-    mean_diff = mean(loglikelihoods1)-mean(loglikelihoods2)
-    variance = sum(
-            ( (loglikelihoods1-loglikelihoods2) - mean_diff)**2
-            )/n
-    p = erfc( abs(R) / sqrt(2*n*variance))
-    p = abs(erfc( R / sqrt(2*n*variance)))
+    if nested:
+        from scipy.stats import chi2
+        p = 1 - chi2.cdf(abs(2*R), 1)
+    else:
+        from numpy import mean
+        mean_diff = mean(loglikelihoods1)-mean(loglikelihoods2)
+        variance = sum(
+                ( (loglikelihoods1-loglikelihoods2) - mean_diff)**2
+                )/n
+        p = erfc( abs(R) / sqrt(2*n*variance))
+
+    if normalized_ratio:
+        R = R/sqrt(n*variance)
     return R, p
 
 
