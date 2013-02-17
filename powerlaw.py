@@ -25,11 +25,18 @@ class cache(object):
 
 class Distribution(object):
 
-    def __init__(self, data, xmin,
+    def __init__(self, data,
+        distribution=power_law,
+        xmin=1,
         xmax=None,
         discrete=False,
         fit_method='Likelihood',
+        parameters=None,
         **kwargs):
+
+        self.distribution = distribution(xmin=xmin,
+            xmax=xmax,
+            discrete=discrete)
         self.xmin = xmin
         self.xmax = xmax
         self.discrete = discrete
@@ -42,24 +49,34 @@ class Distribution(object):
         self.n = float(len(data))
 
         self.fit_method = fit_method
+        if parameters:
+            self.distribution.parameters(parameters)
+
+    @property
+    def name(self):
+        return self.distribution.name
 
     def fit(self):
         if self.fit_method=='Likelihood':
-            fit_function = lambda params: -sum(log(self.pdf(params,self.data)))
+            def fit_function(params):
+                self.distribution.parameters(params)
+                return -sum(log(self.distribution.pdf(self.data)))
         elif self.fit_method=='KS':
-            fit_function = lambda params: self.D
+            def fit_function(params):
+                self.distribution.parameters(params)
+                return self.D
         from numpy import log
         from scipy.optimize import fmin
         parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
             fmin(
                 lambda params: fit_function(params),
-                self.initial_parameters,
+                self.distribution.initial_parameters(self.data),
                 full_output=1,
                 disp=False)
         self.loglikelihood =-negative_loglikelihood
 
     def likelihoods(self):
-        return self.pdf(self.data) 
+        return self.distribution.pdf(self.data) 
 
     def cdf_empirical(self):
         from numpy import arange
@@ -86,7 +103,7 @@ class Distribution(object):
             self.Kappa = 2
 
         Actual_CDF, bins = self.cdf_empirical()
-        Theoretical_CDF = self.cdf(bins)
+        Theoretical_CDF = self.distribution.cdf(bins)
 
 
         self.D_plus = max(Theoretical_CDF-Actual_CDF)
@@ -99,16 +116,23 @@ class Distribution(object):
 
         return D
 
-class Exponential(Distribution):
+class Exponential(object):
+
+    def __init__(self, xmin=1, xmax=None, discrete=False, **kwargs):
+        self.xmin = xmin
+        self.xmax = xmax
+        self.discrete = discrete
+
+    def parameters(self, params):
+        self.Lambda = params[0]
 
     @property
     def name(self):
         return "exponential"
 
-    @property
-    def initial_parameters(self):
+    def initial_parameters(self, data):
         from numpy import mean
-        return 1/mean(self.data)
+        return 1/mean(data)
 
     def pdf(self):
         if self.Lambda<0:
@@ -222,7 +246,8 @@ class Fit(object):
             self.sigmas = 1
 
         def fit_function(xmin):
-            pl = power_law(self.data,
+            pl = Distribution_Fit(self.data,
+                distribution=power_law,
                 xmin = xmin,
                 xmax = self.xmax,
                 discrete = self.discrete,
