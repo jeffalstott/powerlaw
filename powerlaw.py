@@ -105,22 +105,18 @@ class Fit(object):
             #dist = globals()[dist] #Seems a hack. Might try import powerlaw; getattr(powerlaw, dist)
             dist = self.supported_distributions[name]
             if dist == Power_Law:
-                setattr(self, name,
-                    dist(data=self.data,
-                    xmin=self.xmin, xmax=self.xmax,
-                    discrete=self.discrete,
-                    fit_method=self.fit_method,
-                    estimate_discrete=self.estimate_discrete,
-                    discrete_approximation=self.discrete_approximation,
-                    parameter_range=self.parameter_range))
+                parameter_range = self.parameter_range
             else:
-                setattr(self, name,
-                    dist(data=self.data,
-                    xmin=self.xmin, xmax=self.xmax,
-                    discrete=self.discrete,
-                    fit_method=self.fit_method,
-                    estimate_discrete=self.estimate_discrete,
-                    discrete_approximation=self.discrete_approximation))
+                parameter_range = None
+            setattr(self, name,
+                dist(data=self.data,
+                xmin=self.xmin, xmax=self.xmax,
+                discrete=self.discrete,
+                fit_method=self.fit_method,
+                estimate_discrete=self.estimate_discrete,
+                discrete_approximation=self.discrete_approximation,
+                parameter_range=parameter_range,
+                parent_Fit=self))
             return getattr(self, name)
         else:  raise AttributeError, name
 
@@ -158,7 +154,8 @@ class Fit(object):
                 discrete = self.discrete,
                 estimate_discrete = self.estimate_discrete,
                 data = self.data,
-                parameter_range = self.parameter_range)
+                parameter_range = self.parameter_range,
+                parent_Fit = self)
             return pl.D, pl.alpha, pl.loglikelihood, pl.sigma
 
         fits  = asarray( map(fit_function, xmins))
@@ -283,6 +280,7 @@ class Distribution(object):
         parameters = None,
         parameter_range = None,
         discrete_approximation = 'round',
+        parent_Fit = None,
         **kwargs):
 
         self.xmin = xmin
@@ -298,6 +296,8 @@ class Distribution(object):
         self.parameter2_name = None
         self.parameter3_name = None
 
+        self.parent_Fit = parent_Fit
+
         if parameters!=None:
             self.parameters(parameters)
 
@@ -307,7 +307,10 @@ class Distribution(object):
         if data!=None:
             self.fit(data)
 
-    def fit(self, data):
+
+    def fit(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if self.fit_method=='Likelihood':
             def fit_function(params):
@@ -329,7 +332,9 @@ class Distribution(object):
         self.loglikelihood =-negative_loglikelihood
         self.KS(data)
 
-    def KS(self, data):
+    def KS(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if len(data)<2:
             self.D = 1
@@ -353,7 +358,9 @@ class Distribution(object):
     def ccdf(self,x, survival=True):
         return self.cdf(x, survival=survival)
 
-    def cdf(self,x, survival=False):
+    def cdf(self,x=None, survival=False):
+        if x==None and hasattr(self, 'parent_Fit'):
+            x = self.parent_Fit.data
         x = trim_to_range(x, xmin=self.xmin, xmax=self.xmax)
         n = len(x)
         from sys import float_info
@@ -376,7 +383,9 @@ class Distribution(object):
 
         return CDF
 
-    def pdf(self, data):
+    def pdf(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
         from sys import float_info
@@ -448,6 +457,8 @@ class Distribution(object):
 
     def parameter_range(self, function):
         self._in_given_parameter_range = function
+        if hasattr(self, "parent_Fit"):
+            self.fit(self.parent_Fit.data)
 
     def in_range(self):
         try:
@@ -463,10 +474,12 @@ class Distribution(object):
         from numpy import log
         return log(self.likelihoods(data))
 
-    def plot_ccdf(self, data, ax=None, survival=True, **kwargs):
+    def plot_ccdf(self, data=None, ax=None, survival=True, **kwargs):
         return self.plot_cdf(data, ax=None, survival=survival, **kwargs)
 
-    def plot_cdf(self, data, ax=None, survival=False, **kwargs):
+    def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         from numpy import unique
         bins = unique(data)
         CDF = self.cdf(bins, survival=survival)
@@ -480,7 +493,9 @@ class Distribution(object):
         ax.set_yscale("log")
         return ax
 
-    def plot_pdf(self, data, ax=None, **kwargs):
+    def plot_pdf(self, data=None, ax=None, **kwargs):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         from numpy import unique
         bins = unique(data)
         PDF = self.pdf(bins)
@@ -499,6 +514,7 @@ class Power_Law(Distribution):
     def __init__(self, estimate_discrete=True, **kwargs):
         self.estimate_discrete = estimate_discrete
         Distribution.__init__(self, **kwargs)
+#        from ipdb import set_trace
 
     def parameters(self, params):
         self.alpha = params[0]
@@ -512,7 +528,9 @@ class Power_Law(Distribution):
     def _in_standard_parameter_range(self):
         return self.alpha>1
 
-    def fit(self, data):
+    def fit(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
         from numpy import log, nan
@@ -604,7 +622,9 @@ class Exponential(Distribution):
         from numpy import exp
         return (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
 
-    def pdf(self, data):
+    def pdf(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
         if not self.discrete and self.in_range():
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import exp
