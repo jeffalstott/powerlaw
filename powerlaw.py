@@ -30,16 +30,18 @@ class Fit(object):
         xmin=None, xmax=None,
         fit_method='Likelihood',
         estimate_discrete=False,
-        approximate_discrete='round',
+        discrete_approximation='round',
         sigma_threshold=None):
 
         self.data_original = data
-        self.data = self.data_original
+        from numpy import asarray
+        self.data = asarray(self.data_original)
+
         self.discrete = discrete
 
         self.fit_method = fit_method
         self.estimate_discrete = estimate_discrete
-        self.approximate_discrete = approximate_discrete
+        self.discrete_approximation = discrete_approximation
         self.sigma_threshold = sigma_threshold
 
         self.given_xmin = xmin
@@ -53,7 +55,7 @@ class Fit(object):
 
         if self.xmax:
             self.fixed_xmax = True
-            n_above_max = sum[self.data>self.xmax]
+            n_above_max = sum(self.data>self.xmax)
             self.data = self.data[self.data<=self.xmax]
         else:
             n_above_max = 0
@@ -104,7 +106,7 @@ class Fit(object):
                 discrete=self.discrete,
                 fit_method=self.fit_method,
                 estimate_discrete=self.estimate_discrete,
-                approximate_discrete=self.approximate_discrete))
+                discrete_approximation=self.discrete_approximation))
             return getattr(self, name)
         else:  raise AttributeError, name
 
@@ -113,11 +115,11 @@ class Fit(object):
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
 #specifically the mapping and sigma threshold behavior:
 #http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
-        try:
-            possible_xmins = self.data[
-                min(self.given_xmin)<=self.data<=max(self.given_xmin)]
-        except TypeError:
+        if not self.given_xmin:
             possible_xmins = self.data
+        else:
+            possible_xmins = self.data[
+                (min(self.given_xmin)<=self.data)<=max(self.given_xmin)]
         xmins, xmin_indices = unique(possible_xmins, return_index=True)
 #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
         xmins = xmins[:-1]
@@ -229,14 +231,14 @@ class Distribution(object):
         fit_method='Likelihood',
         data = None,
         parameters = None,
-        approximate_discrete = 'round',
+        discrete_approximation = 'round',
         **kwargs):
 
         self.xmin = xmin
         self.xmax = xmax
         self.discrete = discrete
         self.fit_method = fit_method
-        self.approximate_discrete = approximate_discrete
+        self.discrete_approximation = discrete_approximation
 
         self.parameter1 = None
         self.parameter2 = None
@@ -337,7 +339,7 @@ class Distribution(object):
                 f = self._pdf_base_function(data)
                 C = self._pdf_discrete_normalizer
                 likelihoods = f*C
-            elif self.approximate_discrete=='round':
+            elif self.discrete_approximation=='round':
                 lower_data = data-.5
                 upper_data = data+.5
 #Temporarily expand xmin and xmax to be able to grab the extra bit of
@@ -361,10 +363,10 @@ class Distribution(object):
                 if self.xmax:
                     self.xmax += .5
             else:
-                if self.approximate_discrete=='xmax':
+                if self.discrete_approximation=='xmax':
                     upper_limit = self.xmax
                 else:
-                    upper_limit = self.approximate_discrete
+                    upper_limit = self.discrete_approximation
 #            from mpmath import exp
                     from numpy import arange
                     X = arange(self.xmin, upper_limit+1)
@@ -401,7 +403,7 @@ class Distribution(object):
     def plot_pdf(self, data, ax=None, **kwargs):
         from numpy import unique
         bins = unique(data)
-        PDF = self.pdf(bins, **kwargs)
+        PDF = self.pdf(bins)
         if not ax:
             import matplotlib.pyplot as plt
             plt.plot(bins, PDF, **kwargs)
@@ -640,6 +642,9 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
         R = 0
         p = 1
         return R, p
+    from numpy import asarray
+    loglikelihoods1 = asarray(loglikelihoods1)
+    loglikelihoods2 = asarray(loglikelihoods2)
 
     R = sum(loglikelihoods1-loglikelihoods2)
 
@@ -669,11 +674,12 @@ def ccdf(data, survival=True, **kwargs):
 def cumulative_distribution_function(data,
     xmin=None, xmax=None,
     survival=False, **kwargs):
-    from numpy import arange, array
-    if type(data)==list:
-        data = array(data)
+
+    from numpy import array
+    data = array(data)
     if not data.any():
-        return array([0]), array([0])
+        from numpy import nan
+        return array([nan]), array([nan])
 
     data = trim_to_range(data, xmin=xmin, xmax=xmax)
 
@@ -684,6 +690,7 @@ def cumulative_distribution_function(data,
         from numpy import searchsorted
         CDF = searchsorted(data, data,side='left')/n
     else:
+        from numpy import arange
         CDF = arange(n)/n
 
     if survival:
@@ -695,6 +702,8 @@ def is_discrete(data):
     return (floor(data)==data.astype(float)).all()
 
 def trim_to_range(data, xmin=1, xmax=None, **kwargs):
+    from numpy import asarray
+    data = asarray(data)
     data = data[data>=xmin]
     if xmax:
         data = data[data<=xmax]
@@ -751,10 +760,10 @@ def plot_pdf(data, ax=None, **kwargs):
     edges, hist = pdf(data, **kwargs)
     if not ax:
         import matplotlib.pyplot as plt
-        plt.plot(edges, hist, **kwargs)
+        plt.plot(edges[:-1], hist, **kwargs)
         ax = plt.gca()
     else:
-        ax.plot(edges, hist, **kwargs)
+        ax.plot(edges[:-1], hist, **kwargs)
     ax.set_xscale("log")
     ax.set_yscale("log")
     return ax
