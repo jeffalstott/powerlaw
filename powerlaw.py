@@ -31,7 +31,8 @@ class Fit(object):
         fit_method='Likelihood',
         estimate_discrete=True,
         discrete_approximation='round',
-        sigma_threshold=None):
+        sigma_threshold=None,
+        invalid_parameters=None):
 
         self.data_original = data
         from numpy import asarray
@@ -43,6 +44,7 @@ class Fit(object):
         self.estimate_discrete = estimate_discrete
         self.discrete_approximation = discrete_approximation
         self.sigma_threshold = sigma_threshold
+        self.invalid_parameters = invalid_parameters
 
         self.given_xmin = xmin
         self.given_xmax = xmax
@@ -73,7 +75,8 @@ class Fit(object):
                 xmax = self.xmax,
                 discrete = self.discrete,
                 estimate_discrete = self.estimate_discrete,
-                data = self.data)
+                data = self.data,
+                invalid_parameters = self.invalid_parameters)
             self.D = pl.D
             self.alpha = pl.alpha
             self.sigma = pl.sigma
@@ -422,6 +425,8 @@ class Distribution(object):
     def invalid_parameters(self, function):
         if function=='basic_assumptions':
             self._invalid_parameters = self._basic_assumptions
+        elif function=='positive_assumptions':
+            self._invalid_parameters = self._positive_assumptions
         else:
             self._invalid_parameters = function
 
@@ -569,27 +574,32 @@ class Exponential(Distribution):
         from numpy import mean
         return 1/mean(data)
 
-    def cdf(self,x):
-        x = trim_to_range(x, xmin=self.xmin, xmax=self.xmax)
-        n = len(x)
-        from sys import float_info
-        if self.Lambda<0:
-            from numpy import tile
-            return tile(10**float_info.min_10_exp, n)
+    @property
+    def _basic_assumptions(self):
+        return None
 
+    @property
+    def _positive_assumptions(self):
+        return self.Lambda<=0
+
+    def _cdf_base_function(self, x):
         from numpy import exp
-        CDF = exp(-self.Lambda*x)
-        if self.xmax:
-            CDF = CDF - exp( -self.Lambda*( self.xmax+1 ))
-
-        norm = exp(-self.Lambda*self.xmin)
-        if self.xmax:
-            norm = norm - exp( -self.Lambda*( self.xmax+1 ))
-
-        CDF = 1 - (CDF/norm)
-
+        CDF = 1 - exp(-self.Lambda*x)
         return CDF
-    
+
+    def _pdf_base_function(self, x):
+        from numpy import exp
+        return self.Lambda * exp(-self.Lambda * x)
+
+    @property
+    def _pdf_continuous_normalizer(self):
+        from numpy import exp
+        return self.Lambda * exp(self.Lambda * self.xmin)
+
+    @property
+    def _pdf_discrete_normalizer(self):
+        from numpy import exp
+        return (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
 
     def pdf(self, data):
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -642,11 +652,12 @@ class Lognormal(Distribution):
 
     @property
     def _basic_assumptions(self):
-#The standard deviation can't be negative, and the mean of the
-#logarithm of the distribution can't be smaller than the log of
-#the smallest member of the distribution!
-        from numpy import log
-        return self.sigma<=0 or self.mu<log(self.xmin)
+#The standard deviation can't be negative
+        return self.sigma<=0
+
+    @property
+    def _positive_assumptions(self):
+        return self._basic_assumptions
 
     def _cdf_base_function(self, x):
         from numpy import sqrt, log
