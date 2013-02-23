@@ -32,7 +32,7 @@ class Fit(object):
         estimate_discrete=True,
         discrete_approximation='round',
         sigma_threshold=None,
-        invalid_parameters=None):
+        parameter_range=None):
 
         self.data_original = data
         from numpy import asarray
@@ -44,7 +44,7 @@ class Fit(object):
         self.estimate_discrete = estimate_discrete
         self.discrete_approximation = discrete_approximation
         self.sigma_threshold = sigma_threshold
-        self.invalid_parameters = invalid_parameters
+        self.parameter_range = parameter_range
 
         self.given_xmin = xmin
         self.given_xmax = xmax
@@ -76,7 +76,7 @@ class Fit(object):
                 discrete = self.discrete,
                 estimate_discrete = self.estimate_discrete,
                 data = self.data,
-                invalid_parameters = self.invalid_parameters)
+                parameter_range = self.parameter_range)
             self.D = pl.D
             self.alpha = pl.alpha
             self.sigma = pl.sigma
@@ -91,25 +91,36 @@ class Fit(object):
         self.n = float(len(self.data))
         self.n_tail = self.n + n_above_max
 
-        self.supported_distributions = ['power_law',
-            'lognormal',
-            'exponential',
-            'truncated_power_law',
-            'stretched_exponential',
-            'gamma']
+        self.supported_distributions = {'power_law': Power_Law,
+                    'lognormal': Lognormal,
+                    'exponential': Exponential,
+                    'truncated_power_law': None,
+                    'stretched_exponential': None,
+                    'gamma': None}
 
     def __getattr__(self, name):
-        if name in self.supported_distributions:
-            from string import capwords
-            dist = capwords(name, '_')
-            dist = globals()[dist] #Seems a hack. Might try import powerlaw; getattr(powerlaw, dist)
-            setattr(self, name,
-                dist(data=self.data,
-                xmin=self.xmin, xmax=self.xmax,
-                discrete=self.discrete,
-                fit_method=self.fit_method,
-                estimate_discrete=self.estimate_discrete,
-                discrete_approximation=self.discrete_approximation))
+        if name in self.supported_distributions.keys():
+            #from string import capwords
+            #dist = capwords(name, '_')
+            #dist = globals()[dist] #Seems a hack. Might try import powerlaw; getattr(powerlaw, dist)
+            dist = self.supported_distributions[name]
+            if dist == Power_Law:
+                setattr(self, name,
+                    dist(data=self.data,
+                    xmin=self.xmin, xmax=self.xmax,
+                    discrete=self.discrete,
+                    fit_method=self.fit_method,
+                    estimate_discrete=self.estimate_discrete,
+                    discrete_approximation=self.discrete_approximation,
+                    parameter_range=self.parameter_range))
+            else:
+                setattr(self, name,
+                    dist(data=self.data,
+                    xmin=self.xmin, xmax=self.xmax,
+                    discrete=self.discrete,
+                    fit_method=self.fit_method,
+                    estimate_discrete=self.estimate_discrete,
+                    discrete_approximation=self.discrete_approximation))
             return getattr(self, name)
         else:  raise AttributeError, name
 
@@ -146,7 +157,8 @@ class Fit(object):
                 xmax = self.xmax,
                 discrete = self.discrete,
                 estimate_discrete = self.estimate_discrete,
-                data = self.data)
+                data = self.data,
+                parameter_range = self.parameter_range)
             return pl.D, pl.alpha, pl.loglikelihood, pl.sigma
 
         fits  = asarray( map(fit_function, xmins))
@@ -179,7 +191,6 @@ class Fit(object):
         self.alpha = self.alphas[min_D_index]
         self.sigma = self.sigmas[min_D_index]
         self.loglikelihood = self.loglikelihoods[min_D_index]
-
         return self.xmin
 
 
@@ -253,8 +264,7 @@ class Fit(object):
             data = self.data_original
         else:
             data = self.data
-        return plot_cdf(data, ax=ax, original_data=original_data,
-                survival=survival, **kwargs)
+        return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
     def plot_pdf(self, ax=None, original_data=False, **kwargs):
         if original_data:
@@ -271,7 +281,7 @@ class Distribution(object):
         fit_method='Likelihood',
         data = None,
         parameters = None,
-        invalid_parameters = None,
+        parameter_range = None,
         discrete_approximation = 'round',
         **kwargs):
 
@@ -291,10 +301,8 @@ class Distribution(object):
         if parameters!=None:
             self.parameters(parameters)
 
-        if invalid_parameters!=None:
-            self.invalid_parameters(invalid_parameters)
-        else:
-            self._invalid_parameters = None
+        if parameter_range:
+            self.parameter_range(parameter_range)
 
         if data!=None:
             self.fit(data)
@@ -349,7 +357,7 @@ class Distribution(object):
         x = trim_to_range(x, xmin=self.xmin, xmax=self.xmax)
         n = len(x)
         from sys import float_info
-        if self._invalid_parameters:
+        if not self._in_parameter_range():
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
@@ -372,7 +380,7 @@ class Distribution(object):
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
         from sys import float_info
-        if self._invalid_parameters:
+        if not self._in_parameter_range():
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
@@ -422,13 +430,8 @@ class Distribution(object):
         likelihoods[likelihoods==0] = 10**float_info.min_10_exp
         return likelihoods
 
-    def invalid_parameters(self, function):
-        if function=='basic_assumptions':
-            self._invalid_parameters = self._basic_assumptions
-        elif function=='positive_assumptions':
-            self._invalid_parameters = self._positive_assumptions
-        else:
-            self._invalid_parameters = function
+    def parameter_range(self, function):
+        self._in_parameter_range = function
 
     def likelihoods(self, data):
         return self.pdf(data) 
@@ -482,6 +485,9 @@ class Power_Law(Distribution):
     @property
     def name(self):
         return "power_law"
+
+    def _in_parameter_range(self):
+        return self.alpha>1
 
     def fit(self, data):
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -574,13 +580,8 @@ class Exponential(Distribution):
         from numpy import mean
         return 1/mean(data)
 
-    @property
-    def _basic_assumptions(self):
-        return None
-
-    @property
-    def _positive_assumptions(self):
-        return self.Lambda<=0
+    def _in_parameter_range(self):
+        return self.Lambda>0
 
     def _cdf_base_function(self, x):
         from numpy import exp
@@ -589,7 +590,7 @@ class Exponential(Distribution):
 
     def _pdf_base_function(self, x):
         from numpy import exp
-        return self.Lambda * exp(-self.Lambda * x)
+        return exp(-self.Lambda * x)
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -602,32 +603,17 @@ class Exponential(Distribution):
         return (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
 
     def pdf(self, data):
-        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        n = len(data)
-        from sys import float_info
-        if self.Lambda<0:
-            from numpy import tile
-            return tile(10**float_info.min_10_exp, n)
-
-        from numpy import exp
-        f = exp(-self.Lambda*data)
-
-        if not self.discrete:
+        if not self.discrete and self._in_parameter_range():
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import exp
 #        likelihoods = exp(-Lambda*data)*\
 #                Lambda*exp(Lambda*xmin)
             likelihoods = self.Lambda*exp(self.Lambda*(self.xmin-data))
             #Simplified so as not to throw a nan from infs being divided by each other
-        if self.discrete:
-            if not self.xmax:
-                C = (1-exp(-self.Lambda))*exp(self.Lambda*self.xmin)
-            else:
-                C = ( (1-exp(-self.Lambda)) /
-                        (exp(-self.Lambda*self.xmin) - 
-                            exp(-self.Lambda*(self.xmax+1))
-                            )
-                        )
-            likelihoods = f*C
-        likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+            from sys import float_info
+            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+        else:
+            likelihoods = Distribution.pdf(self, data)
         return likelihoods
 
 class Lognormal(Distribution):
@@ -650,14 +636,9 @@ class Lognormal(Distribution):
         logdata = log(data)
         return (mean(logdata), std(logdata))
 
-    @property
-    def _basic_assumptions(self):
+    def _in_parameter_range(self):
 #The standard deviation can't be negative
-        return self.sigma<=0
-
-    @property
-    def _positive_assumptions(self):
-        return self._basic_assumptions
+        return self.sigma>0
 
     def _cdf_base_function(self, x):
         from numpy import sqrt, log
@@ -705,6 +686,13 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
     from numpy import asarray
     loglikelihoods1 = asarray(loglikelihoods1)
     loglikelihoods2 = asarray(loglikelihoods2)
+
+    #Clean for extreme values, if any
+    from numpy import inf, log
+    from sys import float_info
+    min_val = log(10**float_info.min_10_exp)
+    loglikelihoods1[loglikelihoods1==-inf] = min_val
+    loglikelihoods2[loglikelihoods2==-inf] = min_val
 
     R = sum(loglikelihoods1-loglikelihoods2)
 
