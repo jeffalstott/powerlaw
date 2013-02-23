@@ -29,7 +29,7 @@ class Fit(object):
         discrete=False,
         xmin=None, xmax=None,
         fit_method='Likelihood',
-        estimate_discrete=False,
+        estimate_discrete=True,
         discrete_approximation='round',
         sigma_threshold=None):
 
@@ -202,26 +202,63 @@ class Fit(object):
     def loglikelihood_ratio(self, dist1, dist2, nested=None, **kwargs):
         return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
-    def cdf(self, survival=False, **kwargs):
-        return cdf(self.data, xmin=self.xmin, xmax=self.xmax, survival=survival,
+    def cdf(self, original_data=False, survival=False, **kwargs):
+        if original_data:
+            data = self.data_original
+            xmin = None
+            xmax = None
+        else:
+            data = self.data
+            xmin = self.xmin
+            xmax = self.xmax
+        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
                 **kwargs) 
 
-    def ccdf(self, survival=True, **kwargs):
-        return cdf(self.data, xmin=self.xmin, xmax=self.xmax, survival=survival,
+    def ccdf(self, original_data=False, survival=True, **kwargs):
+        if original_data:
+            data = self.data_original
+            xmin = None
+            xmax = None
+        else:
+            data = self.data
+            xmin = self.xmin
+            xmax = self.xmax
+        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
                 **kwargs) 
 
-    def pdf(self, **kwargs):
-        edges, hist = pdf(self.data, xmin=self.xmin, xmax=self.xmax, **kwargs)
+    def pdf(self, original_data=False, **kwargs):
+        if original_data:
+            data = self.data_original
+            xmin = None
+            xmax = None
+        else:
+            data = self.data
+            xmin = self.xmin
+            xmax = self.xmax
+        edges, hist = pdf(data, xmin=xmin, xmax=xmax, **kwargs)
         return edges, hist
 
-    def plot_cdf(self, ax=None, survival=False, **kwargs):
-        return plot_cdf(self.data, ax=ax, survival=survival, **kwargs)
+    def plot_cdf(self, ax=None, original_data=False, survival=False, **kwargs):
+        if original_data:
+            data = self.data_original
+        else:
+            data = self.data
+        return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
-    def plot_ccdf(self, ax=None, survival=True, **kwargs):
-        return plot_cdf(self.data, ax=ax, survival=survival, **kwargs)
+    def plot_ccdf(self, ax=None, original_data=False, survival=True, **kwargs):
+        if original_data:
+            data = self.data_original
+        else:
+            data = self.data
+        return plot_cdf(data, ax=ax, original_data=original_data,
+                survival=survival, **kwargs)
 
-    def plot_pdf(self, ax=None, **kwargs):
-        return plot_pdf(self.data, ax=ax, **kwargs)
+    def plot_pdf(self, ax=None, original_data=False, **kwargs):
+        if original_data:
+            data = self.data_original
+        else:
+            data = self.data
+        return plot_pdf(data, ax=ax, **kwargs)
 
 class Distribution(object):
 
@@ -231,6 +268,7 @@ class Distribution(object):
         fit_method='Likelihood',
         data = None,
         parameters = None,
+        invalid_parameters = None,
         discrete_approximation = 'round',
         **kwargs):
 
@@ -249,6 +287,11 @@ class Distribution(object):
 
         if parameters!=None:
             self.parameters(parameters)
+
+        if invalid_parameters!=None:
+            self.invalid_parameters(invalid_parameters)
+        else:
+            self._invalid_parameters = None
 
         if data!=None:
             self.fit(data)
@@ -376,6 +419,12 @@ class Distribution(object):
         likelihoods[likelihoods==0] = 10**float_info.min_10_exp
         return likelihoods
 
+    def invalid_parameters(self, function):
+        if function=='basic_assumptions':
+            self._invalid_parameters = self._basic_assumptions
+        else:
+            self._invalid_parameters = function
+
     def likelihoods(self, data):
         return self.pdf(data) 
 
@@ -416,7 +465,7 @@ class Distribution(object):
 
 class Power_Law(Distribution):
 
-    def __init__(self, estimate_discrete=False, **kwargs):
+    def __init__(self, estimate_discrete=True, **kwargs):
         self.estimate_discrete = estimate_discrete
         Distribution.__init__(self, **kwargs)
 
@@ -592,12 +641,12 @@ class Lognormal(Distribution):
         return (mean(logdata), std(logdata))
 
     @property
-    def _invalid_parameters(self):
+    def _basic_assumptions(self):
 #The standard deviation can't be negative, and the mean of the
 #logarithm of the distribution can't be smaller than the log of
 #the smallest member of the distribution!
         from numpy import log
-        return False #self.sigma<=0 or self.mu<log(self.xmin)
+        return self.sigma<=0 or self.mu<log(self.xmin)
 
     def _cdf_base_function(self, x):
         from numpy import sqrt, log
@@ -701,10 +750,11 @@ def is_discrete(data):
     from numpy import floor
     return (floor(data)==data.astype(float)).all()
 
-def trim_to_range(data, xmin=1, xmax=None, **kwargs):
+def trim_to_range(data, xmin=None, xmax=None, **kwargs):
     from numpy import asarray
     data = asarray(data)
-    data = data[data>=xmin]
+    if xmin:
+        data = data[data>=xmin]
     if xmax:
         data = data[data<=xmax]
     return data
@@ -774,7 +824,7 @@ def plot_pdf(data, ax=None, **kwargs):
 #really want them.
 
 class Distribution_Fit(object):
-    def __init__(self, data, name, xmin, discrete=False, xmax=None, method='Likelihood', estimate_discrete=False):
+    def __init__(self, data, name, xmin, discrete=False, xmax=None, method='Likelihood', estimate_discrete=True):
         self.data = data
         self.discrete = discrete
         self.xmin = xmin
@@ -883,8 +933,8 @@ class Distribution_Fit(object):
             raise AttributeError(name)
 
 
-def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None,
-                     comparison_alpha=None, search_method='Likelihood', estimate_discrete=False):
+def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None, \
+        comparison_alpha=None, search_method='Likelihood', estimate_discrete=True):
     """distribution_fit does things"""
     from numpy import log
 
@@ -1125,7 +1175,7 @@ def likelihood_function_generator(distribution_name, discrete=False, xmin=1, xma
 
     return likelihood_function
 
-def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', return_all=False, estimate_discrete=False, xmin_range=None):
+def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', return_all=False, estimate_discrete=True, xmin_range=None):
     from numpy import sort, unique, asarray, argmin, vstack, arange, sqrt
     if 0 in data:
         print("Value 0 in data. Throwing out 0 values")
