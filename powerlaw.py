@@ -430,6 +430,22 @@ class Distribution(object):
         likelihoods[likelihoods==0] = 10**float_info.min_10_exp
         return likelihoods
 
+    @property
+    def _pdf_continuous_normalizer(self):
+        C = 1 - self._cdf_base_function(self.xmin)
+        if self.xmax:
+            C -= 1 - self._cdf_base_function(self.xmax+1)
+        C = 1.0/C
+        return C
+
+    @property
+    def _pdf_discrete_normalizer(self):
+        C = 1 - self._cdf_base_function(self.xmin)
+        if self.xmax:
+            C -= 1 - self._cdf_base_function(self.xmax+1)
+        C = 1.0/C
+        return C
+
     def parameter_range(self, function):
         self._in_parameter_range = function
 
@@ -518,52 +534,31 @@ class Power_Law(Distribution):
         from numpy import log, sum
         return 1 + len(data)/sum( log( data / (self.xmin) ))
 
-    def cdf(self,x, survival=False):
-        if not self.discrete:
-            CDF = 1-(x/self.xmin)**(-self.alpha+1)
-        else:
+    def _cdf_base_function(self, x):
+        if self.discrete:
             from scipy.special import zeta
-            if self.xmax:
-                CDF= 1 - ((zeta(self.alpha, x) -
-                            zeta(self.alpha, self.xmax+1)) /
-                            (zeta(self.alpha, self.xmin) -
-                            zeta(self.alpha,self.xmax+1)))
-            else:
-                CDF = 1 - (zeta(self.alpha, x) /  zeta(self.alpha, self.xmin))
-        if survival:
-            CDF = 1 - CDF
+            CDF = 1 - zeta(self.alpha, x)
+        else:
+#Can this be reformulated to not reference xmin? Removal of the probability
+#before xmin and after xmax is handled in Distribution.cdf(), so we don't
+#strictly need this element. It doesn't hurt, for the moment.
+            CDF = 1-(x/self.xmin)**(-self.alpha+1)
         return CDF
 
-    def pdf(self, data):
-        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        n = len(data)
-        from sys import float_info
+    def _pdf_base_function(self, x):
+        return x**-self.alpha
 
-        if self.alpha<0:
-            from numpy import tile
-            return tile(10**float_info.min_10_exp, n)
+    @property
+    def _pdf_continuous_normalizer(self):
+        return (self.alpha-1) * self.xmin**(self.alpha-1)
 
-        f = data**-self.alpha
-
-        if not self.discrete:
-            C = (self.alpha-1) * self.xmin**(self.alpha-1)
-        else:
-            if self.alpha<1:
-                from numpy import tile
-                from sys import float_info
-                return tile(10**float_info.min_10_exp, n)
-            if not self.xmax:
-                from scipy.special import zeta
-                C = 1 / zeta(self.alpha, self.xmin)
-            if self.xmax:
-                from scipy.special import zeta
-                C = 1 / (zeta(self.alpha, self.xmin) -
-                        zeta(self.alpha,self.xmax+1))
-
-        likelihoods = f*C
-
-        likelihoods[likelihoods==0] = 10**float_info.min_10_exp
-        return likelihoods
+    @property
+    def _pdf_discrete_normalizer(self):
+        C = 1 - self._cdf_base_function(self.xmin)
+        if self.xmax:
+            C -= 1 - self._cdf_base_function(self.xmax+1)
+        C = 1.0/C
+        return C
 
 class Exponential(Distribution):
 
