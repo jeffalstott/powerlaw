@@ -357,7 +357,7 @@ class Distribution(object):
         x = trim_to_range(x, xmin=self.xmin, xmax=self.xmax)
         n = len(x)
         from sys import float_info
-        if not self._in_parameter_range():
+        if not self.in_range():
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
@@ -380,7 +380,7 @@ class Distribution(object):
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
         from sys import float_info
-        if not self._in_parameter_range():
+        if not self.in_range():
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
@@ -447,7 +447,14 @@ class Distribution(object):
         return C
 
     def parameter_range(self, function):
-        self._in_parameter_range = function
+        self._in_given_parameter_range = function
+
+    def in_range(self):
+        try:
+            in_range = self._in_given_parameter_range(self)
+        except AttributeError:
+            in_range = self._in_standard_parameter_range()
+        return in_range
 
     def likelihoods(self, data):
         return self.pdf(data) 
@@ -502,7 +509,7 @@ class Power_Law(Distribution):
     def name(self):
         return "power_law"
 
-    def _in_parameter_range(self):
+    def _in_standard_parameter_range(self):
         return self.alpha>1
 
     def fit(self, data):
@@ -575,7 +582,7 @@ class Exponential(Distribution):
         from numpy import mean
         return 1/mean(data)
 
-    def _in_parameter_range(self):
+    def _in_standard_parameter_range(self):
         return self.Lambda>0
 
     def _cdf_base_function(self, x):
@@ -598,7 +605,7 @@ class Exponential(Distribution):
         return (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
 
     def pdf(self, data):
-        if not self.discrete and self._in_parameter_range():
+        if not self.discrete and self.in_range():
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import exp
 #        likelihoods = exp(-Lambda*data)*\
@@ -631,7 +638,7 @@ class Lognormal(Distribution):
         logdata = log(data)
         return (mean(logdata), std(logdata))
 
-    def _in_parameter_range(self):
+    def _in_standard_parameter_range(self):
 #The standard deviation can't be negative
         return self.sigma>0
 
