@@ -653,7 +653,7 @@ class Exponential(Distribution):
             from sys import float_info
             loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
         else:
-            loglikelihoods = Distribution.pdf(self, data)
+            loglikelihoods = Distribution.loglikelihoods(self, data)
         return loglikelihoods
 
 class Streched_Exponential(Distribution):
