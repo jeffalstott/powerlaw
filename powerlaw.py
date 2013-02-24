@@ -130,8 +130,9 @@ class Fit(object):
         if not self.given_xmin:
             possible_xmins = self.data
         else:
-            possible_xmins = self.data[
-                (min(self.given_xmin)<=self.data)<=max(self.given_xmin)]
+            possible_ind = min(self.given_xmin)<=self.data
+            possible_ind *= self.data<=max(self.given_xmin)
+            possible_xmins = self.data[possible_ind]
         xmins, xmin_indices = unique(possible_xmins, return_index=True)
 #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
         xmins = xmins[:-1]
@@ -885,15 +886,16 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
 
     R = sum(loglikelihoods1-loglikelihoods2)
 
+    from numpy import mean
+    mean_diff = mean(loglikelihoods1)-mean(loglikelihoods2)
+    variance = sum(
+            ( (loglikelihoods1-loglikelihoods2) - mean_diff)**2
+            )/n
+
     if nested:
         from scipy.stats import chi2
         p = 1 - chi2.cdf(abs(2*R), 1)
     else:
-        from numpy import mean
-        mean_diff = mean(loglikelihoods1)-mean(loglikelihoods2)
-        variance = sum(
-                ( (loglikelihoods1-loglikelihoods2) - mean_diff)**2
-                )/n
         p = erfc( abs(R) / sqrt(2*n*variance))
 
     if normalized_ratio:
