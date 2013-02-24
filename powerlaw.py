@@ -32,7 +32,9 @@ class Fit(object):
         estimate_discrete=True,
         discrete_approximation='round',
         sigma_threshold=None,
-        parameter_range=None):
+        parameter_range=None,
+        fit_optimizer=None,
+        **kwargs):
 
         self.data_original = data
         from numpy import asarray
@@ -81,7 +83,7 @@ class Fit(object):
             self.alpha = pl.alpha
             self.sigma = pl.sigma
             self.loglikelihood = pl.loglikelihood
-            self.power_law = pl
+            #self.power_law = pl
         else:
             self.fixed_xmin=False
             print("Calculating best minimal value for power law fit")
@@ -94,8 +96,8 @@ class Fit(object):
         self.supported_distributions = {'power_law': Power_Law,
                     'lognormal': Lognormal,
                     'exponential': Exponential,
-                    'truncated_power_law': None,
-                    'stretched_exponential': None,
+                    'truncated_power_law': Truncated_Power_Law,
+                    'stretched_exponential': Streched_Exponential,
                     'gamma': None}
 
     def __getattr__(self, name):
@@ -638,6 +640,171 @@ class Exponential(Distribution):
             likelihoods = Distribution.pdf(self, data)
         return likelihoods
 
+    def loglikelihoods(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        if not self.discrete and self.in_range():
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import log
+#        likelihoods = exp(-Lambda*data)*\
+#                Lambda*exp(Lambda*xmin)
+            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
+            #Simplified so as not to throw a nan from infs being divided by each other
+            from sys import float_info
+            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
+        else:
+            loglikelihoods = Distribution.pdf(self, data)
+        return loglikelihoods
+
+class Streched_Exponential(Distribution):
+
+    def parameters(self, params):
+        self.Lambda = params[0]
+        self.parameter1 = self.Lambda
+        self.parameter1_name = 'lambda'
+        self.beta = params[1]
+        self.parameter2 = self.beta
+        self.parameter2_name = 'beta'
+
+    @property
+    def name(self):
+        return "stretched_exponential"
+
+    def initial_parameters(self, data):
+        from numpy import mean
+        return (1/mean(data), 1)
+
+    def _in_standard_parameter_range(self):
+        return self.Lambda>0 and self.beta>0
+
+    def _cdf_base_function(self, x):
+        from numpy import exp
+        CDF = 1 - exp((-self.Lambda*x)**self.beta)
+        return CDF
+
+    def _pdf_base_function(self, x):
+        from numpy import exp
+        return x**(self.beta-1) * exp(-self.Lambda*(x**self.beta))
+
+    @property
+    def _pdf_continuous_normalizer(self):
+        from numpy import exp
+        C = self.beta*self.Lambda*exp(self.Lambda*(self.xmin**self.beta))
+        return C
+
+    @property
+    def _pdf_discrete_normalizer(self):
+        return False
+
+    def pdf(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        if not self.discrete and self.in_range():
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import exp
+#        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
+#            (beta*Lambda*exp(Lambda*(xmin**beta)))
+            likelihoods = ( data**(self.beta-1) * self.beta * self. Lambda *
+                exp(self.Lambda*(self.xmin**self.beta-data**self.beta)) )
+            #Simplified so as not to throw a nan from infs being divided by each other
+            from sys import float_info
+            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+        else:
+            likelihoods = Distribution.pdf(self, data)
+        return likelihoods
+
+    def loglikelihoods2(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        if not self.discrete and self.in_range():
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import log
+#        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
+#            (beta*Lambda*exp(Lambda*(xmin**beta)))
+            loglikelihoods = ( 
+                    log(data**(self.beta-1) * self.beta * self. Lambda) + 
+                    self.Lambda*(self.xmin**self.beta-data**self.beta) )
+            #Simplified so as not to throw a nan from infs being divided by each other
+            from sys import float_info
+            from numpy import inf
+            loglikelihoods[loglikelihoods==-inf] = log(10**float_info.min_10_exp)
+        else:
+            loglikelihoods = Distribution.loglikelihoods(self, data)
+        return loglikelihoods
+
+class Truncated_Power_Law(Distribution):
+
+    def parameters(self, params):
+        self.alpha = params[0]
+        self.parameter1 = self.alpha
+        self.parameter1_name = 'alpha'
+        self.Lambda = params[1]
+        self.parameter2 = self.Lambda
+        self.parameter2_name = 'lambda'
+
+    @property
+    def name(self):
+        return "truncated_power_law"
+
+    def initial_parameters(self, data):
+        from numpy import log, sum, mean
+        alpha = 1 + len(data)/sum( log( data / (self.xmin) ))
+        Lambda = 1/mean(data)
+        return (alpha, Lambda)
+
+    def _in_standard_parameter_range(self):
+        return self.Lambda>0 and self.alpha>1
+
+######
+    def _cdf_base_function(self, x):
+        from mpmath import gammainc
+        from numpy import vectorize
+        gammainc = vectorize(gammainc)
+
+        CDF = ( self.Lambda**(1-self.alpha) /
+                (gammainc(1-self.alpha,self.Lambda*x)).astype('float')
+                    )
+        CDF = 1 - CDF
+        return CDF
+
+    def _pdf_base_function(self, x):
+        from numpy import exp
+        return x**(-self.alpha) * exp(-self.Lambda * x)
+
+    @property
+    def _pdf_continuous_normalizer(self):
+        from mpmath import gammainc
+        C = ( self.Lambda**(1-self.alpha) /
+                float(gammainc(1-self.alpha,self.Lambda*self.xmin)))
+        return C
+
+    @property
+    def _pdf_discrete_normalizer(self):
+        return False
+
+    def pdf(self, data=None):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        if not self.discrete and self.in_range() and False:
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import exp
+            from mpmath import gammainc
+#        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
+#                (Lambda**(1-alpha))/\
+#                float(gammainc(1-alpha,Lambda*xmin))
+            likelihoods = ( self.Lambda**(1-self.alpha) /
+                    (data**self.alpha *
+                            exp(self.Lambda*data) *
+                            gammainc(1-self.alpha,self.Lambda*self.xmin)
+                            ).astype(float)
+                    )
+            #Simplified so as not to throw a nan from infs being divided by each other
+            from sys import float_info
+            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+        else:
+            likelihoods = Distribution.pdf(self, data)
+        return likelihoods
+
 class Lognormal(Distribution):
 
     def parameters(self, params):
@@ -807,9 +974,9 @@ def checksort(data):
 
     n = len(data)
     from numpy import arange
-    if not all(data[i] <= data[i+1] for i in arange(n-1)):
-        from numpy import sort
-        data = sort(data)
+    #if not all(data[i] <= data[i+1] for i in arange(n-1)):
+    from numpy import sort
+    data = sort(data)
     return data
 
 def plot_ccdf(data, ax=None, survival=False, **kwargs):
