@@ -76,6 +76,7 @@ class Fit(object):
             pl = Power_Law(xmin = self.xmin,
                 xmax = self.xmax,
                 discrete = self.discrete,
+                fit_method = self.fit_method,
                 estimate_discrete = self.estimate_discrete,
                 data = self.data,
                 parameter_range = self.parameter_range)
@@ -156,6 +157,7 @@ class Fit(object):
                 xmax = self.xmax,
                 discrete = self.discrete,
                 estimate_discrete = self.estimate_discrete,
+                fit_method = self.fit_method,
                 data = self.data,
                 parameter_range = self.parameter_range,
                 parent_Fit = self)
@@ -358,8 +360,8 @@ class Distribution(object):
 
         return self.D
 
-    def ccdf(self,x, survival=True):
-        return self.cdf(x, survival=survival)
+    def ccdf(self,x=None, survival=True):
+        return self.cdf(x=x, survival=survival)
 
     def cdf(self,x=None, survival=False):
         if x==None and hasattr(self, 'parent_Fit'):
@@ -460,7 +462,7 @@ class Distribution(object):
 
     def parameter_range(self, function):
         self._in_given_parameter_range = function
-        if hasattr(self, "parent_Fit"):
+        if self.parent_Fit:
             self.fit(self.parent_Fit.data)
 
     def in_range(self):
@@ -926,6 +928,10 @@ def cumulative_distribution_function(data,
     data = checksort(data)
 
     if is_discrete(data):
+#This clever bit way of using searchsorted to rapidly calculate the 
+#CDF of data with repeated values comes from Adam Ginsburg's plfit code,
+#specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
+
         from numpy import searchsorted
         CDF = searchsorted(data, data,side='left')/n
     else:
