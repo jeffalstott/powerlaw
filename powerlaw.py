@@ -83,7 +83,6 @@ class Fit(object):
             self.D = pl.D
             self.alpha = pl.alpha
             self.sigma = pl.sigma
-            self.loglikelihood = pl.loglikelihood
             #self.power_law = pl
         else:
             self.fixed_xmin=False
@@ -141,12 +140,10 @@ class Fit(object):
         if len(xmins)<=0:
             print("Less than 2 unique data values left after xmin and xmax options!"
             "Cannot fit.")
-            from sys import float_info
             self.xmin = 1
             self.D = 1
             self.alpha = 0
             self.sigma = 1
-            self.loglikelihood = -10**float_info.max_10_exp
             self.n_tail = 0
             self.Ds = 1
             self.alphas = 0
@@ -161,13 +158,12 @@ class Fit(object):
                 data = self.data,
                 parameter_range = self.parameter_range,
                 parent_Fit = self)
-            return pl.D, pl.alpha, pl.loglikelihood, pl.sigma
+            return pl.D, pl.alpha, pl.sigma
 
         fits  = asarray( map(fit_function, xmins))
         self.Ds = fits[:,0]
         self.alphas = fits[:,1]
-        self.loglikelihoods = fits[:,2]
-        self.sigmas = fits[:,3]
+        self.sigmas = fits[:,2]
         self.xmins = xmins
 
         if self.sigma_threshold:
@@ -192,7 +188,6 @@ class Fit(object):
         self.D = self.Ds[min_D_index]
         self.alpha = self.alphas[min_D_index]
         self.sigma = self.sigmas[min_D_index]
-        self.loglikelihood = self.loglikelihoods[min_D_index]
         return self.xmin
 
 
@@ -538,22 +533,12 @@ class Power_Law(Distribution):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
-        from numpy import log, nan
+        from numpy import log
         if not self.discrete and not self.xmax:
             self.alpha = 1 + ( n / sum( log( data / self.xmin ) ))
-            self.loglikelihood = ( n*log(self.alpha-1.0) -
-                n*log(self.xmin) -
-                self.alpha*sum(log(data/self.xmin)) )
-            if self.loglikelihood == nan:
-                self.loglikelihood=0
             self.KS(data)
         elif self.discrete and self.estimate_discrete and not self.xmax:
             self.alpha = 1 + ( n / sum( log( data / ( self.xmin - .5 ) ) ))
-            self.loglikelihood = ( n*log(self.alpha-1.0) -
-                n*log(self.xmin) -
-                self.alpha*sum(log(data/self.xmin)) )
-            if self.loglikelihood == nan:
-                self.loglikelihood=0
             self.KS(data)
         else:
             Distribution.fit(self, data)
