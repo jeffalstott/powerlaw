@@ -263,12 +263,13 @@ class Fit(object):
             data = self.data
         return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
-    def plot_pdf(self, ax=None, original_data=False, **kwargs):
+    def plot_pdf(self, ax=None, original_data=False,
+            linear_bins=False, **kwargs):
         if original_data:
             data = self.data_original
         else:
             data = self.data
-        return plot_pdf(data, ax=ax, **kwargs)
+        return plot_pdf(data, ax=ax, linear_bins=linear_bins, **kwargs)
 
 class Distribution(object):
 
@@ -345,34 +346,36 @@ class Distribution(object):
         bins, Actual_CDF = cdf(data)
         Theoretical_CDF = self.cdf(bins)
 
-        self.D_plus = max(Theoretical_CDF-Actual_CDF)
-        self.D_minus = max(Actual_CDF-Theoretical_CDF)
+        CDF_diff = Theoretical_CDF - Actual_CDF
+
+        self.D_plus = CDF_diff.max()
+        self.D_minus = -1.0*CDF_diff.min()
         from numpy import mean
-        self.Kappa = 1 + mean(Theoretical_CDF-Actual_CDF)
+        self.Kappa = 1 + mean(CDF_diff)
 
         self.V = self.D_plus + self.D_minus
         self.D = max(self.D_plus, self.D_minus)
 
         return self.D
 
-    def ccdf(self,x=None, survival=True):
-        return self.cdf(x=x, survival=survival)
+    def ccdf(self,data=None, survival=True):
+        return self.cdf(data=data, survival=survival)
 
-    def cdf(self,x=None, survival=False):
-        if x==None and hasattr(self, 'parent_Fit'):
-            x = self.parent_Fit.data
-        x = trim_to_range(x, xmin=self.xmin, xmax=self.xmax)
-        n = len(x)
+    def cdf(self,data=None, survival=False):
+        if data==None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+        n = len(data)
         from sys import float_info
         if not self.in_range():
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
-        CDF = self._cdf_base_function(x) - self._cdf_base_function(self.xmin)
+        CDF = self._cdf_base_function(data) - self._cdf_xmin
         if self.xmax:
             CDF = CDF - self._cdf_base_function(self.xmax)
 
-        norm = 1 - self._cdf_base_function(self.xmin)
+        norm = 1 - self._cdf_xmin
         if self.xmax:
             norm = norm - (1 - self._cdf_base_function(self.xmax))
 
@@ -382,6 +385,11 @@ class Distribution(object):
             CDF = 1 - CDF
 
         return CDF
+
+    @property
+    def _cdf_xmin(self):
+        return self._cdf_base_function(self.xmin)
+
 
     def pdf(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
@@ -431,17 +439,17 @@ class Distribution(object):
                 else:
                     upper_limit = self.discrete_approximation
 #            from mpmath import exp
-                    from numpy import arange
-                    X = arange(self.xmin, upper_limit+1)
-                    PDF = self._pdf_base_function(X)
-                    PDF = (PDF/sum(PDF)).astype(float)
-                    likelihoods = PDF[(data-self.xmin).astype(int)]
+                from numpy import arange
+                X = arange(self.xmin, upper_limit+1)
+                PDF = self._pdf_base_function(X)
+                PDF = (PDF/sum(PDF)).astype(float)
+                likelihoods = PDF[(data-self.xmin).astype(int)]
         likelihoods[likelihoods==0] = 10**float_info.min_10_exp
         return likelihoods
 
     @property
     def _pdf_continuous_normalizer(self):
-        C = 1 - self._cdf_base_function(self.xmin)
+        C = 1 - self._cdf_xmin
         if self.xmax:
             C -= 1 - self._cdf_base_function(self.xmax+1)
         C = 1.0/C
@@ -449,7 +457,7 @@ class Distribution(object):
 
     @property
     def _pdf_discrete_normalizer(self):
-        C = 1 - self._cdf_base_function(self.xmin)
+        C = 1 - self._cdf_xmin
         if self.xmax:
             C -= 1 - self._cdf_base_function(self.xmax+1)
         C = 1.0/C
@@ -493,7 +501,7 @@ class Distribution(object):
         ax.set_yscale("log")
         return ax
 
-    def plot_pdf(self, data=None, ax=None, **kwargs):
+    def plot_pdf(self, data=None, ax=None, linear_bins=False, **kwargs):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
@@ -501,7 +509,7 @@ class Distribution(object):
         PDF = self.pdf(bins)
         if not ax:
             import matplotlib.pyplot as plt
-            plt.plot(bins, PDF, **kwargs)
+            plt.plot(bins, PDF, linear_bins=linear_bins, **kwargs)
             ax = plt.gca()
         else:
             ax.plot(bins, PDF, **kwargs)
@@ -533,7 +541,7 @@ class Power_Law(Distribution):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
-        from numpy import log
+        from numpy import log, sum
         if not self.discrete and not self.xmax:
             self.alpha = 1 + ( n / sum( log( data / self.xmin ) ))
             self.KS(data)
@@ -569,7 +577,7 @@ class Power_Law(Distribution):
 
     @property
     def _pdf_discrete_normalizer(self):
-        C = 1 - self._cdf_base_function(self.xmin)
+        C = 1.0 - self._cdf_xmin
         if self.xmax:
             C -= 1 - self._cdf_base_function(self.xmax+1)
         C = 1.0/C
@@ -830,14 +838,14 @@ class Lognormal(Distribution):
 
     @property
     def _pdf_continuous_normalizer(self):
-#        from mpmath import erfc
-        from scipy.special import erfc
+        from mpmath import erfc
+#        from scipy.special import erfc
         from scipy.constants import pi
         from numpy import sqrt, log
         C = ( sqrt(2/(pi*self.sigma**2)) /
                 erfc( (log(self.xmin)-self.mu) / (sqrt(2)*self.sigma))
                 )
-        return C
+        return float(C)
 
     @property
     def _pdf_discrete_normalizer(self):
@@ -987,8 +995,8 @@ def plot_cdf(data, ax=None, survival=False, **kwargs):
     ax.set_yscale("log")
     return ax
 
-def plot_pdf(data, ax=None, **kwargs):
-    edges, hist = pdf(data, **kwargs)
+def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
+    edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
     if not ax:
         import matplotlib.pyplot as plt
         plt.plot(edges[:-1], hist, **kwargs)
