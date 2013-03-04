@@ -158,31 +158,34 @@ class Fit(object):
                 data = self.data,
                 parameter_range = self.parameter_range,
                 parent_Fit = self)
-            return pl.D, pl.alpha, pl.sigma
+            return pl.D, pl.alpha, pl.sigma, pl.in_range()
 
         fits  = asarray( map(fit_function, xmins))
         self.Ds = fits[:,0]
         self.alphas = fits[:,1]
         self.sigmas = fits[:,2]
+        self.in_ranges = fits[:,3].astype(bool)
         self.xmins = xmins
 
+        good_values = self.in_ranges
+
         if self.sigma_threshold:
-            good_values = self.sigmas < self.sigma_threshold
-            #Find the last good value (The first False, where sigma > threshold)
-            xmin_max = argmin(good_values)
-            #If there are no fits beyond the noise threshold
-            if good_values.all():
-                min_D_index = argmin(self.Ds)
-                self.noise_flag = False
-            elif xmin_max>0:
-                min_D_index = argmin(self.Ds[:xmin_max])
-                self.noise_flag = False
-            else:
-                min_D_index = argmin(self.Ds)
-                self.noise_flag = True
-        else:
+            good_values = good_values * (self.sigmas < self.sigma_threshold)
+
+        if good_values.all():
             min_D_index = argmin(self.Ds)
             self.noise_flag = False
+        elif not good_values.any():
+            min_D_index = argmin(self.Ds)
+            self.noise_flag = True
+        else:
+            from numpy.ma import masked_array
+            masked_Ds = masked_array(self.Ds, mask=-good_values)
+            min_D_index = masked_Ds.argmin()
+            self.noise_flag = False
+
+        if self.noise_flag:
+            print("No valid fits found.")
 
         self.xmin = xmins[min_D_index]
         self.D = self.Ds[min_D_index]
@@ -280,6 +283,7 @@ class Distribution(object):
         data = None,
         parameters = None,
         parameter_range = None,
+        initial_parameters = None,
         discrete_approximation = 'round',
         parent_Fit = None,
         **kwargs):
@@ -305,11 +309,14 @@ class Distribution(object):
         if parameter_range:
             self.parameter_range(parameter_range)
 
-        if data!=None:
+        if initial_parameters:
+            self._given_initial_parameters(initial_parameters)
+
+        if data!=None and not (parameter_range and self.parent_Fit):
             self.fit(data)
 
 
-    def fit(self, data=None):
+    def fit(self, data=None, suppress_output=False):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -330,6 +337,12 @@ class Distribution(object):
                 full_output=1,
                 disp=False)
         self.parameters(parameters)
+        if not self.in_range():
+            self.noise_flag=True
+        else:
+            self.noise_flag=False
+        if self.noise_flag and not suppress_output:
+            print("No valid fits found.")
         self.loglikelihood =-negative_loglikelihood
         self.KS(data)
 
@@ -463,17 +476,42 @@ class Distribution(object):
         C = 1.0/C
         return C
 
-    def parameter_range(self, function):
-        self._in_given_parameter_range = function
+    def parameter_range(self, r, initial_parameters=None):
+        from types import FunctionType
+        if type(r)==FunctionType:
+            self._in_given_parameter_range = r
+        else:
+            self._range_dict = r
+
+        if initial_parameters:
+            self._given_initial_parameters = initial_parameters
+
         if self.parent_Fit:
             self.fit(self.parent_Fit.data)
 
     def in_range(self):
         try:
-            in_range = self._in_given_parameter_range(self)
+            r = self._range_dict
+            result = True
+            for k in r.keys():
+#For any attributes we've specificed, make sure we're above the lower bound
+#and below the lower bound (if they exist). This must be true of all of them.
+                if r[k][1]!=None:
+                    result *= r[k][1]> getattr(self, k)
+                result *= r[k][0]< getattr(self, k)
+            return result
         except AttributeError:
-            in_range = self._in_standard_parameter_range()
-        return in_range
+            try:
+                in_range = self._in_given_parameter_range(self)
+            except AttributeError:
+                in_range = self._in_standard_parameter_range()
+        return bool(in_range)
+
+    def initial_parameters(self, data):
+        try:
+            return self._given_initial_parameters
+        except AttributeError:
+            return self._initial_parameters(data)
 
     def likelihoods(self, data):
         return self.pdf(data) 
@@ -522,7 +560,6 @@ class Power_Law(Distribution):
     def __init__(self, estimate_discrete=True, **kwargs):
         self.estimate_discrete = estimate_discrete
         Distribution.__init__(self, **kwargs)
-#        from ipdb import set_trace
 
     def parameters(self, params):
         self.alpha = params[0]
@@ -533,6 +570,13 @@ class Power_Law(Distribution):
     def name(self):
         return "power_law"
 
+    @property
+    def sigma(self):
+#Only is calculable after self.fit is started, when the number of data points is
+#established
+        from numpy import sqrt
+        return (self.alpha - 1) / sqrt(self.n)
+
     def _in_standard_parameter_range(self):
         return self.alpha>1
 
@@ -540,20 +584,27 @@ class Power_Law(Distribution):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        n = len(data)
+        self.n = len(data)
         from numpy import log, sum
         if not self.discrete and not self.xmax:
-            self.alpha = 1 + ( n / sum( log( data / self.xmin ) ))
+            self.alpha = 1 + ( self.n / sum( log( data / self.xmin ) ))
+            if not self.in_range():
+                Distribution.fit(self, data, suppress_output=True)
             self.KS(data)
         elif self.discrete and self.estimate_discrete and not self.xmax:
-            self.alpha = 1 + ( n / sum( log( data / ( self.xmin - .5 ) ) ))
+            self.alpha = 1 + ( self.n / sum( log( data / ( self.xmin - .5 ) ) ))
+            if not self.in_range():
+                Distribution.fit(self, data, suppress_output=True)
             self.KS(data)
         else:
-            Distribution.fit(self, data)
-        from numpy import sqrt
-        self.sigma = (self.alpha - 1) / sqrt(n)
+            Distribution.fit(self, data, suppress_output=True)
 
-    def initial_parameters(self, data):
+        if not self.in_range():
+            self.noise_flag=True
+        else:
+            self.noise_flag=False
+
+    def _initial_parameters(self, data):
         from numpy import log, sum
         return 1 + len(data)/sum( log( data / (self.xmin) ))
 
@@ -594,7 +645,7 @@ class Exponential(Distribution):
     def name(self):
         return "exponential"
 
-    def initial_parameters(self, data):
+    def _initial_parameters(self, data):
         from numpy import mean
         return 1/mean(data)
 
@@ -623,7 +674,7 @@ class Exponential(Distribution):
     def pdf(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
-        if not self.discrete and self.in_range():
+        if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import exp
 #        likelihoods = exp(-Lambda*data)*\
@@ -639,7 +690,7 @@ class Exponential(Distribution):
     def loglikelihoods(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
-        if not self.discrete and self.in_range():
+        if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import log
 #        likelihoods = exp(-Lambda*data)*\
@@ -666,7 +717,7 @@ class Streched_Exponential(Distribution):
     def name(self):
         return "stretched_exponential"
 
-    def initial_parameters(self, data):
+    def _initial_parameters(self, data):
         from numpy import mean
         return (1/mean(data), 1)
 
@@ -742,7 +793,7 @@ class Truncated_Power_Law(Distribution):
     def name(self):
         return "truncated_power_law"
 
-    def initial_parameters(self, data):
+    def _initial_parameters(self, data):
         from numpy import log, sum, mean
         alpha = 1 + len(data)/sum( log( data / (self.xmin) ))
         Lambda = 1/mean(data)
@@ -816,7 +867,7 @@ class Lognormal(Distribution):
     def name(self):
         return "lognormal"
 
-    def initial_parameters(self, data):
+    def _initial_parameters(self, data):
         from numpy import mean, std, log
         logdata = log(data)
         return (mean(logdata), std(logdata))
@@ -896,7 +947,6 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
     if normalized_ratio:
         R = R/sqrt(n*variance)
 
-    #import ipdb; ipdb.set_trace()
     return R, p
 
 def cdf(data, survival=False, **kwargs):
