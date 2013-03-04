@@ -802,7 +802,6 @@ class Truncated_Power_Law(Distribution):
     def _in_standard_parameter_range(self):
         return self.Lambda>0 and self.alpha>1
 
-######
     def _cdf_base_function(self, x):
         from mpmath import gammainc
         from numpy import vectorize
@@ -968,18 +967,18 @@ def cumulative_distribution_function(data,
     data = trim_to_range(data, xmin=xmin, xmax=xmax)
 
     n = float(len(data))
-    data = checksort(data)
+    from numpy import sort
+    data = sort(data)
 
-    if is_discrete(data):
+    if checkunique(data):
+        from numpy import arange
+        CDF = arange(n)/n
+    else:
 #This clever bit way of using searchsorted to rapidly calculate the 
 #CDF of data with repeated values comes from Adam Ginsburg's plfit code,
 #specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
-
         from numpy import searchsorted
         CDF = searchsorted(data, data,side='left')/n
-    else:
-        from numpy import arange
-        CDF = arange(n)/n
 
     if survival:
         CDF = 1-CDF
@@ -1018,6 +1017,14 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
     hist, edges = histogram(data, bins, density=True)
     return edges, hist
 
+def checkunique(data):
+    """Quickly checks if a sorted array is all unique elements"""
+    for i in range(len(data)-1):
+        if data[i]==data[i+1]:
+            return False
+    return True
+
+
 def checksort(data):
     """Checks if the data is sorted, in O(n) time. If it isn't sorted, it then"""
     """sorts it in O(nlogn) time. Expectation is that the data will typically"""
@@ -1025,9 +1032,9 @@ def checksort(data):
 
     n = len(data)
     from numpy import arange
-    #if not all(data[i] <= data[i+1] for i in arange(n-1)):
-    from numpy import sort
-    data = sort(data)
+    if not all(data[i] <= data[i+1] for i in arange(n-1)):
+        from numpy import sort
+        data = sort(data)
     return data
 
 def plot_ccdf(data, ax=None, survival=False, **kwargs):
