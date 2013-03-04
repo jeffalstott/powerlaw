@@ -746,7 +746,7 @@ class Streched_Exponential(Distribution):
     def pdf(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
-        if not self.discrete and self.in_range():
+        if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import exp
 #        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
@@ -760,10 +760,10 @@ class Streched_Exponential(Distribution):
             likelihoods = Distribution.pdf(self, data)
         return likelihoods
 
-    def loglikelihoods2(self, data=None):
+    def loglikelihoods(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
-        if not self.discrete and self.in_range():
+        if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import log
 #        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
