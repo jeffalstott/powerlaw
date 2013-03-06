@@ -1,9 +1,13 @@
 from distutils.core import setup
+with open('README.rst') as file:
+        long_description = file.read()
+
 setup(
     name='powerlaw',
     py_modules=['powerlaw'],
     version='.8',
     description='Toolbox for testing if a probability distribution fits a power law',
+    long_description=long_description,
     author='Jeff Alstott',
     author_email='jeffalstott@gmail.com',
     url='http://code.google.com/p/powerlaw/',
