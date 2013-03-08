@@ -13,7 +13,9 @@ __ http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779
 
 Basic Usage 
 -----------------
-.. code-block::
+For the simplest, typical use cases, that tells you everything you need to
+know.::
+
     import powerlaw
     data = array([1.7, 3.2 ...]) #data can be list or Numpy array
     results = powerlaw.Fit(data)
@@ -21,8 +23,7 @@ Basic Usage
     print results.power_law.xmin
     R, p = results.distribution_compare('power_law', 'lognormal')
 
-For the simplest, typical use cases, that tells you everything you need to
-know. For more explanation, understanding, and figures, see the working paper,
+For more explanation, understanding, and figures, see the working paper,
 which illustrates all of powerlaw's features. For details of the math, see
 Clauset et al. 2007, which developed these methods.
 
