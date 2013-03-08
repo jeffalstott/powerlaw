@@ -1,4 +1,33 @@
 class Fit(object):
+    """
+    A fit of a data set to various probability distributions, namely power
+    laws. For fits to power laws, the methods of Clauset et al. 2007 are used.
+    These methods identify the portion of the tail of the distribution that
+    follows a power law, beyond a value xmin. If no xmin is
+    provided, the optimal one is calculated and assigned and initialization.  
+
+    Parameters
+    ----------
+    discrete : boolean, optional
+        Whether the data is discrete (integers).
+    xmin : int or float, optional
+        The data value beyond which distributions should be fitted. If
+        None an optimal one will be calculated.
+    xmax : int or float, optional The maximum value of the fitted
+        distributions.
+    estimate_discrete : bool, optional
+        Whether to estimate the fit of a discrete power law using fast
+        analytical methods, instead of calculating the fit exactly with
+        slow numerical methods. Very accurate with xmin>6
+    sigma_threshold : float, optional
+        Upper limit on the standard error of the power law fit. Used after 
+        fitting, when identifying valid xmin values.
+    parameter_range : dict, optional
+        Dictionary of valid parameter ranges for fitting. Formatted as a 
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+    """
+
     def __init__(self, data,
         discrete=False,
         xmin=None, xmax=None,
@@ -97,6 +126,14 @@ class Fit(object):
         else:  raise AttributeError, name
 
     def find_xmin(self):
+        """
+        Returns the optimal xmin beyond which the scaling regime of the power
+        law fits best. The attribute self.xmin of the Fit object is also set.
+        The optimal xmin beyond which the scaling regime of the power law fits
+        best is identified by minimizing the Kolmogorov-Smirnov distance
+        between the data and the theoretical power law fit.
+        This is the method of Clauset et al. 2007.
+        """
         from numpy import unique, asarray, argmin
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
 #specifically the mapping and sigma threshold behavior:
@@ -168,10 +205,58 @@ class Fit(object):
         return self.xmin
 
 
-    def nested_distribution_compare(self, dist1, dist2, **kwargs):
-        return self.distribution_compare(dist1, dist2, nested=True, **kwargs)
+    def nested_distribution_compare(self, dist1, dist2, nested=True, **kwargs):
+        """
+        Returns the loglikelihood ratio, and its p-value, between the two
+        distribution fits, assuming the candidate distributions are nested.
+
+        Parameters
+        ----------
+        dist1 : string
+            Name of the first candidate distribution (ex. 'power_law')
+        dist2 : string
+            Name of the second candidate distribution (ex. 'exponential')
+        nested : bool or None, optional
+            Whether to assume the candidate distributions are nested versions 
+            of each other. None assumes not unless the name of one distribution
+            is a substring of the other.
+
+        Returns
+        -------
+        R : float
+            Loglikelihood ratio of the two distributions' fit to the data. If
+            greater than 0, the first distribution is preferred. If less than
+            0, the second distribution is preferred.
+        p : float
+            Significance of R
+        """
+        return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
     def distribution_compare(self, dist1, dist2, nested=None, **kwargs):
+        """
+        Returns the loglikelihood ratio, and its p-value, between the two
+        distribution fits, assuming the candidate distributions are nested.
+
+        Parameters
+        ----------
+        dist1 : string
+            Name of the first candidate distribution (ex. 'power_law')
+        dist2 : string
+            Name of the second candidate distribution (ex. 'exponential')
+        nested : bool or None, optional
+            Whether to assume the candidate distributions are nested versions 
+            of each other. None assumes not unless the name of one distribution
+            is a substring of the other.
+
+        Returns
+        -------
+        R : float
+            Loglikelihood ratio of the two distributions' fit to the data. If
+            greater than 0, the first distribution is preferred. If less than
+            0, the second distribution is preferred.
+        p : float
+            Significance of R
+        """
         if (dist1 in dist2) or (dist2 in dist1) and nested==None:
             print "Assuming nested distributions"
             nested = True
@@ -188,9 +273,32 @@ class Fit(object):
             **kwargs)
 
     def loglikelihood_ratio(self, dist1, dist2, nested=None, **kwargs):
+        """
+        Another name for distribution_compare.
+        """
         return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
     def cdf(self, original_data=False, survival=False, **kwargs):
+        """
+        Returns the cumulative distribution function of the data.
+
+        Parameters
+        ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival : bool, optional
+            Whether to return the complementary cumulative distribution
+            function, 1-CDF, also known as the survival function.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
         if original_data:
             data = self.data_original
             xmin = None
@@ -203,6 +311,27 @@ class Fit(object):
                 **kwargs) 
 
     def ccdf(self, original_data=False, survival=True, **kwargs):
+        """
+        Returns the complementary cumulative distribution function of the data.
+
+        Parameters
+        ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival : bool, optional
+            Whether to return the complementary cumulative distribution
+            function, also known as the survival function, or the cumulative
+            distribution function, 1-CCDF.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is greater than or equal to X.
+        """
         if original_data:
             data = self.data_original
             xmin = None
@@ -215,6 +344,25 @@ class Fit(object):
                 **kwargs) 
 
     def pdf(self, original_data=False, **kwargs):
+        """
+        Returns the probability density function (normalized histogram) of the
+        data.
+
+        Parameters
+        ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+
+        Returns
+        -------
+        bin_edges : array
+            The edges of the bins of the probability density function.
+        probabilities : array
+            The portion of the data that is within the bin. Length 1 less than
+            bin_edges, as it corresponds to the spaces between them.
+        """
         if original_data:
             data = self.data_original
             xmin = None
@@ -227,6 +375,7 @@ class Fit(object):
         return edges, hist
 
     def plot_cdf(self, ax=None, original_data=False, survival=False, **kwargs):
+        "Plots the CDF to a new figure or to axis ax if provided."
         if original_data:
             data = self.data_original
         else:
@@ -234,6 +383,7 @@ class Fit(object):
         return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
     def plot_ccdf(self, ax=None, original_data=False, survival=True, **kwargs):
+        "Plots the CCDF to a new figure or to axis ax if provided."
         if original_data:
             data = self.data_original
         else:
@@ -242,6 +392,7 @@ class Fit(object):
 
     def plot_pdf(self, ax=None, original_data=False,
             linear_bins=False, **kwargs):
+        "Plots the PDF to a new figure or to axis ax if provided."
         if original_data:
             data = self.data_original
         else:
@@ -975,6 +1126,29 @@ def trim_to_range(data, xmin=None, xmax=None, **kwargs):
     return data
 
 def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
+    """
+    Returns the probability density function (normalized histogram) of the
+    data.
+
+    Parameters
+    ----------
+    data : list or array
+    xmin : float, optional
+        Minimum value of the PDF. If None, uses the smallest value in the data.
+    xmax : float, optional
+        Maximum value of the PDF. If None, uses the largest value in the data.
+    linear_bins : float, optional
+        Whether to use linearly spaced bins, as opposed to logarithmically
+        spaced bins (recommended for log-log plots).
+
+    Returns
+    -------
+    bin_edges : array
+        The edges of the bins of the probability density function.
+    probabilities : array
+        The portion of the data that is within the bin. Length 1 less than
+        bin_edges, as it corresponds to the spaces between them.
+    """
     from numpy import logspace, histogram, floor, unique
     from math import ceil, log10
     if not xmax:
@@ -995,24 +1169,26 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
     return edges, hist
 
 def checkunique(data):
-    """Quickly checks if a sorted array is all unique elements"""
+    """Quickly checks if a sorted array is all unique elements."""
     for i in range(len(data)-1):
         if data[i]==data[i+1]:
             return False
     return True
 
-
-def checksort(data):
-    """Checks if the data is sorted, in O(n) time. If it isn't sorted, it then"""
-    """sorts it in O(nlogn) time. Expectation is that the data will typically"""
-    """be sorted."""
-
-    n = len(data)
-    from numpy import arange
-    if not all(data[i] <= data[i+1] for i in arange(n-1)):
-        from numpy import sort
-        data = sort(data)
-    return data
+#def checksort(data):
+#    """
+#    Checks if the data is sorted, in O(n) time. If it isn't sorted, it then
+#    sorts it in O(nlogn) time. Expectation is that the data will typically
+#    be sorted. Presently slower than numpy's sort, even on large arrays, and
+#    so is useless.
+#    """
+#
+#    n = len(data)
+#    from numpy import arange
+#    if not all(data[i] <= data[i+1] for i in arange(n-1)):
+#        from numpy import sort
+#        data = sort(data)
+#    return data
 
 def plot_ccdf(data, ax=None, survival=False, **kwargs):
     return plot_cdf(data, ax=ax, survival=True, **kwargs)
@@ -1158,7 +1334,6 @@ class Distribution_Fit(object):
 
 def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None, \
         comparison_alpha=None, search_method='Likelihood', estimate_discrete=True):
-    """distribution_fit does things"""
     from numpy import log
 
     if distribution == 'negative_binomial' and not is_discrete(data):
@@ -1475,7 +1650,6 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', retur
 
 
 def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=False):
-    """Helps if all data is sorted beforehand!"""
     from numpy import arange, sort, mean
     data = data[data >= xmin]
     if xmax:
