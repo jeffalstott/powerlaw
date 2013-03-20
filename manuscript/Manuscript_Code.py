@@ -3,6 +3,16 @@
 
 # <codecell>
 
+import pylab
+pylab.rcParams['xtick.major.pad']='8'
+pylab.rcParams['ytick.major.pad']='8'
+#import matplotlib.gridspec as gridspec
+#from matplotlib import rc
+#rc('text', usetex=False)
+#rc('font', family='serif')
+
+# <codecell>
+
 from os import listdir
 files = listdir('.')
 if 'blackouts.txt' not in files:
@@ -15,26 +25,133 @@ if 'words.txt' not in files:
 # <codecell>
 
 from numpy import genfromtxt
-blackouts = genfromtxt('blackouts.txt')/10**3
+blackouts = genfromtxt('blackouts.txt')#/10**3
 words = genfromtxt('words.txt')
+cities = genfromtxt('cities.txt')
+
+# <codecell>
+
+f = figure()
+ax = f.add_subplot(111)
+ax.hist(blackouts, normed=True)
+#ax.ticklabel_format(style='sci', scilimits=(0,0))
+ax.set_xticks([])#ax.get_xticks()[::2])
+#locs,labels = yticks()
+#yticks(locs, map(lambda x: "%.1f" % x, locs*1e6))
+
+#ax.set_yticks(map(lambda x: "%.1f"%x, ax.get_yticks()*1e6))
+
+# <codecell>
+
+
+# <codecell>
+
+def plot_basics(data, data_inst, fig, units):
+    from powerlaw import plot_pdf, Fit, pdf
+    ylabel_coord = -.3
+    ax1 = fig.add_subplot(n_graphs,n_data,n_data+data_inst)
+    plot_pdf(data, ax=ax1, linear_bins=True, color='r', linewidth=.5)
+    x, y = pdf(data, linear_bins=True)
+    ind = y>0
+    y = y[ind]
+    x = x[:-1]
+    x = x[ind]
+    ax1.scatter(x, y, color='r', s=.5)
+    plot_pdf(data, ax=ax1, color='b', linewidth=2)
+    from pylab import setp
+    setp( ax1.get_xticklabels(), visible=False)
+    ax1.set_yticks(ax1.get_yticks()[::2])
+    locs,labels = yticks()
+    yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
+    if data_inst==1:
+        ax1.annotate("A", (0,0.95), xycoords=(ax1.get_yaxis().get_label(), "axes fraction"), fontsize=14)
+
+    
+    from mpl_toolkits.axes_grid.inset_locator import inset_axes
+    ax1in = inset_axes(ax1, width = "30%", height = "30%", loc=3)
+    ax1in.hist(data, normed=True, color='b')
+    ax1in.set_xticks([])
+    ax1in.set_yticks([])
+
+    
+    ax = fig.add_subplot(n_graphs,n_data,n_data*2+data_inst, sharex=ax1)
+    plot_pdf(data, ax=ax, color='b', linewidth=2)
+    fit = Fit(data, xmin=1)
+    fit.power_law.plot_pdf(ax=ax, linestyle=':', color='g')
+
+    fit = Fit(data)
+    fit.power_law.plot_pdf(ax=ax, linestyle='--', color='g')
+    #from pylab import setp
+    #setp( ax.get_xticklabels(), visible=False)
+    ax.set_xticks(ax.get_xticks()[::2])
+    ax.set_yticks(ax.get_yticks()[::2])
+    locs,labels = yticks()
+    yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
+    if data_inst==1:
+        ax.annotate("B", (0,0.95), xycoords=(ax.get_yaxis().get_label(), "axes fraction"), fontsize=14)
+        #ax.set_ylabel("P(X) (10^n)")
+        
+    ax = fig.add_subplot(n_graphs,n_data,n_data*3+data_inst)
+    fit.plot_pdf(ax=ax, color='b', linewidth=2)
+    fit.power_law.plot_pdf(ax=ax, linestyle='--', color='g')
+    fit.exponential.plot_pdf(ax=ax, linestyle='--', color='r')
+    p = fit.power_law.pdf()
+    ax.set_ylim(min(p), max(p))
+    ax.set_yticks(ax.get_yticks()[::2])
+    locs,labels = yticks()
+    yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
+    if data_inst==1:
+        ax.annotate("C", (0,0.95), xycoords=(ax.get_yaxis().get_label(), "axes fraction"), fontsize=14)
+        
+    ax.set_xlabel(units)
+
+# <codecell>
+
+n_data = 3
+n_graphs = 4
+f = figure(figsize=(8,11))
+
+data = words
+data_inst = 1
+units = 'Word Frequency'
+plot_basics(data, data_inst, f, units)
+
+data = cities
+data_inst = 2
+units = 'City Population'
+plot_basics(data, data_inst, f, units)
+
+data = blackouts
+data_inst = 3
+units = 'Population Affected\nby Blackouts'
+plot_basics(data, data_inst, f, units)
+
+f.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=.2, hspace=.15)
 
 # <codecell>
 
 data = blackouts
 ####
 import powerlaw
-results = powerlaw.Fit(data, discrete=True)
-results.xmin
-results.fixed_xmin
-results.alpha
-results.sigma
-results.D
-results = powerlaw.Fit(data, xmin=60.0)
-results.xmin
-results.fixed_xmin
-results.alpha
-results.sigma
-results.D
+fit = powerlaw.Fit(data)
+fit.power_law.alpha
+fit.power_law.sigma
+
+# <codecell>
+
+data = blackouts
+####
+import powerlaw
+fit = powerlaw.Fit(data)
+fit.xmin
+fit.fixed_xmin
+fit.alpha
+fit.D
+fit = powerlaw.Fit(data, xmin=60.0)
+fit.xmin
+fit.fixed_xmin
+fit.alpha
+fit.D
 
 # <codecell>
 
@@ -135,21 +252,21 @@ y = fit.lognormal.pdf()
 
 data = blackouts
 ####
-results = powerlaw.Fit(data, discrete=True, estimate_discrete=True)
-results.power_law.alpha
-results = powerlaw.Fit(data, discrete=True, estimate_discrete=False)
-results.power_law.alpha
+fit = powerlaw.Fit(data, discrete=True, estimate_discrete=True)
+fit.power_law.alpha
+fit = powerlaw.Fit(data, discrete=True, estimate_discrete=False)
+fit.power_law.alpha
 
 # <codecell>
 
 data = blackouts
 ####
-results = powerlaw.Fit(data, discrete=True, xmin=230.0, xmax=9000, discrete_approximation='xmax')
-results.lognormal.mu
-results = powerlaw.Fit(data, discrete_approximation=100000, xmin=230.0, discrete=True)
-results.lognormal.mu
-results = powerlaw.Fit(data, discrete_approximation='round', xmin=230.0, discrete=True)
-results.lognormal.mu
+fit = powerlaw.Fit(data, discrete=True, xmin=230.0, xmax=9000, discrete_approximation='xmax')
+fit.lognormal.mu
+fit = powerlaw.Fit(data, discrete_approximation=100000, xmin=230.0, discrete=True)
+fit.lognormal.mu
+fit = powerlaw.Fit(data, discrete_approximation='round', xmin=230.0, discrete=True)
+fit.lognormal.mu
 
 # <codecell>
 
