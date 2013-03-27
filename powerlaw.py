@@ -1,4 +1,229 @@
 class Fit(object):
+    """
+    A generic continuous random variable class meant for subclassing.
+
+    `rv_continuous` is a base class to construct specific distribution classes
+    and instances from for continuous random variables. It cannot be used
+    directly as a distribution.
+
+    Parameters
+    ----------
+    momtype : int, optional
+        The type of generic moment calculation to use: 0 for pdf, 1 (default) for ppf.
+    a : float, optional
+        Lower bound of the support of the distribution, default is minus
+        infinity.
+    b : float, optional
+        Upper bound of the support of the distribution, default is plus
+        infinity.
+    xa : float, optional
+        DEPRECATED
+    xb : float, optional
+        DEPRECATED
+    xtol : float, optional
+        The tolerance for fixed point calculation for generic ppf.
+    badvalue : object, optional
+        The value in a result arrays that indicates a value that for which
+        some argument restriction is violated, default is np.nan.
+    name : str, optional
+        The name of the instance. This string is used to construct the default
+        example for distributions.
+    longname : str, optional
+        This string is used as part of the first line of the docstring returned
+        when a subclass has no docstring of its own. Note: `longname` exists
+        for backwards compatibility, do not use for new subclasses.
+    shapes : str, optional
+        The shape of the distribution. For example ``"m, n"`` for a
+        distribution that takes two integers as the two shape arguments for all
+        its methods.
+    extradoc :  str, optional, deprecated
+        This string is used as the last part of the docstring returned when a
+        subclass has no docstring of its own. Note: `extradoc` exists for
+        backwards compatibility, do not use for new subclasses.
+
+    Methods
+    -------
+    rvs(<shape(s)>, loc=0, scale=1, size=1)
+        random variates
+
+    pdf(x, <shape(s)>, loc=0, scale=1)
+        probability density function
+
+    logpdf(x, <shape(s)>, loc=0, scale=1)
+        log of the probability density function
+
+    cdf(x, <shape(s)>, loc=0, scale=1)
+        cumulative density function
+
+    logcdf(x, <shape(s)>, loc=0, scale=1)
+        log of the cumulative density function
+
+    sf(x, <shape(s)>, loc=0, scale=1)
+        survival function (1-cdf --- sometimes more accurate)
+
+    logsf(x, <shape(s)>, loc=0, scale=1)
+        log of the survival function
+
+    ppf(q, <shape(s)>, loc=0, scale=1)
+      percent point function (inverse of cdf --- quantiles)
+
+    isf(q, <shape(s)>, loc=0, scale=1)
+        inverse survival function (inverse of sf)
+
+    moment(n, <shape(s)>, loc=0, scale=1)
+        non-central n-th moment of the distribution.  May not work for array arguments.
+
+    stats(<shape(s)>, loc=0, scale=1, moments='mv')
+        mean('m'), variance('v'), skew('s'), and/or kurtosis('k')
+
+    entropy(<shape(s)>, loc=0, scale=1)
+        (differential) entropy of the RV.
+
+    fit(data, <shape(s)>, loc=0, scale=1)
+        Parameter estimates for generic data
+
+    expect(func=None, args=(), loc=0, scale=1, lb=None, ub=None,
+             conditional=False, **kwds)
+        Expected value of a function with respect to the distribution.
+        Additional kwd arguments passed to integrate.quad
+
+    median(<shape(s)>, loc=0, scale=1)
+        Median of the distribution.
+
+    mean(<shape(s)>, loc=0, scale=1)
+        Mean of the distribution.
+
+    std(<shape(s)>, loc=0, scale=1)
+        Standard deviation of the distribution.
+
+    var(<shape(s)>, loc=0, scale=1)
+        Variance of the distribution.
+
+    interval(alpha, <shape(s)>, loc=0, scale=1)
+        Interval that with `alpha` percent probability contains a random
+        realization of this distribution.
+
+    __call__(<shape(s)>, loc=0, scale=1)
+        Calling a distribution instance creates a frozen RV object with the
+        same methods but holding the given shape, location, and scale fixed.
+        See Notes section.
+
+    **Parameters for Methods**
+
+    x : array_like
+        quantiles
+    q : array_like
+        lower or upper tail probability
+    <shape(s)> : array_like
+        shape parameters
+    loc : array_like, optional
+        location parameter (default=0)
+    scale : array_like, optional
+        scale parameter (default=1)
+    size : int or tuple of ints, optional
+        shape of random variates (default computed from input arguments )
+    moments : string, optional
+        composed of letters ['mvsk'] specifying which moments to compute where
+        'm' = mean, 'v' = variance, 's' = (Fisher's) skew and
+        'k' = (Fisher's) kurtosis. (default='mv')
+    n : int
+        order of moment to calculate in method moments
+
+
+    **Methods that can be overwritten by subclasses**
+    ::
+
+      _rvs
+      _pdf
+      _cdf
+      _sf
+      _ppf
+      _isf
+      _stats
+      _munp
+      _entropy
+      _argcheck
+
+    There are additional (internal and private) generic methods that can
+    be useful for cross-checking and for debugging, but might work in all
+    cases when directly called.
+
+
+    Notes
+    -----
+
+    **Frozen Distribution**
+
+    Alternatively, the object may be called (as a function) to fix the shape,
+    location, and scale parameters returning a "frozen" continuous RV object:
+
+    rv = generic(<shape(s)>, loc=0, scale=1)
+        frozen RV object with the same methods but holding the given shape,
+        location, and scale fixed
+
+    **Subclassing**
+
+    New random variables can be defined by subclassing rv_continuous class
+    and re-defining at least the
+
+    _pdf or the _cdf method (normalized to location 0 and scale 1)
+    which will be given clean arguments (in between a and b) and
+    passing the argument check method
+
+    If postive argument checking is not correct for your RV
+    then you will also need to re-define ::
+
+      _argcheck
+
+    Correct, but potentially slow defaults exist for the remaining
+    methods but for speed and/or accuracy you can over-ride ::
+
+      _logpdf, _cdf, _logcdf, _ppf, _rvs, _isf, _sf, _logsf
+
+    Rarely would you override _isf, _sf, and _logsf but you could.
+
+    Statistics are computed using numerical integration by default.
+    For speed you can redefine this using
+
+    _stats
+     - take shape parameters and return mu, mu2, g1, g2
+     - If you can't compute one of these, return it as None
+     - Can also be defined with a keyword argument moments=<str>
+       where <str> is a string composed of 'm', 'v', 's',
+       and/or 'k'.  Only the components appearing in string
+       should be computed and returned in the order 'm', 'v',
+       's', or 'k'  with missing values returned as None
+
+    OR
+
+    You can override
+
+    _munp
+      takes n and shape parameters and returns
+      the nth non-central moment of the distribution.
+
+
+    Examples
+    --------
+    To create a new Gaussian distribution, we would do the following::
+
+        class gaussian_gen(rv_continuous):
+            "Gaussian distribution"
+            def _pdf:
+                ...
+            ...
+
+    """
+    """
+    This function does something.
+
+    :param name: The name to use.
+    :type name: str.
+    :param state: Current state to be in.
+    :type state: bool.
+    :returns:  int -- the return code.
+    :raises: AttributeError, KeyError
+    """
     def __init__(self, data,
         discrete=False,
         xmin=None, xmax=None,
@@ -521,7 +746,7 @@ class Distribution(object):
         PDF = self.pdf(bins)
         if not ax:
             import matplotlib.pyplot as plt
-            plt.plot(bins, PDF, linear_bins=linear_bins, **kwargs)
+            plt.plot(bins, PDF, **kwargs)
             ax = plt.gca()
         else:
             ax.plot(bins, PDF, **kwargs)
@@ -1003,9 +1228,12 @@ def checkunique(data):
 
 
 def checksort(data):
-    """Checks if the data is sorted, in O(n) time. If it isn't sorted, it then"""
-    """sorts it in O(nlogn) time. Expectation is that the data will typically"""
-    """be sorted."""
+    """
+    Checks if the data is sorted, in O(n) time. If it isn't sorted, it then
+    sorts it in O(nlogn) time. Expectation is that the data will typically
+    be sorted. This function presently is slower than just using numpy's sort,
+    and thus useless.
+    """
 
     n = len(data)
     from numpy import arange
@@ -1158,7 +1386,6 @@ class Distribution_Fit(object):
 
 def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=None, \
         comparison_alpha=None, search_method='Likelihood', estimate_discrete=True):
-    """distribution_fit does things"""
     from numpy import log
 
     if distribution == 'negative_binomial' and not is_discrete(data):
@@ -1475,7 +1702,6 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', retur
 
 
 def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=False):
-    """Helps if all data is sorted beforehand!"""
     from numpy import arange, sort, mean
     data = data[data >= xmin]
     if xmax:
