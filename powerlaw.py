@@ -583,6 +583,15 @@ class Distribution(object):
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
+        if self._cdf_xmin==1:
+#If cdf_xmin is 1, it means we don't have the numerical accuracy to
+            #calculate this tail. So we make everything 1, indicating
+            #we're at the end of the tail. Such an xmin should be thrown
+            #out by the KS test.
+            from numpy import ones
+            CDF = ones(n)
+            return CDF
+
         CDF = self._cdf_base_function(data) - self._cdf_xmin
         if self.xmax:
             CDF = CDF - self._cdf_base_function(self.xmax)
