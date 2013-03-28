@@ -8,13 +8,14 @@ class Fit(object):
 
     Parameters
     ----------
+    data : list or array
     discrete : boolean, optional
         Whether the data is discrete (integers).
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
         None an optimal one will be calculated.
-    xmax : int or float, optional The maximum value of the fitted
-        distributions.
+    xmax : int or float, optional 
+        The maximum value of the fitted distributions.
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
@@ -129,6 +130,7 @@ class Fit(object):
         """
         Returns the optimal xmin beyond which the scaling regime of the power
         law fits best. The attribute self.xmin of the Fit object is also set.
+
         The optimal xmin beyond which the scaling regime of the power law fits
         best is identified by minimizing the Kolmogorov-Smirnov distance
         between the data and the theoretical power law fit.
@@ -386,7 +388,7 @@ class Fit(object):
             Whether to use all of the data initially passed to the Fit object.
             If False, uses only the data used for the fit (within xmin and
             xmax.)
-        survival: bool, optional
+        survival : bool, optional
             Whether to plot a CDF (False) or CCDF (True). False by default.
 
         Returns
@@ -412,7 +414,7 @@ class Fit(object):
             Whether to use all of the data initially passed to the Fit object.
             If False, uses only the data used for the fit (within xmin and
             xmax.)
-        survival: bool, optional
+        survival : bool, optional
             Whether to plot a CDF (False) or CCDF (True). True by default.
 
         Returns
@@ -439,7 +441,7 @@ class Fit(object):
             Whether to use all of the data initially passed to the Fit object.
             If False, uses only the data used for the fit (within xmin and
             xmax.)
-        linear_bins: bool, optional
+        linear_bins : bool, optional
             Whether to use linearly spaced bins (True) or logarithmically
             spaced bins (False). False by default.
 
@@ -455,6 +457,49 @@ class Fit(object):
         return plot_pdf(data, ax=ax, linear_bins=linear_bins, **kwargs)
 
 class Distribution(object):
+    """
+    An abstract class for theoretical probability distributions. Can be created
+    with particular parameter values, or fitted to a dataset. Fitting is
+    by maximum likelihood estimation by default.
+
+    Parameters
+    ----------
+    xmin : int or float, optional
+        The data value beyond which distributions should be fitted. If
+        None an optimal one will be calculated.
+    xmax : int or float, optional
+        The maximum value of the fitted distributions.
+    discrete : boolean, optional
+        Whether the distribution is discrete (integers).
+
+    data : list or array, optional
+        The data to which to fit the distribution. If provided, the fit will
+        be created at initialization.
+    fit_method : "Likelihood" or "KS", optional
+        Method for fitting the distribution. "Likelihood" is maximum Likelihood
+        estimation. "KS" is minimial distance estimation using The
+        Kolmogorov-Smirnov test.
+
+    parameters : tuple or list, optional
+        The parameters of the distribution. Will be overridden if data is
+        given or the fit method is called.
+    parameter_range : dict, optional
+        Dictionary of valid parameter ranges for fitting. Formatted as a 
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+    initial_parameters : tuple or list, optional
+        Initial values for the parameter in the fitting search.
+
+    discrete_approximation : "round", "xmax" or int, optional
+        If the discrete form of the theoeretical distribution is not known,
+        it can be estimated. One estimation method is "round", which sums
+        the probability mass from x-.5 to x+.5 for each data point. The other
+        option is to calculate the probability for each x from 1 to N and
+        normalize by their sum. N can be "xmax" or an integer.
+
+    parent_Fit : Fit object, optional
+        A Fit object from which to use data, if it exists.
+    """
 
     def __init__(self,
         xmin=1, xmax=None,
@@ -497,6 +542,11 @@ class Distribution(object):
 
 
     def fit(self, data=None, suppress_output=False):
+        """
+        Fits the parameters of the distribution to the data. Uses options set
+        at initialization.
+        """
+
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -527,6 +577,18 @@ class Distribution(object):
         self.KS(data)
 
     def KS(self, data=None):
+        """
+        Returns the Kolmogorov-Smirnov distance D between the distribution and
+        the data. Also sets the properties D+, D-, V (the Kuiper testing
+        statistic), and Kappa (1 + the average difference between the 
+        theoretical and empirical distributions).
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -552,9 +614,51 @@ class Distribution(object):
         return self.D
 
     def ccdf(self,data=None, survival=True):
+        """
+        The complementary cumulative distribution function (CCDF) of the
+        theoretical distribution. Calculated for the values given in data
+        within xmin and xmax, if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        survival : bool, optional
+            Whether to calculate a CDF (False) or CCDF (True).
+            True by default.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
         return self.cdf(data=data, survival=survival)
 
     def cdf(self,data=None, survival=False):
+        """
+        The cumulative distribution function (CDF) of the theoretical
+        distribution. Calculated for the values given in data within xmin and
+        xmax, if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        survival : bool, optional
+            Whether to calculate a CDF (False) or CCDF (True).
+            False by default.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -585,6 +689,21 @@ class Distribution(object):
 
 
     def pdf(self, data=None):
+        """
+        Returns the probability density function (normalized histogram) of the
+        theoretical distribution for the values in data within xmin and xmax,
+        if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+
+        Returns
+        -------
+        probabilities : array
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -657,6 +776,19 @@ class Distribution(object):
         return C
 
     def parameter_range(self, r, initial_parameters=None):
+        """
+        Set the limits on the range of valid parameters to be considered while
+        fitting.
+
+        Parameters
+        ----------
+        r : dict
+            A dictionary of the parameter range. Restricted parameter 
+            names are keys, and with tuples of the form (lower_bound,
+            upper_bound) as values.
+        initial_parameters : tuple or list, optional
+            Initial parameter values to start the fitting search from.
+        """
         from types import FunctionType
         if type(r)==FunctionType:
             self._in_given_parameter_range = r
@@ -670,6 +802,10 @@ class Distribution(object):
             self.fit(self.parent_Fit.data)
 
     def in_range(self):
+        """
+        Whether the current parameters of the distribution are within the range
+        of valid parameters.
+        """
         try:
             r = self._range_dict
             result = True
@@ -688,22 +824,75 @@ class Distribution(object):
         return bool(in_range)
 
     def initial_parameters(self, data):
+        """
+        Return previously user-provided initial parameters or, if never
+        provided,  calculate new ones. Default initial parameter estimates are
+        unique to each theoretical distribution.
+        """
         try:
             return self._given_initial_parameters
         except AttributeError:
             return self._initial_parameters(data)
 
     def likelihoods(self, data):
+        """
+        The likelihoods of the observed data from the theoretical distribution.
+        Another name for the probabilities or probability density function.
+        """
         return self.pdf(data) 
 
     def loglikelihoods(self, data):
+        """
+        The logarithm of the likelihoods of the observed data from the
+        theoretical distribution.
+        """
         from numpy import log
         return log(self.likelihoods(data))
 
     def plot_ccdf(self, data=None, ax=None, survival=True, **kwargs):
+        """
+        Plots the complementary cumulative distribution function (CDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present. Plots to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        survival : bool, optional
+            Whether to plot a CDF (False) or CCDF (True). True by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         return self.plot_cdf(data, ax=None, survival=survival, **kwargs)
 
     def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
+        """
+        Plots the cumulative distribution function (CDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present. Plots to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        survival : bool, optional
+            Whether to plot a CDF (False) or CCDF (True). False by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
@@ -719,7 +908,25 @@ class Distribution(object):
         ax.set_yscale("log")
         return ax
 
-    def plot_pdf(self, data=None, ax=None, linear_bins=False, **kwargs):
+    def plot_pdf(self, data=None, ax=None, **kwargs):
+        """
+        Plots the probability density function (PDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present. Plots to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
@@ -1090,16 +1297,16 @@ def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
 
     Parameters
     ----------
-    loglikelihoods1: list or array
+    loglikelihoods1 : list or array
         The logarithms of the likelihoods of each observation, calculated from
         a particular probability distribution.
-    loglikelihoods2: list or array
+    loglikelihoods2 : list or array
         The logarithms of the likelihoods of each observation, calculated from
         a particular probability distribution.
-    nested: bool, optional
+    nested : bool, optional
         Whether one of the two probability distributions that generated the
         likelihoods is a nested version of the other. True by default.
-    normalized_ratio: bool, optional
+    normalized_ratio : bool, optional
         Whether to return the loglikelihood ratio, R, or the normalized
         ratio R/sqrt(n*variance)
 
@@ -1128,16 +1335,16 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
 
     Parameters
     ----------
-    loglikelihoods1: list or array
+    loglikelihoods1 : list or array
         The logarithms of the likelihoods of each observation, calculated from
         a particular probability distribution.
-    loglikelihoods2: list or array
+    loglikelihoods2 : list or array
         The logarithms of the likelihoods of each observation, calculated from
         a particular probability distribution.
     nested: bool, optional
         Whether one of the two probability distributions that generated the
         likelihoods is a nested version of the other. False by default.
-    normalized_ratio: bool, optional
+    normalized_ratio : bool, optional
         Whether to return the loglikelihood ratio, R, or the normalized
         ratio R/sqrt(n*variance)
 
@@ -1199,7 +1406,8 @@ def cdf(data, survival=False, **kwargs):
 
     Parameters
     ----------
-    survival: bool, optional
+    data : list or array, optional
+    survival : bool, optional
         Whether to calculate a CDF (False) or CCDF (True). False by default.
 
     Returns
@@ -1217,7 +1425,8 @@ def ccdf(data, survival=True, **kwargs):
 
     Parameters
     ----------
-    survival: bool, optional
+    data : list or array, optional
+    survival : bool, optional
         Whether to calculate a CDF (False) or CCDF (True). True by default.
 
     Returns
@@ -1237,11 +1446,12 @@ def cumulative_distribution_function(data,
 
     Parameters
     ----------
-    survival: bool, optional
+    data : list or array, optional
+    survival : bool, optional
         Whether to calculate a CDF (False) or CCDF (True). False by default.
-    xmin: int or float, optional
+    xmin : int or float, optional
         The minimum data size to include. Values less than xmin are excluded.
-    xmax: int or float, optional
+    xmax : int or float, optional
         The maximum data size to include. Values greater than xmin are
         excluded.
 
@@ -1375,7 +1585,7 @@ def plot_ccdf(data, ax=None, survival=False, **kwargs):
     data : list or array
     ax : matplotlib axis, optional
         The axis to which to plot. If None, a new figure is created.
-    survival: bool, optional
+    survival : bool, optional
         Whether to plot a CDF (False) or CCDF (True). True by default.
 
     Returns
@@ -1394,7 +1604,7 @@ def plot_cdf(data, ax=None, survival=False, **kwargs):
     data : list or array
     ax : matplotlib axis, optional
         The axis to which to plot. If None, a new figure is created.
-    survival: bool, optional
+    survival : bool, optional
         Whether to plot a CDF (False) or CCDF (True). False by default.
 
     Returns
@@ -1424,7 +1634,7 @@ def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     data : list or array
     ax : matplotlib axis, optional
         The axis to which to plot. If None, a new figure is created.
-    linear_bins: bool, optional
+    linear_bins : bool, optional
         Whether to use linearly spaced bins (True) or logarithmically
         spaced bins (False). False by default.
 
