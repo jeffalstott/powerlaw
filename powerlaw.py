@@ -4,7 +4,7 @@ class Fit(object):
     laws. For fits to power laws, the methods of Clauset et al. 2007 are used.
     These methods identify the portion of the tail of the distribution that
     follows a power law, beyond a value xmin. If no xmin is
-    provided, the optimal one is calculated and assigned and initialization.  
+    provided, the optimal one is calculated and assigned at initialization.
 
     Parameters
     ----------
@@ -219,7 +219,7 @@ class Fit(object):
         nested : bool or None, optional
             Whether to assume the candidate distributions are nested versions 
             of each other. None assumes not unless the name of one distribution
-            is a substring of the other.
+            is a substring of the other. True by default.
 
         Returns
         -------
@@ -375,7 +375,25 @@ class Fit(object):
         return edges, hist
 
     def plot_cdf(self, ax=None, original_data=False, survival=False, **kwargs):
-        "Plots the CDF to a new figure or to axis ax if provided."
+        """
+        Plots the CDF to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival: bool, optional
+            Whether to plot a CDF (False) or CCDF (True). False by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if original_data:
             data = self.data_original
         else:
@@ -383,7 +401,25 @@ class Fit(object):
         return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
     def plot_ccdf(self, ax=None, original_data=False, survival=True, **kwargs):
-        "Plots the CCDF to a new figure or to axis ax if provided."
+        """
+        Plots the CCDF to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival: bool, optional
+            Whether to plot a CDF (False) or CCDF (True). True by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if original_data:
             data = self.data_original
         else:
@@ -392,7 +428,26 @@ class Fit(object):
 
     def plot_pdf(self, ax=None, original_data=False,
             linear_bins=False, **kwargs):
-        "Plots the PDF to a new figure or to axis ax if provided."
+        """
+        Plots the PDF to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        linear_bins: bool, optional
+            Whether to use linearly spaced bins (True) or logarithmically
+            spaced bins (False). False by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if original_data:
             data = self.data_original
         else:
@@ -1026,14 +1081,79 @@ class Lognormal(Distribution):
     def _pdf_discrete_normalizer(self):
         return False
 
-
-
 def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
+    """
+    Calculates a loglikelihood ratio and the p-value for testing which of two
+    probability distributions is more likely to have created a set of
+    observations. Assumes one of the probability distributions is a nested
+    version of the other.
+
+    Parameters
+    ----------
+    loglikelihoods1: list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    loglikelihoods2: list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    nested: bool, optional
+        Whether one of the two probability distributions that generated the
+        likelihoods is a nested version of the other. True by default.
+    normalized_ratio: bool, optional
+        Whether to return the loglikelihood ratio, R, or the normalized
+        ratio R/sqrt(n*variance)
+
+    Returns
+    -------
+    R : float
+        The loglikelihood ratio of the two sets of likelihoods. If positive, 
+        the first set of likelihoods is more likely (and so the probability
+        distribution that produced them is a better fit to the data). If
+        negative, the reverse is true.
+    p : float
+        The significance of the sign of R. If below a critical values
+        (typically .05) the sign of R is taken to be significant. If below the
+        critical value the sign of R is taken to be due to statistical
+        fluctuations.
+    """
     return loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
             nested=True, **kwargs)
 
 def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
         nested=False, normalized_ratio=False):
+    """
+    Calculates a loglikelihood ratio and the p-value for testing which of two
+    probability distributions is more likely to have created a set of
+    observations.
+
+    Parameters
+    ----------
+    loglikelihoods1: list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    loglikelihoods2: list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    nested: bool, optional
+        Whether one of the two probability distributions that generated the
+        likelihoods is a nested version of the other. False by default.
+    normalized_ratio: bool, optional
+        Whether to return the loglikelihood ratio, R, or the normalized
+        ratio R/sqrt(n*variance)
+
+    Returns
+    -------
+    R : float
+        The loglikelihood ratio of the two sets of likelihoods. If positive, 
+        the first set of likelihoods is more likely (and so the probability
+        distribution that produced them is a better fit to the data). If
+        negative, the reverse is true.
+    p : float
+        The significance of the sign of R. If below a critical values
+        (typically .05) the sign of R is taken to be significant. If below the
+        critical value the sign of R is taken to be due to statistical
+        fluctuations.
+    """
     from numpy import sqrt
     from scipy.special import erfc
 
@@ -1074,14 +1194,64 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
     return R, p
 
 def cdf(data, survival=False, **kwargs):
+    """
+    The cumulative distribution function (CDF) of the data.
+
+    Parameters
+    ----------
+    survival: bool, optional
+        Whether to calculate a CDF (False) or CCDF (True). False by default.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+    probabilities : array
+        The portion of the data that is less than or equal to X.
+    """
     return cumulative_distribution_function(data, survival=survival, **kwargs)
 
 def ccdf(data, survival=True, **kwargs):
+    """
+    The complementary cumulative distribution function (CCDF) of the data.
+
+    Parameters
+    ----------
+    survival: bool, optional
+        Whether to calculate a CDF (False) or CCDF (True). True by default.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+    probabilities : array
+        The portion of the data that is less than or equal to X.
+    """
     return cumulative_distribution_function(data, survival=survival, **kwargs)
 
 def cumulative_distribution_function(data,
     xmin=None, xmax=None,
     survival=False, **kwargs):
+    """
+    The cumulative distribution function (CDF) of the data.
+
+    Parameters
+    ----------
+    survival: bool, optional
+        Whether to calculate a CDF (False) or CCDF (True). False by default.
+    xmin: int or float, optional
+        The minimum data size to include. Values less than xmin are excluded.
+    xmax: int or float, optional
+        The maximum data size to include. Values greater than xmin are
+        excluded.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+    probabilities : array
+        The portion of the data that is less than or equal to X.
+    """
 
     from numpy import array
     data = array(data)
@@ -1113,10 +1283,14 @@ def cumulative_distribution_function(data,
     return data, CDF
 
 def is_discrete(data):
+    """Checks if every element of the array is an integer."""
     from numpy import floor
     return (floor(data)==data.astype(float)).all()
 
 def trim_to_range(data, xmin=None, xmax=None, **kwargs):
+    """
+    Removes elements of the data that are above xmin or below xmax (if present)
+    """
     from numpy import asarray
     data = asarray(data)
     if xmin:
@@ -1192,8 +1366,42 @@ def checkunique(data):
 
 def plot_ccdf(data, ax=None, survival=False, **kwargs):
     return plot_cdf(data, ax=ax, survival=True, **kwargs)
+    """
+    Plots the complementary cumulative distribution function (CDF) of the data
+    to a new figure or to axis ax if provided.
+
+    Parameters
+    ----------
+    data : list or array
+    ax : matplotlib axis, optional
+        The axis to which to plot. If None, a new figure is created.
+    survival: bool, optional
+        Whether to plot a CDF (False) or CCDF (True). True by default.
+
+    Returns
+    -------
+    ax : matplotlib axis
+        The axis to which the plot was made.
+    """
 
 def plot_cdf(data, ax=None, survival=False, **kwargs):
+    """
+    Plots the cumulative distribution function (CDF) of the data to a new
+    figure or to axis ax if provided.
+
+    Parameters
+    ----------
+    data : list or array
+    ax : matplotlib axis, optional
+        The axis to which to plot. If None, a new figure is created.
+    survival: bool, optional
+        Whether to plot a CDF (False) or CCDF (True). False by default.
+
+    Returns
+    -------
+    ax : matplotlib axis
+        The axis to which the plot was made.
+    """
     bins, CDF = cdf(data, survival=survival, **kwargs)
     if not ax:
         import matplotlib.pyplot as plt
@@ -1207,6 +1415,24 @@ def plot_cdf(data, ax=None, survival=False, **kwargs):
 
 def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
+    """
+    Plots the probability density function (PDF) to a new figure or to axis ax
+    if provided.
+
+    Parameters
+    ----------
+    data : list or array
+    ax : matplotlib axis, optional
+        The axis to which to plot. If None, a new figure is created.
+    linear_bins: bool, optional
+        Whether to use linearly spaced bins (True) or logarithmically
+        spaced bins (False). False by default.
+
+    Returns
+    -------
+    ax : matplotlib axis
+        The axis to which the plot was made.
+    """
     if not ax:
         import matplotlib.pyplot as plt
         plt.plot(edges[:-1], hist, **kwargs)

@@ -13,7 +13,7 @@ __ http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779
 
 Basic Usage 
 -----------------
-For the simplest, typical use cases, that tells you everything you need to
+For the simplest, typical use cases, this tells you everything you need to
 know.::
 
     import powerlaw
