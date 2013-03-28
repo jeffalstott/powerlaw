@@ -1,229 +1,34 @@
 class Fit(object):
     """
-    A generic continuous random variable class meant for subclassing.
-
-    `rv_continuous` is a base class to construct specific distribution classes
-    and instances from for continuous random variables. It cannot be used
-    directly as a distribution.
+    A fit of a data set to various probability distributions, namely power
+    laws. For fits to power laws, the methods of Clauset et al. 2007 are used.
+    These methods identify the portion of the tail of the distribution that
+    follows a power law, beyond a value xmin. If no xmin is
+    provided, the optimal one is calculated and assigned at initialization.
 
     Parameters
     ----------
-    momtype : int, optional
-        The type of generic moment calculation to use: 0 for pdf, 1 (default) for ppf.
-    a : float, optional
-        Lower bound of the support of the distribution, default is minus
-        infinity.
-    b : float, optional
-        Upper bound of the support of the distribution, default is plus
-        infinity.
-    xa : float, optional
-        DEPRECATED
-    xb : float, optional
-        DEPRECATED
-    xtol : float, optional
-        The tolerance for fixed point calculation for generic ppf.
-    badvalue : object, optional
-        The value in a result arrays that indicates a value that for which
-        some argument restriction is violated, default is np.nan.
-    name : str, optional
-        The name of the instance. This string is used to construct the default
-        example for distributions.
-    longname : str, optional
-        This string is used as part of the first line of the docstring returned
-        when a subclass has no docstring of its own. Note: `longname` exists
-        for backwards compatibility, do not use for new subclasses.
-    shapes : str, optional
-        The shape of the distribution. For example ``"m, n"`` for a
-        distribution that takes two integers as the two shape arguments for all
-        its methods.
-    extradoc :  str, optional, deprecated
-        This string is used as the last part of the docstring returned when a
-        subclass has no docstring of its own. Note: `extradoc` exists for
-        backwards compatibility, do not use for new subclasses.
-
-    Methods
-    -------
-    rvs(<shape(s)>, loc=0, scale=1, size=1)
-        random variates
-
-    pdf(x, <shape(s)>, loc=0, scale=1)
-        probability density function
-
-    logpdf(x, <shape(s)>, loc=0, scale=1)
-        log of the probability density function
-
-    cdf(x, <shape(s)>, loc=0, scale=1)
-        cumulative density function
-
-    logcdf(x, <shape(s)>, loc=0, scale=1)
-        log of the cumulative density function
-
-    sf(x, <shape(s)>, loc=0, scale=1)
-        survival function (1-cdf --- sometimes more accurate)
-
-    logsf(x, <shape(s)>, loc=0, scale=1)
-        log of the survival function
-
-    ppf(q, <shape(s)>, loc=0, scale=1)
-      percent point function (inverse of cdf --- quantiles)
-
-    isf(q, <shape(s)>, loc=0, scale=1)
-        inverse survival function (inverse of sf)
-
-    moment(n, <shape(s)>, loc=0, scale=1)
-        non-central n-th moment of the distribution.  May not work for array arguments.
-
-    stats(<shape(s)>, loc=0, scale=1, moments='mv')
-        mean('m'), variance('v'), skew('s'), and/or kurtosis('k')
-
-    entropy(<shape(s)>, loc=0, scale=1)
-        (differential) entropy of the RV.
-
-    fit(data, <shape(s)>, loc=0, scale=1)
-        Parameter estimates for generic data
-
-    expect(func=None, args=(), loc=0, scale=1, lb=None, ub=None,
-             conditional=False, **kwds)
-        Expected value of a function with respect to the distribution.
-        Additional kwd arguments passed to integrate.quad
-
-    median(<shape(s)>, loc=0, scale=1)
-        Median of the distribution.
-
-    mean(<shape(s)>, loc=0, scale=1)
-        Mean of the distribution.
-
-    std(<shape(s)>, loc=0, scale=1)
-        Standard deviation of the distribution.
-
-    var(<shape(s)>, loc=0, scale=1)
-        Variance of the distribution.
-
-    interval(alpha, <shape(s)>, loc=0, scale=1)
-        Interval that with `alpha` percent probability contains a random
-        realization of this distribution.
-
-    __call__(<shape(s)>, loc=0, scale=1)
-        Calling a distribution instance creates a frozen RV object with the
-        same methods but holding the given shape, location, and scale fixed.
-        See Notes section.
-
-    **Parameters for Methods**
-
-    x : array_like
-        quantiles
-    q : array_like
-        lower or upper tail probability
-    <shape(s)> : array_like
-        shape parameters
-    loc : array_like, optional
-        location parameter (default=0)
-    scale : array_like, optional
-        scale parameter (default=1)
-    size : int or tuple of ints, optional
-        shape of random variates (default computed from input arguments )
-    moments : string, optional
-        composed of letters ['mvsk'] specifying which moments to compute where
-        'm' = mean, 'v' = variance, 's' = (Fisher's) skew and
-        'k' = (Fisher's) kurtosis. (default='mv')
-    n : int
-        order of moment to calculate in method moments
-
-
-    **Methods that can be overwritten by subclasses**
-    ::
-
-      _rvs
-      _pdf
-      _cdf
-      _sf
-      _ppf
-      _isf
-      _stats
-      _munp
-      _entropy
-      _argcheck
-
-    There are additional (internal and private) generic methods that can
-    be useful for cross-checking and for debugging, but might work in all
-    cases when directly called.
-
-
-    Notes
-    -----
-
-    **Frozen Distribution**
-
-    Alternatively, the object may be called (as a function) to fix the shape,
-    location, and scale parameters returning a "frozen" continuous RV object:
-
-    rv = generic(<shape(s)>, loc=0, scale=1)
-        frozen RV object with the same methods but holding the given shape,
-        location, and scale fixed
-
-    **Subclassing**
-
-    New random variables can be defined by subclassing rv_continuous class
-    and re-defining at least the
-
-    _pdf or the _cdf method (normalized to location 0 and scale 1)
-    which will be given clean arguments (in between a and b) and
-    passing the argument check method
-
-    If postive argument checking is not correct for your RV
-    then you will also need to re-define ::
-
-      _argcheck
-
-    Correct, but potentially slow defaults exist for the remaining
-    methods but for speed and/or accuracy you can over-ride ::
-
-      _logpdf, _cdf, _logcdf, _ppf, _rvs, _isf, _sf, _logsf
-
-    Rarely would you override _isf, _sf, and _logsf but you could.
-
-    Statistics are computed using numerical integration by default.
-    For speed you can redefine this using
-
-    _stats
-     - take shape parameters and return mu, mu2, g1, g2
-     - If you can't compute one of these, return it as None
-     - Can also be defined with a keyword argument moments=<str>
-       where <str> is a string composed of 'm', 'v', 's',
-       and/or 'k'.  Only the components appearing in string
-       should be computed and returned in the order 'm', 'v',
-       's', or 'k'  with missing values returned as None
-
-    OR
-
-    You can override
-
-    _munp
-      takes n and shape parameters and returns
-      the nth non-central moment of the distribution.
-
-
-    Examples
-    --------
-    To create a new Gaussian distribution, we would do the following::
-
-        class gaussian_gen(rv_continuous):
-            "Gaussian distribution"
-            def _pdf:
-                ...
-            ...
-
+    data : list or array
+    discrete : boolean, optional
+        Whether the data is discrete (integers).
+    xmin : int or float, optional
+        The data value beyond which distributions should be fitted. If
+        None an optimal one will be calculated.
+    xmax : int or float, optional 
+        The maximum value of the fitted distributions.
+    estimate_discrete : bool, optional
+        Whether to estimate the fit of a discrete power law using fast
+        analytical methods, instead of calculating the fit exactly with
+        slow numerical methods. Very accurate with xmin>6
+    sigma_threshold : float, optional
+        Upper limit on the standard error of the power law fit. Used after 
+        fitting, when identifying valid xmin values.
+    parameter_range : dict, optional
+        Dictionary of valid parameter ranges for fitting. Formatted as a 
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
     """
-    """
-    This function does something.
 
-    :param name: The name to use.
-    :type name: str.
-    :param state: Current state to be in.
-    :type state: bool.
-    :returns:  int -- the return code.
-    :raises: AttributeError, KeyError
-    """
     def __init__(self, data,
         discrete=False,
         xmin=None, xmax=None,
@@ -322,6 +127,15 @@ class Fit(object):
         else:  raise AttributeError, name
 
     def find_xmin(self):
+        """
+        Returns the optimal xmin beyond which the scaling regime of the power
+        law fits best. The attribute self.xmin of the Fit object is also set.
+
+        The optimal xmin beyond which the scaling regime of the power law fits
+        best is identified by minimizing the Kolmogorov-Smirnov distance
+        between the data and the theoretical power law fit.
+        This is the method of Clauset et al. 2007.
+        """
         from numpy import unique, asarray, argmin
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
 #specifically the mapping and sigma threshold behavior:
@@ -393,10 +207,58 @@ class Fit(object):
         return self.xmin
 
 
-    def nested_distribution_compare(self, dist1, dist2, **kwargs):
-        return self.distribution_compare(dist1, dist2, nested=True, **kwargs)
+    def nested_distribution_compare(self, dist1, dist2, nested=True, **kwargs):
+        """
+        Returns the loglikelihood ratio, and its p-value, between the two
+        distribution fits, assuming the candidate distributions are nested.
+
+        Parameters
+        ----------
+        dist1 : string
+            Name of the first candidate distribution (ex. 'power_law')
+        dist2 : string
+            Name of the second candidate distribution (ex. 'exponential')
+        nested : bool or None, optional
+            Whether to assume the candidate distributions are nested versions 
+            of each other. None assumes not unless the name of one distribution
+            is a substring of the other. True by default.
+
+        Returns
+        -------
+        R : float
+            Loglikelihood ratio of the two distributions' fit to the data. If
+            greater than 0, the first distribution is preferred. If less than
+            0, the second distribution is preferred.
+        p : float
+            Significance of R
+        """
+        return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
     def distribution_compare(self, dist1, dist2, nested=None, **kwargs):
+        """
+        Returns the loglikelihood ratio, and its p-value, between the two
+        distribution fits, assuming the candidate distributions are nested.
+
+        Parameters
+        ----------
+        dist1 : string
+            Name of the first candidate distribution (ex. 'power_law')
+        dist2 : string
+            Name of the second candidate distribution (ex. 'exponential')
+        nested : bool or None, optional
+            Whether to assume the candidate distributions are nested versions 
+            of each other. None assumes not unless the name of one distribution
+            is a substring of the other.
+
+        Returns
+        -------
+        R : float
+            Loglikelihood ratio of the two distributions' fit to the data. If
+            greater than 0, the first distribution is preferred. If less than
+            0, the second distribution is preferred.
+        p : float
+            Significance of R
+        """
         if (dist1 in dist2) or (dist2 in dist1) and nested==None:
             print "Assuming nested distributions"
             nested = True
@@ -413,9 +275,32 @@ class Fit(object):
             **kwargs)
 
     def loglikelihood_ratio(self, dist1, dist2, nested=None, **kwargs):
+        """
+        Another name for distribution_compare.
+        """
         return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
     def cdf(self, original_data=False, survival=False, **kwargs):
+        """
+        Returns the cumulative distribution function of the data.
+
+        Parameters
+        ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival : bool, optional
+            Whether to return the complementary cumulative distribution
+            function, 1-CDF, also known as the survival function.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
         if original_data:
             data = self.data_original
             xmin = None
@@ -428,6 +313,27 @@ class Fit(object):
                 **kwargs) 
 
     def ccdf(self, original_data=False, survival=True, **kwargs):
+        """
+        Returns the complementary cumulative distribution function of the data.
+
+        Parameters
+        ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival : bool, optional
+            Whether to return the complementary cumulative distribution
+            function, also known as the survival function, or the cumulative
+            distribution function, 1-CCDF.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is greater than or equal to X.
+        """
         if original_data:
             data = self.data_original
             xmin = None
@@ -440,6 +346,25 @@ class Fit(object):
                 **kwargs) 
 
     def pdf(self, original_data=False, **kwargs):
+        """
+        Returns the probability density function (normalized histogram) of the
+        data.
+
+        Parameters
+        ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+
+        Returns
+        -------
+        bin_edges : array
+            The edges of the bins of the probability density function.
+        probabilities : array
+            The portion of the data that is within the bin. Length 1 less than
+            bin_edges, as it corresponds to the spaces between them.
+        """
         if original_data:
             data = self.data_original
             xmin = None
@@ -452,6 +377,25 @@ class Fit(object):
         return edges, hist
 
     def plot_cdf(self, ax=None, original_data=False, survival=False, **kwargs):
+        """
+        Plots the CDF to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival : bool, optional
+            Whether to plot a CDF (False) or CCDF (True). False by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if original_data:
             data = self.data_original
         else:
@@ -459,6 +403,25 @@ class Fit(object):
         return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
     def plot_ccdf(self, ax=None, original_data=False, survival=True, **kwargs):
+        """
+        Plots the CCDF to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        survival : bool, optional
+            Whether to plot a CDF (False) or CCDF (True). True by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if original_data:
             data = self.data_original
         else:
@@ -467,6 +430,26 @@ class Fit(object):
 
     def plot_pdf(self, ax=None, original_data=False,
             linear_bins=False, **kwargs):
+        """
+        Plots the PDF to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object.
+            If False, uses only the data used for the fit (within xmin and
+            xmax.)
+        linear_bins : bool, optional
+            Whether to use linearly spaced bins (True) or logarithmically
+            spaced bins (False). False by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if original_data:
             data = self.data_original
         else:
@@ -474,6 +457,49 @@ class Fit(object):
         return plot_pdf(data, ax=ax, linear_bins=linear_bins, **kwargs)
 
 class Distribution(object):
+    """
+    An abstract class for theoretical probability distributions. Can be created
+    with particular parameter values, or fitted to a dataset. Fitting is
+    by maximum likelihood estimation by default.
+
+    Parameters
+    ----------
+    xmin : int or float, optional
+        The data value beyond which distributions should be fitted. If
+        None an optimal one will be calculated.
+    xmax : int or float, optional
+        The maximum value of the fitted distributions.
+    discrete : boolean, optional
+        Whether the distribution is discrete (integers).
+
+    data : list or array, optional
+        The data to which to fit the distribution. If provided, the fit will
+        be created at initialization.
+    fit_method : "Likelihood" or "KS", optional
+        Method for fitting the distribution. "Likelihood" is maximum Likelihood
+        estimation. "KS" is minimial distance estimation using The
+        Kolmogorov-Smirnov test.
+
+    parameters : tuple or list, optional
+        The parameters of the distribution. Will be overridden if data is
+        given or the fit method is called.
+    parameter_range : dict, optional
+        Dictionary of valid parameter ranges for fitting. Formatted as a 
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+    initial_parameters : tuple or list, optional
+        Initial values for the parameter in the fitting search.
+
+    discrete_approximation : "round", "xmax" or int, optional
+        If the discrete form of the theoeretical distribution is not known,
+        it can be estimated. One estimation method is "round", which sums
+        the probability mass from x-.5 to x+.5 for each data point. The other
+        option is to calculate the probability for each x from 1 to N and
+        normalize by their sum. N can be "xmax" or an integer.
+
+    parent_Fit : Fit object, optional
+        A Fit object from which to use data, if it exists.
+    """
 
     def __init__(self,
         xmin=1, xmax=None,
@@ -516,6 +542,11 @@ class Distribution(object):
 
 
     def fit(self, data=None, suppress_output=False):
+        """
+        Fits the parameters of the distribution to the data. Uses options set
+        at initialization.
+        """
+
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -546,6 +577,18 @@ class Distribution(object):
         self.KS(data)
 
     def KS(self, data=None):
+        """
+        Returns the Kolmogorov-Smirnov distance D between the distribution and
+        the data. Also sets the properties D+, D-, V (the Kuiper testing
+        statistic), and Kappa (1 + the average difference between the 
+        theoretical and empirical distributions).
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -571,9 +614,51 @@ class Distribution(object):
         return self.D
 
     def ccdf(self,data=None, survival=True):
+        """
+        The complementary cumulative distribution function (CCDF) of the
+        theoretical distribution. Calculated for the values given in data
+        within xmin and xmax, if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        survival : bool, optional
+            Whether to calculate a CDF (False) or CCDF (True).
+            True by default.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
         return self.cdf(data=data, survival=survival)
 
     def cdf(self,data=None, survival=False):
+        """
+        The cumulative distribution function (CDF) of the theoretical
+        distribution. Calculated for the values given in data within xmin and
+        xmax, if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        survival : bool, optional
+            Whether to calculate a CDF (False) or CCDF (True).
+            False by default.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -613,6 +698,21 @@ class Distribution(object):
 
 
     def pdf(self, data=None):
+        """
+        Returns the probability density function (normalized histogram) of the
+        theoretical distribution for the values in data within xmin and xmax,
+        if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+
+        Returns
+        -------
+        probabilities : array
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -685,6 +785,19 @@ class Distribution(object):
         return C
 
     def parameter_range(self, r, initial_parameters=None):
+        """
+        Set the limits on the range of valid parameters to be considered while
+        fitting.
+
+        Parameters
+        ----------
+        r : dict
+            A dictionary of the parameter range. Restricted parameter 
+            names are keys, and with tuples of the form (lower_bound,
+            upper_bound) as values.
+        initial_parameters : tuple or list, optional
+            Initial parameter values to start the fitting search from.
+        """
         from types import FunctionType
         if type(r)==FunctionType:
             self._in_given_parameter_range = r
@@ -698,6 +811,10 @@ class Distribution(object):
             self.fit(self.parent_Fit.data)
 
     def in_range(self):
+        """
+        Whether the current parameters of the distribution are within the range
+        of valid parameters.
+        """
         try:
             r = self._range_dict
             result = True
@@ -716,22 +833,75 @@ class Distribution(object):
         return bool(in_range)
 
     def initial_parameters(self, data):
+        """
+        Return previously user-provided initial parameters or, if never
+        provided,  calculate new ones. Default initial parameter estimates are
+        unique to each theoretical distribution.
+        """
         try:
             return self._given_initial_parameters
         except AttributeError:
             return self._initial_parameters(data)
 
     def likelihoods(self, data):
+        """
+        The likelihoods of the observed data from the theoretical distribution.
+        Another name for the probabilities or probability density function.
+        """
         return self.pdf(data) 
 
     def loglikelihoods(self, data):
+        """
+        The logarithm of the likelihoods of the observed data from the
+        theoretical distribution.
+        """
         from numpy import log
         return log(self.likelihoods(data))
 
     def plot_ccdf(self, data=None, ax=None, survival=True, **kwargs):
+        """
+        Plots the complementary cumulative distribution function (CDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present. Plots to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        survival : bool, optional
+            Whether to plot a CDF (False) or CCDF (True). True by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         return self.plot_cdf(data, ax=None, survival=survival, **kwargs)
 
     def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
+        """
+        Plots the cumulative distribution function (CDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present. Plots to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+        survival : bool, optional
+            Whether to plot a CDF (False) or CCDF (True). False by default.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
@@ -747,7 +917,25 @@ class Distribution(object):
         ax.set_yscale("log")
         return ax
 
-    def plot_pdf(self, data=None, ax=None, linear_bins=False, **kwargs):
+    def plot_pdf(self, data=None, ax=None, **kwargs):
+        """
+        Plots the probability density function (PDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present. Plots to a new figure or to axis ax if provided.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        ax : matplotlib axis, optional
+            The axis to which to plot. If None, a new figure is created.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis to which the plot was made.
+        """
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
@@ -1015,8 +1203,8 @@ class Truncated_Power_Law(Distribution):
         from numpy import vectorize
         gammainc = vectorize(gammainc)
 
-        CDF = ( self.Lambda**(1-self.alpha) /
-                (gammainc(1-self.alpha,self.Lambda*x)).astype('float')
+        CDF = ( (gammainc(1-self.alpha,self.Lambda*x)).astype('float') /
+                self.Lambda**(1-self.alpha)
                     )
         CDF = 1 - CDF
         return CDF
@@ -1109,14 +1297,79 @@ class Lognormal(Distribution):
     def _pdf_discrete_normalizer(self):
         return False
 
-
-
 def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
+    """
+    Calculates a loglikelihood ratio and the p-value for testing which of two
+    probability distributions is more likely to have created a set of
+    observations. Assumes one of the probability distributions is a nested
+    version of the other.
+
+    Parameters
+    ----------
+    loglikelihoods1 : list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    loglikelihoods2 : list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    nested : bool, optional
+        Whether one of the two probability distributions that generated the
+        likelihoods is a nested version of the other. True by default.
+    normalized_ratio : bool, optional
+        Whether to return the loglikelihood ratio, R, or the normalized
+        ratio R/sqrt(n*variance)
+
+    Returns
+    -------
+    R : float
+        The loglikelihood ratio of the two sets of likelihoods. If positive, 
+        the first set of likelihoods is more likely (and so the probability
+        distribution that produced them is a better fit to the data). If
+        negative, the reverse is true.
+    p : float
+        The significance of the sign of R. If below a critical values
+        (typically .05) the sign of R is taken to be significant. If below the
+        critical value the sign of R is taken to be due to statistical
+        fluctuations.
+    """
     return loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
             nested=True, **kwargs)
 
 def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
         nested=False, normalized_ratio=False):
+    """
+    Calculates a loglikelihood ratio and the p-value for testing which of two
+    probability distributions is more likely to have created a set of
+    observations.
+
+    Parameters
+    ----------
+    loglikelihoods1 : list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    loglikelihoods2 : list or array
+        The logarithms of the likelihoods of each observation, calculated from
+        a particular probability distribution.
+    nested: bool, optional
+        Whether one of the two probability distributions that generated the
+        likelihoods is a nested version of the other. False by default.
+    normalized_ratio : bool, optional
+        Whether to return the loglikelihood ratio, R, or the normalized
+        ratio R/sqrt(n*variance)
+
+    Returns
+    -------
+    R : float
+        The loglikelihood ratio of the two sets of likelihoods. If positive, 
+        the first set of likelihoods is more likely (and so the probability
+        distribution that produced them is a better fit to the data). If
+        negative, the reverse is true.
+    p : float
+        The significance of the sign of R. If below a critical values
+        (typically .05) the sign of R is taken to be significant. If below the
+        critical value the sign of R is taken to be due to statistical
+        fluctuations.
+    """
     from numpy import sqrt
     from scipy.special import erfc
 
@@ -1157,14 +1410,67 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
     return R, p
 
 def cdf(data, survival=False, **kwargs):
+    """
+    The cumulative distribution function (CDF) of the data.
+
+    Parameters
+    ----------
+    data : list or array, optional
+    survival : bool, optional
+        Whether to calculate a CDF (False) or CCDF (True). False by default.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+    probabilities : array
+        The portion of the data that is less than or equal to X.
+    """
     return cumulative_distribution_function(data, survival=survival, **kwargs)
 
 def ccdf(data, survival=True, **kwargs):
+    """
+    The complementary cumulative distribution function (CCDF) of the data.
+
+    Parameters
+    ----------
+    data : list or array, optional
+    survival : bool, optional
+        Whether to calculate a CDF (False) or CCDF (True). True by default.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+    probabilities : array
+        The portion of the data that is less than or equal to X.
+    """
     return cumulative_distribution_function(data, survival=survival, **kwargs)
 
 def cumulative_distribution_function(data,
     xmin=None, xmax=None,
     survival=False, **kwargs):
+    """
+    The cumulative distribution function (CDF) of the data.
+
+    Parameters
+    ----------
+    data : list or array, optional
+    survival : bool, optional
+        Whether to calculate a CDF (False) or CCDF (True). False by default.
+    xmin : int or float, optional
+        The minimum data size to include. Values less than xmin are excluded.
+    xmax : int or float, optional
+        The maximum data size to include. Values greater than xmin are
+        excluded.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+    probabilities : array
+        The portion of the data that is less than or equal to X.
+    """
 
     from numpy import array
     data = array(data)
@@ -1196,10 +1502,14 @@ def cumulative_distribution_function(data,
     return data, CDF
 
 def is_discrete(data):
+    """Checks if every element of the array is an integer."""
     from numpy import floor
     return (floor(data)==data.astype(float)).all()
 
 def trim_to_range(data, xmin=None, xmax=None, **kwargs):
+    """
+    Removes elements of the data that are above xmin or below xmax (if present)
+    """
     from numpy import asarray
     data = asarray(data)
     if xmin:
@@ -1209,6 +1519,29 @@ def trim_to_range(data, xmin=None, xmax=None, **kwargs):
     return data
 
 def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
+    """
+    Returns the probability density function (normalized histogram) of the
+    data.
+
+    Parameters
+    ----------
+    data : list or array
+    xmin : float, optional
+        Minimum value of the PDF. If None, uses the smallest value in the data.
+    xmax : float, optional
+        Maximum value of the PDF. If None, uses the largest value in the data.
+    linear_bins : float, optional
+        Whether to use linearly spaced bins, as opposed to logarithmically
+        spaced bins (recommended for log-log plots).
+
+    Returns
+    -------
+    bin_edges : array
+        The edges of the bins of the probability density function.
+    probabilities : array
+        The portion of the data that is within the bin. Length 1 less than
+        bin_edges, as it corresponds to the spaces between them.
+    """
     from numpy import logspace, histogram, floor, unique
     from math import ceil, log10
     if not xmax:
@@ -1229,32 +1562,65 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
     return edges, hist
 
 def checkunique(data):
-    """Quickly checks if a sorted array is all unique elements"""
+    """Quickly checks if a sorted array is all unique elements."""
     for i in range(len(data)-1):
         if data[i]==data[i+1]:
             return False
     return True
 
-
-def checksort(data):
-    """
-    Checks if the data is sorted, in O(n) time. If it isn't sorted, it then
-    sorts it in O(nlogn) time. Expectation is that the data will typically
-    be sorted. This function presently is slower than just using numpy's sort,
-    and thus useless.
-    """
-
-    n = len(data)
-    from numpy import arange
-    if not all(data[i] <= data[i+1] for i in arange(n-1)):
-        from numpy import sort
-        data = sort(data)
-    return data
+#def checksort(data):
+#    """
+#    Checks if the data is sorted, in O(n) time. If it isn't sorted, it then
+#    sorts it in O(nlogn) time. Expectation is that the data will typically
+#    be sorted. Presently slower than numpy's sort, even on large arrays, and
+#    so is useless.
+#    """
+#
+#    n = len(data)
+#    from numpy import arange
+#    if not all(data[i] <= data[i+1] for i in arange(n-1)):
+#        from numpy import sort
+#        data = sort(data)
+#    return data
 
 def plot_ccdf(data, ax=None, survival=False, **kwargs):
     return plot_cdf(data, ax=ax, survival=True, **kwargs)
+    """
+    Plots the complementary cumulative distribution function (CDF) of the data
+    to a new figure or to axis ax if provided.
+
+    Parameters
+    ----------
+    data : list or array
+    ax : matplotlib axis, optional
+        The axis to which to plot. If None, a new figure is created.
+    survival : bool, optional
+        Whether to plot a CDF (False) or CCDF (True). True by default.
+
+    Returns
+    -------
+    ax : matplotlib axis
+        The axis to which the plot was made.
+    """
 
 def plot_cdf(data, ax=None, survival=False, **kwargs):
+    """
+    Plots the cumulative distribution function (CDF) of the data to a new
+    figure or to axis ax if provided.
+
+    Parameters
+    ----------
+    data : list or array
+    ax : matplotlib axis, optional
+        The axis to which to plot. If None, a new figure is created.
+    survival : bool, optional
+        Whether to plot a CDF (False) or CCDF (True). False by default.
+
+    Returns
+    -------
+    ax : matplotlib axis
+        The axis to which the plot was made.
+    """
     bins, CDF = cdf(data, survival=survival, **kwargs)
     if not ax:
         import matplotlib.pyplot as plt
@@ -1268,6 +1634,24 @@ def plot_cdf(data, ax=None, survival=False, **kwargs):
 
 def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
+    """
+    Plots the probability density function (PDF) to a new figure or to axis ax
+    if provided.
+
+    Parameters
+    ----------
+    data : list or array
+    ax : matplotlib axis, optional
+        The axis to which to plot. If None, a new figure is created.
+    linear_bins : bool, optional
+        Whether to use linearly spaced bins (True) or logarithmically
+        spaced bins (False). False by default.
+
+    Returns
+    -------
+    ax : matplotlib axis
+        The axis to which the plot was made.
+    """
     if not ax:
         import matplotlib.pyplot as plt
         plt.plot(edges[:-1], hist, **kwargs)
