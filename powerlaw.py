@@ -727,7 +727,7 @@ class Distribution(object):
         PDF = self.pdf(bins)
         if not ax:
             import matplotlib.pyplot as plt
-            plt.plot(bins, PDF, linear_bins=linear_bins, **kwargs)
+            plt.plot(bins, PDF, **kwargs)
             ax = plt.gca()
         else:
             ax.plot(bins, PDF, **kwargs)
