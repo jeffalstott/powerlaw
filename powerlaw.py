@@ -987,8 +987,8 @@ class Truncated_Power_Law(Distribution):
         from numpy import vectorize
         gammainc = vectorize(gammainc)
 
-        CDF = ( self.Lambda**(1-self.alpha) /
-                (gammainc(1-self.alpha,self.Lambda*x)).astype('float')
+        CDF = ( (gammainc(1-self.alpha,self.Lambda*x)).astype('float') /
+                self.Lambda**(1-self.alpha)
                     )
         CDF = 1 - CDF
         return CDF
