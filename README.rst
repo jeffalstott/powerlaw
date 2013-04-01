@@ -37,9 +37,9 @@ Quick Links
 
 `Update Notifications, Mailing List, and Contacts`__
 
-`Note! This code works on Python 2.x, not 3.x.
-This code was developed and tested with the `Enthought Python Distribution`__
- and will update to 3.x whenever Enthought updates to 3.x.
+Note! This code works on Python 2.x, not 3.x.
+This code was developed and tested with the `Enthought Python Distribution`__, 
+and will update to 3.x whenever Enthought updates to 3.x.
 The full version of Enthought is `available for free for academic use`__.
 
 __ http://code.google.com/p/powerlaw/wiki/Installation
