@@ -679,8 +679,8 @@ class Distribution(object):
             return CDF
 
         CDF = self._cdf_base_function(data) - self._cdf_xmin
-        if self.xmax:
-            CDF = CDF - self._cdf_base_function(self.xmax)
+        #if self.xmax:
+        #    CDF = CDF - (1 - self._cdf_base_function(self.xmax))
 
         norm = 1 - self._cdf_xmin
         if self.xmax:
@@ -906,7 +906,7 @@ class Distribution(object):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
-        bins = unique(data)
+        bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
         CDF = self.cdf(bins, survival=survival)
         if not ax:
             import matplotlib.pyplot as plt
@@ -940,7 +940,7 @@ class Distribution(object):
         if data==None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
-        bins = unique(data)
+        bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
         PDF = self.pdf(bins)
         if not ax:
             import matplotlib.pyplot as plt
