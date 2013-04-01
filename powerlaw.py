@@ -431,7 +431,8 @@ class Fit(object):
     def plot_pdf(self, ax=None, original_data=False,
             linear_bins=False, **kwargs):
         """
-        Plots the PDF to a new figure or to axis ax if provided.
+        Plots the probability density function (PDF) or the data to a new figure
+        or to axis ax if provided.
 
         Parameters
         ----------
@@ -1633,7 +1634,6 @@ def plot_cdf(data, ax=None, survival=False, **kwargs):
     return ax
 
 def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
-    edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
     """
     Plots the probability density function (PDF) to a new figure or to axis ax
     if provided.
@@ -1652,12 +1652,14 @@ def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     ax : matplotlib axis
         The axis to which the plot was made.
     """
+    edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
+    bin_centers = (edges[1:]+edges[:-1])/2.0
     if not ax:
         import matplotlib.pyplot as plt
-        plt.plot(edges[:-1], hist, **kwargs)
+        plt.plot(bin_centers, hist, **kwargs)
         ax = plt.gca()
     else:
-        ax.plot(edges[:-1], hist, **kwargs)
+        ax.plot(bin_centers, hist, **kwargs)
     ax.set_xscale("log")
     ax.set_yscale("log")
     return ax
