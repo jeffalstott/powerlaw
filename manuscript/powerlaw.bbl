@@ -1,0 +1,96 @@
+\begin{thebibliography}{10}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi:\discretionary{}{}{}#1}\else
+  \providecommand{\doi}{doi:\discretionary{}{}{}\begingroup
+  \urlstyle{rm}\Url}\fi
+\providecommand{\bibAnnoteFile}[1]{%
+  \IfFileExists{#1}{\begin{quotation}\noindent\textsc{Key:} #1\\
+  \textsc{Annotation:}\ \input{#1}\end{quotation}}{}}
+\providecommand{\bibAnnote}[2]{%
+  \begin{quotation}\noindent\textsc{Key:} #1\\
+  \textsc{Annotation:}\ #2\end{quotation}}
+\providecommand{\eprint}[2][]{\url{#2}}
+
+\bibitem{Michel2011}
+Michel M, Kirk H, Myers PC (2011) {Mass Distributions of Stars and Cores in
+  Young Groups and Clusters}.
+\newblock The Astrophysical Journal 735: 51.
+\bibAnnoteFile{Michel2011}
+
+\bibitem{Zipf1935}
+Zipf GK (1935) {Psycho-Biology of Languages: An Introduction to Dynamic
+  Philology}.
+\newblock Boston: Houghton-Mifflin.
+\bibAnnoteFile{Zipf1935}
+
+\bibitem{Beggs2003}
+Beggs JM, Plenz D (2003) {Neuronal Avalanches in Neocortical Circuits}.
+\newblock The Journal of Neuroscience 23: 11167--11177.
+\bibAnnoteFile{Beggs2003}
+
+\bibitem{Shriki2013}
+Shriki O, Alstott J, Carver F, Holroyd T, Henson R, et~al. (2013) {Neuronal
+  Avalanches in the Resting MEG of the Human Brain}.
+\newblock Journal of Neuroscience 33: 7079--7090.
+\bibAnnoteFile{Shriki2013}
+
+\bibitem{Clauset2009}
+Clauset A, Shalizi CR, Newman MEJ (2009) {Power-law distributions in empirical
+  data}.
+\newblock SIAM Review 51.
+\bibAnnoteFile{Clauset2009}
+
+\bibitem{Klaus2011}
+Klaus A, Yu S, Plenz D (2011) {Statistical analyses support power law
+  distributions found in neuronal avalanches.}
+\newblock PloS one 6: e19779.
+\bibAnnoteFile{Klaus2011}
+
+\bibitem{Newman2005}
+Newman MEJ (2005) {Power laws, Pareto distributions and Zipf’s law} 46.
+\bibAnnoteFile{Newman2005}
+
+\bibitem{Towlson2013}
+Towlson EK, Vertes PE, Ahnert SE, Schafer WR, Bullmore ET (2013) {The Rich Club
+  of the C. elegans Neuronal Connectome}.
+\newblock Journal of Neuroscience 33: 6380--6387.
+\bibAnnoteFile{Towlson2013}
+
+\bibitem{Varshney2011}
+Varshney LR, Chen BL, Paniagua E, Hall DH, Chklovskii DB (2011) {Structural
+  properties of the Caenorhabditis elegans neuronal network.}
+\newblock PLoS Computational Biology 7: e1001066.
+\bibAnnoteFile{Varshney2011}
+
+\bibitem{Asmussen2003}
+Asmussen Sr (2003) {Applied probability and queues}.
+\newblock Berlin: Springer.
+\bibAnnoteFile{Asmussen2003}
+
+\bibitem{Malevergne2009}
+Malevergne Y, Pisarenko V, Sornette D (2009) {Gibrat's law for cities:
+  uniformly most powerful unbiased test of the Pareto against the lognormal} :
+  7.
+\bibAnnoteFile{Malevergne2009}
+
+\bibitem{Malevergne2005}
+Malevergne Y, Pisarenko VF, Sornette D (2005) {Empirical Distributions of
+  Log-Returns : between the Stretched Exponential and the Power Law ?}
+\newblock Quantitative Finance 5: 379--401.
+\bibAnnoteFile{Malevergne2005}
+
+\bibitem{Mitzenmacher2004}
+Mitzenmacher M (2004) {A Brief History of Generative Models for Power Law and
+  Lognormal Distributions}.
+\newblock Internet Mathematics 1: 226--251.
+\bibAnnoteFile{Mitzenmacher2004}
+
+\bibitem{Ginsburg2012}
+Ginsburg A (2012).
+\newblock plfit.
+\newblock \urlprefix\url{https://pypi.python.org/pypi/plfit}.
+\bibAnnoteFile{Ginsburg2012}
+
+\end{thebibliography}

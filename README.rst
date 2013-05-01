@@ -33,6 +33,10 @@ Quick Links
 
 `Working paper illustrating all of powerlaw's features, with figures`__
 
+`Code examples from manuscript, as an IPython Notebook`__
+
+`Documentation`__
+
 `Known Issues`__
 
 `Update Notifications, Mailing List, and Contacts`__
@@ -44,6 +48,8 @@ The full version of Enthought is `available for free for academic use`__.
 
 __ http://code.google.com/p/powerlaw/wiki/Installation
 __ https://powerlaw.googlecode.com/files/powerlaw.pdf
+__ http://nbviewer.ipython.org/19fcdd6a4ba400ce8de2
+__ http://pythonhosted.org/powerlaw/
 __ https://code.google.com/p/powerlaw/wiki/KnownIssues
 __ http://code.google.com/p/powerlaw/wiki/Interact
 __ http://www.enthought.com/products/epd.php
@@ -51,8 +57,9 @@ __ http://www.enthought.com/products/edudownload.php
 
 Acknowledgements
 -----------------
-Many thanks to Mika Rubinov and Shan Yu for helpful discussions and to Adam
-Ginsburg for posting `his code`__, which inspired the xmin-selection function
-of this toolbox.
-
-__ http://code.google.com/p/agpy/wiki/PowerLaw
+Many thanks to  Andreas Klaus, Mika Rubinov and Shan Yu for helpful
+discussions. Thanks also to `Andreas Klaus <http://neuroscience.nih.gov/Fellows/Fellow.asp?People_ID=2709>`_,
+`Aaron Clauset, Cosma Shaliz <http://tuvalu.santafe.edu/~aaronc/powerlaws/>`_,
+and `Adam Ginsburg <http://code.google.com/p/agpy/wiki/PowerLaw>`_ for making 
+their code available. Their implementations were a critical starting point for
+making powerlaw.
