@@ -32,84 +32,14 @@ if 'words.txt' not in files:
 from numpy import genfromtxt
 blackouts = genfromtxt('blackouts.txt')#/10**3
 words = genfromtxt('words.txt')
-cities = genfromtxt('cities.txt')
 worm = genfromtxt('worm.txt')
 worm = worm[worm>0]
 
 # <codecell>
 
-from matplotlib.transforms import Bbox, TransformedBbox, \
-     blended_transform_factory
-
-from mpl_toolkits.axes_grid1.inset_locator import BboxPatch, BboxConnector,\
-     BboxConnectorPatch
-
-def connect_bbox(bbox1, bbox2,
-                 loc1a, loc2a, loc1b, loc2b,
-                 prop_lines, prop_patches=None):
-    if prop_patches is None:
-        prop_patches = prop_lines.copy()
-        prop_patches["alpha"] = prop_patches.get("alpha", 1)*0.2
-
-    c1 = BboxConnector(bbox1, bbox2, loc1=loc1a, loc2=loc2a, linestyle='dashed', **prop_lines)
-    c1.set_clip_on(False)
-    c2 = BboxConnector(bbox1, bbox2, loc1=loc1b, loc2=loc2b, linestyle='dashed', **prop_lines)
-    c2.set_clip_on(False)
-
-    bbox_patch1 = BboxPatch(bbox1, **prop_patches)
-    bbox_patch2 = BboxPatch(bbox2, **prop_patches)
-
-    p = BboxConnectorPatch(bbox1, bbox2,
-                           #loc1a=3, loc2a=2, loc1b=4, loc2b=1,
-                           loc1a=loc1a, loc2a=loc2a, loc1b=loc1b, loc2b=loc2b,
-                           **prop_patches)
-    p.set_clip_on(False)
-
-    return c1, c2, bbox_patch1, bbox_patch2, p
-
-
-def zoom_effect01(ax1, ax2, xmin, xmax, **kwargs):
-    """
-    ax1 : the main axes
-    ax1 : the zoomed axes
-    (xmin,xmax) : the limits of the colored area in both plot axes.
-
-    connect ax1 & ax2. The x-range of (xmin, xmax) in both axes will
-    be marked.  The keywords parameters will be used ti create
-    patches.
-
-    """
-
-    trans1 = blended_transform_factory(ax1.transData, ax1.transAxes)
-    trans2 = blended_transform_factory(ax2.transData, ax2.transAxes)
-
-    bbox = Bbox.from_extents(xmin, 0, xmax, 1)
-
-    mybbox1 = TransformedBbox(bbox, trans1)
-    mybbox2 = TransformedBbox(bbox, trans2)
-
-    prop_patches=kwargs.copy()
-    prop_patches["ec"]="none"
-    prop_patches["alpha"]=0.2
-
-    c1, c2, bbox_patch1, bbox_patch2, p = \
-        connect_bbox(mybbox1, mybbox2,
-                     loc1a=3, loc2a=2, loc1b=4, loc2b=1,
-                     prop_lines=kwargs, prop_patches=prop_patches)
-
-    #ax1.add_patch(bbox_patch1)
-    #ax2.add_patch(bbox_patch2)
-    ax2.add_patch(c1)
-    ax2.add_patch(c2)
-    #ax2.add_patch(p)
-
-    return c1, c2, bbox_patch1, bbox_patch2, p
-
-# <codecell>
-
 def plot_basics(data, data_inst, fig, units):
     from powerlaw import plot_pdf, Fit, pdf
-    annotate_coord = (-.3, .95)
+    annotate_coord = (-.4, .95)
     ax1 = fig.add_subplot(n_graphs,n_data,data_inst)
     plot_pdf(data[data>0], ax=ax1, linear_bins=True, color='r', linewidth=.5)
     x, y = pdf(data, linear_bins=True)
@@ -119,9 +49,9 @@ def plot_basics(data, data_inst, fig, units):
     x = x[ind]
     ax1.scatter(x, y, color='r', s=.5)
     plot_pdf(data[data>0], ax=ax1, color='b', linewidth=2)
-    #from pylab import setp
-    #setp( ax1.get_xticklabels(), visible=False)
-    ax1.set_xticks(ax1.get_xticks()[::2])
+    from pylab import setp
+    setp( ax1.get_xticklabels(), visible=False)
+    #ax1.set_xticks(ax1.get_xticks()[::2])
     ax1.set_yticks(ax1.get_yticks()[::2])
     locs,labels = yticks()
     #yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
@@ -138,38 +68,44 @@ def plot_basics(data, data_inst, fig, units):
     
     ax2 = fig.add_subplot(n_graphs,n_data,n_data+data_inst, sharex=ax1)
     plot_pdf(data, ax=ax2, color='b', linewidth=2)
-    fit = Fit(data, xmin=1)
+    fit = Fit(data, xmin=1, discrete=True)
     fit.power_law.plot_pdf(ax=ax2, linestyle=':', color='g')
-
+    p = fit.power_law.pdf()
+    #ax2.set_ylim(min(p), max(p))
+    ax2.set_xlim(ax1.get_xlim())
+    
     fit = Fit(data, discrete=True)
     fit.power_law.plot_pdf(ax=ax2, linestyle='--', color='g')
     from pylab import setp
     setp( ax2.get_xticklabels(), visible=False)
-    ax2.set_xticks(ax2.get_xticks()[::2])
+    #ax2.set_xticks(ax2.get_xticks()[::2])
     if ax2.get_ylim()[1] >1:
         ax2.set_ylim(ax2.get_ylim()[0], 1)
+    
     ax2.set_yticks(ax2.get_yticks()[::2])
-    locs,labels = yticks()
+    #locs,labels = yticks()
     #yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
     if data_inst==1:
        ax2.annotate("B", annotate_coord, xycoords="axes fraction", fontsize=14)        
-       ax2.set_ylabel("P(X)")# (10^n)")
+       ax2.set_ylabel(r"$p(X)$")# (10^n)")
         
-    ax3 = fig.add_subplot(n_graphs,n_data,n_data*2+data_inst)
-    fit.plot_pdf(ax=ax3, color='b', linewidth=2)
+    ax3 = fig.add_subplot(n_graphs,n_data,n_data*2+data_inst)#, sharex=ax1)#, sharey=ax2)
     fit.power_law.plot_pdf(ax=ax3, linestyle='--', color='g')
     fit.exponential.plot_pdf(ax=ax3, linestyle='--', color='r')
-
-    p = fit.power_law.pdf()
-    ax3.set_ylim(min(p), max(p))
+    fit.plot_pdf(ax=ax3, color='b', linewidth=2)
+    
+    #p = fit.power_law.pdf()
+    ax3.set_ylim(ax2.get_ylim())
     ax3.set_yticks(ax3.get_yticks()[::2])
-    locs,labels = yticks()
+    ax3.set_xlim(ax1.get_xlim())
+    
+    #locs,labels = yticks()
     #yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
     if data_inst==1:
         ax3.annotate("C", annotate_coord, xycoords="axes fraction", fontsize=14)
 
-    if ax2.get_xlim()!=ax3.get_xlim():
-        zoom_effect01(ax2, ax3, ax3.get_xlim()[0], ax3.get_xlim()[1])
+    #if ax2.get_xlim()!=ax3.get_xlim():
+    #    zoom_effect01(ax2, ax3, ax3.get_xlim()[0], ax3.get_xlim()[1])
     ax3.set_xlabel(units)
 
 # <codecell>
@@ -216,8 +152,8 @@ fit.distribution_compare('power_law', 'exponential')
 
 data = words
 ####
-powerlaw.plot_pdf(data, color='b')
-powerlaw.plot_pdf(data, linear_bins=True, color='r')
+figPDF = powerlaw.plot_pdf(data, color='b')
+powerlaw.plot_pdf(data, linear_bins=True, color='r', ax=figPDF)
 ####
 figPDF.set_ylabel(r"$p(X)$")
 figPDF.set_xlabel(r"Word Frequency")
@@ -225,7 +161,7 @@ savefig('FigPDF.eps', bbox_inches='tight')
 
 # <codecell>
 
-data = worm
+data = words
 fit = powerlaw.Fit(data, discrete=True)
 ####
 figCCDF = fit.plot_pdf(color='b', linewidth=2)
@@ -233,8 +169,8 @@ fit.power_law.plot_pdf(color='b', linestyle='--', ax=figCCDF)
 fit.plot_ccdf(color='r', linewidth=2, ax=figCCDF)
 fit.power_law.plot_ccdf(color='r', linestyle='--', ax=figCCDF)
 ####
-figCCDF.set_ylabel(r"$p(X)$,  $p(X>x)$")
-figCCDF.set_xlabel(r"Neuron Connections")
+figCCDF.set_ylabel(r"$p(X)$,  $p(X\geq x)$")
+figCCDF.set_xlabel(r"Word Frequency")
 savefig('FigCCDF.eps', bbox_inches='tight')
 
 # <codecell>
@@ -285,7 +221,7 @@ fit.fixed_xmax
 
 data = words
 #FigCCDFmax = powerlaw.plot_ccdf(data, linewidth=3)
-fit = powerlaw.Fit(data, discrete=True)
+fit = powerlaw.Fit(data, discrete=True, xmax=None)
 FigCCDFmax = fit.plot_ccdf(color='b', label=r"Empirical, no $x_{max}$")
 fit.power_law.plot_ccdf(color='b', linestyle='--', ax=FigCCDFmax, label=r"Fit, no $x_{max}$")
 fit = powerlaw.Fit(data, discrete=True, xmax=1000)
@@ -295,7 +231,7 @@ fit.power_law.plot_ccdf(color='r', linestyle='--', ax=FigCCDFmax, label=r"Fit, $
 #fig1.plot(x,y)
 ####
 FigCCDFmax.set_ylabel(r"$p(X\geq x)$")
-FigCCDFmax.set_xlabel(r"Neuron Connections")
+FigCCDFmax.set_xlabel(r"Word Frequency")
 handles, labels = FigCCDFmax.get_legend_handles_labels()
 leg = FigCCDFmax.legend(handles, labels, loc=3)
 leg.draw_frame(False)
@@ -436,10 +372,4 @@ fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
 initial_parameters = (12, .7)
 fit.lognormal.parameter_range(range_dict, initial_parameters)
 fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
-
-# <codecell>
-
-#from sicpy.optimize import fmin_ncg
-#results = powerlaw.Fit(data, fit_optimizer=fmin_ncg)
-#results.power_law.alpha
 
