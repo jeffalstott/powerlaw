@@ -22,10 +22,13 @@ from os import listdir
 files = listdir('.')
 if 'blackouts.txt' not in files:
     import urllib
-    urllib.urlretrieve('http://tuvalu.santafe.edu/~aaronc/powerlaws/data/blackouts.txt', 'blackouts.txt')
+    urllib.urlretrieve('https://raw.github.com/jeffalstott/powerlaw/master/manuscript/blackouts.txt', 'blackouts.txt')
 if 'words.txt' not in files:
     import urllib
-    urllib.urlretrieve('http://tuvalu.santafe.edu/~aaronc/powerlaws/data/words.txt', 'words.txt')
+    urllib.urlretrieve('https://raw.github.com/jeffalstott/powerlaw/master/manuscript/words.txt', 'words.txt')
+if 'worm.txt' not in files:
+    import urllib
+    urllib.urlretrieve('https://raw.github.com/jeffalstott/powerlaw/master/manuscript/worm.txt', 'worm.txt')
 
 # <codecell>
 
