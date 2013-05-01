@@ -59,7 +59,7 @@ Acknowledgements
 -----------------
 Many thanks to  Andreas Klaus, Mika Rubinov and Shan Yu for helpful
 discussions. Thanks also to `Andreas Klaus <http://neuroscience.nih.gov/Fellows/Fellow.asp?People_ID=2709>`_,
-`Aaron Clauset, Cosma Shaliz <http://tuvalu.santafe.edu/~aaronc/powerlaws/>`_,
+`Aaron Clauset, Cosma Shalizi <http://tuvalu.santafe.edu/~aaronc/powerlaws/>`_,
 and `Adam Ginsburg <http://code.google.com/p/agpy/wiki/PowerLaw>`_ for making 
 their code available. Their implementations were a critical starting point for
 making powerlaw.
