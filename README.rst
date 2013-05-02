@@ -47,7 +47,7 @@ and will update to 3.x whenever Enthought updates to 3.x.
 The full version of Enthought is `available for free for academic use`__.
 
 __ http://code.google.com/p/powerlaw/wiki/Installation
-__ https://powerlaw.googlecode.com/files/powerlaw.pdf
+__ http://arxiv.org/abs/1305.0215 
 __ http://nbviewer.ipython.org/19fcdd6a4ba400ce8de2
 __ http://pythonhosted.org/powerlaw/
 __ https://code.google.com/p/powerlaw/wiki/KnownIssues
