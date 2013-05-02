@@ -1,8 +1,6 @@
 `powerlaw` is a toolbox using the statistical methods developed in
 `Clauset et al. 2007`__ and `Klaus et al. 2011`__ to determine if a
-probability distribution fits a power law. This package is in "open beta",
-which means everything pretty much works but it's being tweaked and expanded
-on. Academics, please cite as:
+probability distribution fits a power law. Academics, please cite as:
 
 Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2013). powerlaw: a Python package
 for analysis of heavy-tailed distributions. `arXiv:1305.0215 [physics.data-an]`__
