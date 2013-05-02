@@ -4,12 +4,13 @@ probability distribution fits a power law. This package is in "open beta",
 which means everything pretty much works but it's being tweaked and expanded
 on. Academics, please cite as:
 
-    Jeff Alstott. (2012). powerlaw Python package. Web address:
-    pypi.python.org/pypi/powerlaw.
-
+    Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2013). powerlaw: a Python package
+     for analysis of heavy-tailed distributions.
+     `arXiv:1305.0215 [physics.data-an]`__
 
 __ http://arxiv.org/abs/0706.1062 
 __ http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779
+__ http://arxiv.org/abs/1305.0215
 
 Basic Usage 
 -----------------
