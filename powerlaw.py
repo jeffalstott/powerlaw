@@ -1223,7 +1223,10 @@ class Truncated_Power_Law(Distribution):
 
     @property
     def _pdf_discrete_normalizer(self):
-        return False
+        from mpmath import lerchphi
+        from mpmath import exp # faster /here/ than numpy.exp
+        C = float(exp(self.xmin * self.Lambda) / lerchphi(exp(-self.Lambda), self.alpha, self.xmin))
+        return C
 
     def pdf(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
