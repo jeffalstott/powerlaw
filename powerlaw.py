@@ -779,11 +779,7 @@ class Distribution(object):
 
     @property
     def _pdf_discrete_normalizer(self):
-        C = 1 - self._cdf_xmin
-        if self.xmax:
-            C -= 1 - self._cdf_base_function(self.xmax+1)
-        C = 1.0/C
-        return C
+        return False
 
     def parameter_range(self, r, initial_parameters=None):
         """
@@ -1066,7 +1062,11 @@ class Exponential(Distribution):
     @property
     def _pdf_discrete_normalizer(self):
         from numpy import exp
-        return (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
+        C = (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
+        if self.xmax:
+            C = 1.0/C - (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
+            C = 1.0/C
+        return C
 
     def pdf(self, data=None):
         if data==None and hasattr(self, 'parent_Fit'):
@@ -1225,7 +1225,12 @@ class Truncated_Power_Law(Distribution):
     def _pdf_discrete_normalizer(self):
         from mpmath import lerchphi
         from mpmath import exp # faster /here/ than numpy.exp
-        C = float(exp(self.xmin * self.Lambda) / lerchphi(exp(-self.Lambda), self.alpha, self.xmin))
+        C = ( float(exp(self.xmin * self.Lambda) / 
+            lerchphi(exp(-self.Lambda), self.alpha, self.xmin)) )
+        if self.xmax:
+            C = 1.0/C - ( float(exp(self.xmax * self.Lambda) /
+                lerchphi(exp(-self.Lambda), self.alpha, self.xmax)) )
+            C = 1.0/C
         return C
 
     def pdf(self, data=None):
