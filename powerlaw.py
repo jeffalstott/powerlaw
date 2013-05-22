@@ -1064,7 +1064,8 @@ class Exponential(Distribution):
         from numpy import exp
         C = (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
         if self.xmax:
-            C = 1.0/C - (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
+            Cxmax = (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmax)
+            C = 1.0/C - 1.0/Cxmax
             C = 1.0/C
         return C
 
@@ -1225,12 +1226,13 @@ class Truncated_Power_Law(Distribution):
     def _pdf_discrete_normalizer(self):
         from mpmath import lerchphi
         from mpmath import exp # faster /here/ than numpy.exp
-        C = ( float(exp(self.xmin * self.Lambda) / 
+        C = ( float(exp(self.xmin * self.Lambda) /
             lerchphi(exp(-self.Lambda), self.alpha, self.xmin)) )
         if self.xmax:
-            C = 1.0/C - ( float(exp(self.xmax * self.Lambda) /
+            Cxmax = ( float(exp(self.xmax * self.Lambda) /
                 lerchphi(exp(-self.Lambda), self.alpha, self.xmax)) )
-            C = 1.0/C
+            C = 1.0/C - 1.0/Cxmax
+        C = 1.0/C
         return C
 
     def pdf(self, data=None):
