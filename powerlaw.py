@@ -151,16 +151,21 @@ class Fit(object):
         xmins = xmins[:-1]
         xmin_indices = xmin_indices[:-1] 
         if len(xmins)<=0:
-            print("Less than 2 unique data values left after xmin and xmax options!"
-            "Cannot fit.")
-            self.xmin = 1
-            self.D = 1
-            self.alpha = 0
-            self.sigma = 1
-            self.n_tail = 0
-            self.Ds = 1
-            self.alphas = 0
-            self.sigmas = 1
+            print("Less than 2 unique data values left after xmin and xmax "
+                    "options! Cannot fit. Returning nans.")
+            from numpy import nan, array
+            self.xmin = nan
+            self.D = nan
+            self.alpha = nan
+            self.sigma = nan
+            self.n_tail = nan
+            self.Ds = array([nan])
+            self.alphas = array([nan])
+            self.sigmas = array([nan])
+            self.in_ranges = array([nan])
+            self.xmins = array([nan])
+            self.noise_flag = True
+            return self.xmin
 
         def fit_function(xmin):
             pl = Power_Law(xmin = xmin,
@@ -594,10 +599,13 @@ class Distribution(object):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if len(data)<2:
-            self.D = 1
-            self.D_plus = 1
-            self.D_minus = 1
-            self.Kappa = 2
+            print("Not enough data. Returning nan")
+            from numpy import nan
+            self.D = nan
+            self.D_plus = nan
+            self.D_minus = nan
+            self.Kappa = nan
+            return self.D
 
         bins, Actual_CDF = cdf(data)
         Theoretical_CDF = self.cdf(bins)
