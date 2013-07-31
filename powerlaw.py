@@ -956,6 +956,32 @@ class Distribution(object):
         ax.set_yscale("log")
         return ax
 
+    def generate_random(self,n=1, estimate_discrete=None):
+        if estimate_discrete==None:
+            estimate_discrete = self.estimate_discrete
+        from numpy.random import rand
+        from numpy import array
+        r = rand(n)
+        if not self.discrete:
+            x = self._generate_random_continuous(r)
+        elif ( estimate_discrete and
+            hasattr(self, '_generate_random_discrete_estimate') ):
+            x = self._generate_random_discrete_estimate(r)
+        else:
+            x = array([self._double_search_discrete(R) for R in r]).astype('float')
+        return x
+
+    def _double_search_discrete(self, r):
+        #Find a range from x1 to x2 that our random probability fits between
+        x2 = int(self.xmin)
+        while self.ccdf(data=[x2]) >= (1 - r):
+            x1 = x2
+            x2 = 2*x1
+        #Use binary search within that range to find the exact answer, up to
+        #the limit of being between two integers.
+        x = bisect_map(x1, x2, self.ccdf, 1-r)
+        return x
+
 class Power_Law(Distribution):
 
     def __init__(self, estimate_discrete=True, **kwargs):
@@ -1034,6 +1060,13 @@ class Power_Law(Distribution):
             C -= 1 - self._cdf_base_function(self.xmax+1)
         C = 1.0/C
         return C
+
+    def _generate_random_continuous(self, r):
+            return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
+    def _generate_random_discrete_estimate(self, r):
+            x = (self.xmin - 0.5) * (1 - r) ** (-1/(self.alpha - 1)) + 0.5
+            from numpy import around
+            return around(x)
 
 class Exponential(Distribution):
 
@@ -1502,8 +1535,9 @@ def cumulative_distribution_function(data,
     n = float(len(data))
     from numpy import sort
     data = sort(data)
+    all_unique = not( any( data[:-1]==data[1:] ) )
 
-    if checkunique(data):
+    if all_unique:
         from numpy import arange
         CDF = arange(n)/n
     else:
@@ -1681,6 +1715,40 @@ def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     ax.set_xscale("log")
     ax.set_yscale("log")
     return ax
+
+def bisect_map(mn, mx, function, target):
+    """
+    Uses binary search to find the target solution to a function, searching in
+    a given ordered sequence of integer values.
+
+    Parameters
+    ----------
+    seq : list or array, monotonically increasing integers
+    function : a function that takes a single integer input, which monotonically
+        decreases over the range of seq.
+    target : the target value of the function
+
+    Returns
+    -------
+    value : the input value that yields the target solution. If there is no
+    exact solution in the input sequence, finds the nearest value k such that 
+    function(k) <= target < function(k+1). This is similar to the behavior of
+    bisect_left in the bisect package. If even the first, leftmost value of seq
+    does not satisfy this condition, -1 is returned.
+    """
+    if function([mn]) < target or function([mx]) > target:
+        return -1
+    while 1:
+        if mx==mn+1:
+            return mn
+        m = (mn + mx) / 2
+        value = function([m])[0]
+        if value > target:
+            mn = m
+        elif value < target:
+            mx = m
+        else:
+            return m
 
 ######################
 #What follows are functional programming forms of the above code, which are more
