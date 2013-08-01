@@ -1188,7 +1188,7 @@ class Streched_Exponential(Distribution):
 
     def _pdf_base_function(self, x):
         from numpy import exp
-        return x**(self.beta-1) * exp(-self.Lambda*(x**self.beta))
+        return (x*self.Lambda)**(self.beta-1) * exp(-self.Lambda*(x**self.beta))
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -1208,7 +1208,8 @@ class Streched_Exponential(Distribution):
             from numpy import exp
 #        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
 #            (beta*Lambda*exp(Lambda*(xmin**beta)))
-            likelihoods = ( data**(self.beta-1) * self.beta * self. Lambda *
+            likelihoods = ( (data*self.Lambda)**(self.beta-1) *
+                self.beta * self.Lambda *
                 exp(self.Lambda*(self.xmin**self.beta-data**self.beta)) )
             #Simplified so as not to throw a nan from infs being divided by each other
             from sys import float_info
@@ -1223,10 +1224,11 @@ class Streched_Exponential(Distribution):
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import log
-#        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
+#        likelihoods = ((data*self.Lambda)**(beta-1) * exp(-Lambda*(data**beta)))*\
 #            (beta*Lambda*exp(Lambda*(xmin**beta)))
             loglikelihoods = ( 
-                    log(data**(self.beta-1) * self.beta * self. Lambda) + 
+                    log((data*self.Lambda)**(self.beta-1) *
+                        self.beta * self. Lambda) + 
                     self.Lambda*(self.xmin**self.beta-data**self.beta) )
             #Simplified so as not to throw a nan from infs being divided by each other
             from sys import float_info
