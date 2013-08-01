@@ -1240,8 +1240,10 @@ class Streched_Exponential(Distribution):
 
     def _generate_random_continuous(self, r):
         from numpy import log
-        return ( (self.xmin**self.beta) -
-            (1/self.Lambda) * log(1-r) )**(1/self.beta)
+#        return ( (self.xmin**self.beta) -
+#            (1/self.Lambda) * log(1-r) )**(1/self.beta)
+        return (1/self.Lambda)* ( (self.Lambda*self.xmin)**self.beta -
+            log(1-r) )**(1/self.beta)
 
 class Truncated_Power_Law(Distribution):
 
@@ -1387,25 +1389,39 @@ class Lognormal(Distribution):
     def _pdf_discrete_normalizer(self):
         return False
 
-    def _generate_random_continuous(self, r1, r2=None):
-        from numpy import log, sqrt, exp, sin, cos
-        from scipy.constants import pi
-        if r2==None:
-            from numpy.random import rand
-            r2 = rand(len(r1))
-            r2_provided = False
-        else:
-            r2_provided = True
+    def _generate_random_continuous(self, r):
+        from numpy import exp, sqrt, log, frompyfunc
+        from mpmath import erf, erfinv
+        #This is a long, complicated function broken into parts.
+        #We use mpmath to maintain numerical accuracy as we run through
+        #erf and erfinv, until we get to more sane numbers. Thanks to
+        #Wolfram Alpha for producing the appropriate inverse of the CCDF
+        #for me, which is what we need to calculate these things.
+        erfinv = frompyfunc(erfinv,1,1)
+        Q = erf( ( log(self.xmin) - self.mu ) / (sqrt(2)*self.sigma))
+        Q = Q*r - r + 1.0
+        Q = erfinv(Q).astype('float')
+        return exp(self.mu + sqrt(2)*self.sigma*Q)
 
-        rho = sqrt(-2.0 * self.sigma**2.0 * log(1-r1))
-        theta = 2.0 * pi * r2
-        x1 = exp(rho * sin(theta))
-        x2 = exp(rho * cos(theta))
-
-        if r2_provided:
-            return x1, x2
-        else:
-            return x1
+#    def _generate_random_continuous(self, r1, r2=None):
+#        from numpy import log, sqrt, exp, sin, cos
+#        from scipy.constants import pi
+#        if r2==None:
+#            from numpy.random import rand
+#            r2 = rand(len(r1))
+#            r2_provided = False
+#        else:
+#            r2_provided = True
+#
+#        rho = sqrt(-2.0 * self.sigma**2.0 * log(1-r1))
+#        theta = 2.0 * pi * r2
+#        x1 = exp(rho * sin(theta))
+#        x2 = exp(rho * cos(theta))
+#
+#        if r2_provided:
+#            return x1, x2
+#        else:
+#            return x1
 
 def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
     """
