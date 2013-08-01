@@ -957,18 +957,32 @@ class Distribution(object):
         return ax
 
     def generate_random(self,n=1, estimate_discrete=None):
-        if estimate_discrete==None:
-            estimate_discrete = self.estimate_discrete
         from numpy.random import rand
         from numpy import array
         r = rand(n)
         if not self.discrete:
             x = self._generate_random_continuous(r)
-        elif ( estimate_discrete and
-            hasattr(self, '_generate_random_discrete_estimate') ):
-            x = self._generate_random_discrete_estimate(r)
         else:
-            x = array([self._double_search_discrete(R) for R in r]).astype('float')
+            if ( estimate_discrete and
+                not hasattr(self, '_generate_random_discrete_estimate') ):
+                raise AttributeError("This distribution does not have an "
+                    "estimation of the discrete form for generating simulated "
+                    "data. Try the exact form with estimate_discrete=False.")
+            if estimate_discrete==None:
+                if not hasattr(self, '_generate_random_discrete_estimate'):
+                    estimate_discrete = False
+                elif hasattr(self, 'estimate_discrete'):
+                    estimate_discrete = self.estimate_discrete
+                elif hasattr('parent_Fit'):
+                    estimate_discrete = self.parent_Fit.estimate_discrete
+                else:
+                    estimate_discrete = False
+            if estimate_discrete:
+                x = self._generate_random_discrete_estimate(r)
+            else:
+                x = array(
+                    [self._double_search_discrete(R) for R in r]
+                    ).astype('float')
         return x
 
     def _double_search_discrete(self, r):
@@ -1142,6 +1156,10 @@ class Exponential(Distribution):
             loglikelihoods = Distribution.loglikelihoods(self, data)
         return loglikelihoods
 
+    def _generate_random_continuous(self, r):
+        from numpy import log
+        return self.xmin - (1/self.Lambda) * log(1-r)
+
 class Streched_Exponential(Distribution):
 
     def parameters(self, params):
@@ -1165,7 +1183,7 @@ class Streched_Exponential(Distribution):
 
     def _cdf_base_function(self, x):
         from numpy import exp
-        CDF = 1 - exp((-self.Lambda*x)**self.beta)
+        CDF = 1 - exp(-(self.Lambda*x)**self.beta)
         return CDF
 
     def _pdf_base_function(self, x):
@@ -1217,6 +1235,11 @@ class Streched_Exponential(Distribution):
         else:
             loglikelihoods = Distribution.loglikelihoods(self, data)
         return loglikelihoods
+
+    def _generate_random_continuous(self, r):
+        from numpy import log
+        return ( (self.xmin**self.beta) -
+            (1/self.Lambda) * log(1-r) )**(1/self.beta)
 
 class Truncated_Power_Law(Distribution):
 
@@ -1299,6 +1322,19 @@ class Truncated_Power_Law(Distribution):
             likelihoods = Distribution.pdf(self, data)
         return likelihoods
 
+    def _generate_random_continuous(self, r):
+        def helper(r):
+            from numpy import log
+            from numpy.random import rand
+            while 1:
+                x = self.xmin - (1/self.Lambda) * log(1-r)
+                p = ( x/self.xmin )**-self.alpha
+                if rand()<p:
+                    return x
+                r = rand()
+        from numpy import array
+        return array(map(helper, r))
+
 class Lognormal(Distribution):
 
     def parameters(self, params):
@@ -1348,6 +1384,26 @@ class Lognormal(Distribution):
     @property
     def _pdf_discrete_normalizer(self):
         return False
+
+    def _generate_random_continuous(self, r1, r2=None):
+        from numpy import log, sqrt, exp, sin, cos
+        from scipy.constants import pi
+        if r2==None:
+            from numpy.random import rand
+            r2 = rand(len(r1))
+            r2_provided = False
+        else:
+            r2_provided = True
+
+        rho = sqrt(-2.0 * self.sigma**2.0 * log(1-r1))
+        theta = 2.0 * pi * r2
+        x1 = exp(rho * sin(theta))
+        x2 = exp(rho * cos(theta))
+
+        if r2_provided:
+            return x1, x2
+        else:
+            return x1
 
 def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
     """
