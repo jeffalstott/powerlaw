@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 # <nbformat>3.0</nbformat>
 
-# <codecell>
+# <markdowncell>
 
-%load_ext autoreload
-%autoreload 2
+# # Set up 
 
 # <codecell>
 
@@ -111,6 +110,10 @@ def plot_basics(data, data_inst, fig, units):
     #    zoom_effect01(ax2, ax3, ax3.get_xlim()[0], ax3.get_xlim()[1])
     ax3.set_xlabel(units)
 
+# <markdowncell>
+
+# ### Figure 1
+
 # <codecell>
 
 n_data = 3
@@ -141,6 +144,10 @@ f.savefig('FigWorkflow.eps', bbox_inches='tight')
 
 blackouts = blackouts/10**3
 
+# <markdowncell>
+
+# # Introduction
+
 # <codecell>
 
 data = blackouts
@@ -150,6 +157,18 @@ fit = powerlaw.Fit(data)
 fit.power_law.alpha
 fit.power_law.sigma
 fit.distribution_compare('power_law', 'exponential')
+
+# <markdowncell>
+
+# # Basic Methods
+
+# <markdowncell>
+
+# ## Visualization
+
+# <markdowncell>
+
+# ### PDF Linear vs Logarithmic Bins
 
 # <codecell>
 
@@ -161,6 +180,10 @@ powerlaw.plot_pdf(data, linear_bins=True, color='r', ax=figPDF)
 figPDF.set_ylabel(r"$p(X)$")
 figPDF.set_xlabel(r"Word Frequency")
 savefig('FigPDF.eps', bbox_inches='tight')
+
+# <markdowncell>
+
+# ### Figure 2
 
 # <codecell>
 
@@ -185,6 +208,10 @@ x, y = fit.cdf()
 bin_edges, probability = fit.pdf()
 y = fit.lognormal.cdf(data=[300,350])
 y = fit.lognormal.pdf()
+
+# <markdowncell>
+
+# ## Identifying the Scaling Range
 
 # <codecell>
 
@@ -220,6 +247,10 @@ fit = powerlaw.Fit(data, xmax=10000.0)
 fit.xmax
 fit.fixed_xmax
 
+# <markdowncell>
+
+# ### Figure 3
+
 # <codecell>
 
 data = words
@@ -240,6 +271,10 @@ leg = FigCCDFmax.legend(handles, labels, loc=3)
 leg.draw_frame(False)
 savefig('FigCCDFmax.eps', bbox_inches='tight')
 
+# <markdowncell>
+
+# ## Continuous vs. Discrete Data
+
 # <codecell>
 
 data = blackouts
@@ -249,6 +284,10 @@ fit = powerlaw.Fit(data, xmin=230.0)
 fit.discrete
 fit = powerlaw.Fit(data, xmin=230.0, discrete=True)
 fit.discrete 
+
+# <markdowncell>
+
+# # Comparing Candidate Distributions
 
 # <codecell>
 
@@ -272,6 +311,10 @@ fit = powerlaw.Fit(data)
 R, p = fit.distribution_compare('power_law', 'exponential', normalized_ratio=True)
 print R, p
 
+# <markdowncell>
+
+# ## Generative Mechanisms
+
 # <codecell>
 
 data = worm
@@ -279,6 +322,10 @@ fit = powerlaw.Fit(data, discrete=True)
 ####
 fit.distribution_compare('power_law', 'exponential')
 fit.distribution_compare('power_law', 'truncated_power_law')
+
+# <markdowncell>
+
+# ### Figure 4
 
 # <codecell>
 
@@ -296,13 +343,40 @@ handles, labels = fig.get_legend_handles_labels()
 fig.legend(handles, labels, loc=3)
 savefig('FigLognormal.eps', bbox_inches='tight')
 
+# <markdowncell>
+
+# # Creating Simulated Data
+
 # <codecell>
 
-data = blackouts
-fit = powerlaw.Fit(data)
+empirical_data = blackouts
 ####
-fit.loglikelihood_ratio('power_law', 'truncated_power_law')
-fit.loglikelihood_ratio('exponential', 'stretched_exponential')
+fit = powerlaw.Fit(empirical_data)
+simulated_data = fit.power_law.generate_random(10000)
+
+theoretical_distribution = powerlaw.Power_Law(xmin=5.0, parameters=[2.5])
+simulated_data = theoretical_distribution.generate_random(10000)
+
+# <codecell>
+
+theoretical_distribution = powerlaw.Power_Law(xmin=5.0, parameters=[2.5])
+simulated_data = theoretical_distribution.generate_random(10000)
+####
+fit = powerlaw.Fit(simulated_data)
+fit.power_law.xmin, fit.power_law.alpha
+
+# <codecell>
+
+powerlaw.plot_pdf(simulated_data,linewidth=3)
+fit.power_law.plot_pdf(simulated_data,linestyle='--',color='r')
+
+# <markdowncell>
+
+# #Advanced Considerations
+
+# <markdowncell>
+
+# ## Discrete Distribution Calculation and Estimation
 
 # <codecell>
 
@@ -310,8 +384,10 @@ data = blackouts
 ####
 fit = powerlaw.Fit(data, discrete=True, estimate_discrete=True)
 fit.power_law.alpha
+fit.power_law.estimate_discrete
 fit = powerlaw.Fit(data, discrete=True, estimate_discrete=False)
 fit.power_law.alpha
+fit.power_law.estimate_discrete
 
 # <codecell>
 
@@ -326,6 +402,37 @@ fit.lognormal.mu
 
 # <codecell>
 
+theoretical_distribution = powerlaw.Power_Law(xmin=5.0, parameters=[2.5], discrete=True)
+simulated_data = theoretical_distribution.generate_random(10000, estimate_discrete=True)
+
+# <codecell>
+
+empirical_data = blackouts
+####
+theoretical_distributionibution = powerlaw.Power_Law(xmin=5.0, parameters=[2.5], discrete=True, estimate_discrete=False)
+simulated_data = theoretical_distribution.generate_random(10000)
+
+fit = powerlaw.Fit(empirical_data, discrete=True, estimate_discrete=True)
+simulated_data = fit.power_law.generate_random(10000)
+
+# <markdowncell>
+
+# ## Nested Distributions
+
+# <codecell>
+
+data = blackouts
+fit = powerlaw.Fit(data)
+####
+fit.distribution_compare('power_law', 'truncated_power_law')
+fit.distribution_compare('exponential', 'stretched_exponential')
+
+# <markdowncell>
+
+# ## Restricted Parameter Range
+
+# <codecell>
+
 data = blackouts
 ####
 fit = powerlaw.Fit(data)
@@ -334,13 +441,25 @@ fit.power_law.alpha, fit.power_law.sigma, fit.xmin
 fit = powerlaw.Fit(data, sigma_threshold=.1)
 fit.power_law.alpha, fit.power_law.sigma, fit.xmin
 
+# <codecell>
+
 parameter_range = {'alpha': [2.3, None], 'sigma': [None, .2]}
 fit = powerlaw.Fit(data, parameter_range=parameter_range)
 fit.power_law.alpha, fit.power_law.sigma, fit.xmin
 
+# <codecell>
+
 parameter_range = lambda(self): self.sigma/self.alpha < .05
 fit = powerlaw.Fit(data, parameter_range=parameter_range)
 fit.power_law.alpha, fit.power_law.sigma, fit.xmin
+
+# <markdowncell>
+
+# ## Multiple Possible Fits
+
+# <markdowncell>
+
+# ### Figure 5
 
 # <codecell>
 
@@ -361,6 +480,10 @@ xlabel(r'$x_{min}$')
 ylabel(r'$D,\sigma,\alpha$')
 savefig('FigD.eps', bbox_inches='tight')
 
+# <markdowncell>
+
+# ## No Possible Fits
+
 # <codecell>
 
 data = blackouts
@@ -368,11 +491,272 @@ data = blackouts
 fit = powerlaw.Fit(data, sigma_threshold=.001)
 fit.power_law.alpha, fit.power_law.sigma, fit.xmin, fit.noise_flag
 
+# <codecell>
+
 fit.lognormal.mu, fit.lognormal.sigma
 range_dict = {'mu': [10.5, None]}
 fit.lognormal.parameter_range(range_dict)
 fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
+
 initial_parameters = (12, .7)
 fit.lognormal.parameter_range(range_dict, initial_parameters)
 fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
+
+# <markdowncell>
+
+# # Supporting Information
+
+# <codecell>
+
+from numpy import logspace
+from scipy.stats import variation
+import pandas as pd
+
+def validate(xmin, alpha, discrete='continuous', n_data=10000, n_trials=1):
+    
+    if n_trials>1:
+        return array([validate(xmin, alpha, discrete=discrete, n_data=n_data, n_trials=1) for trial in arange(n_trials)]).T
+        
+    if discrete=='continuous':
+        discrete = False
+        estimate_discrete = False
+    elif discrete == 'discrete':
+        discrete = True
+        estimate_discrete = False
+    elif discrete == 'discrete_estimate':
+        discrete = True
+        estimate_discrete = True
+
+    theoretical_distribution = powerlaw.Power_Law(xmin=xmin, parameters=[alpha], discrete=discrete)
+    simulated_data = theoretical_distribution.generate_random(n_data, estimate_discrete=estimate_discrete)
+    fit = powerlaw.Fit(simulated_data, discrete=discrete, estimate_discrete=estimate_discrete)
+    return fit.xmin, fit.alpha
+
+# <codecell>
+
+%%prun
+xmin=1
+alpha=1.5
+n_data=10000
+discrete='continuous'
+validate(xmin, alpha, discrete=discrete, n_data=n_data, n_trials=10)
+
+# <codecell>
+
+theoretical_xmins = unique(floor(logspace(0.0,2.0,num=20)))
+theoretical_alphas = array([1.5,2.0,2.5,3.0,3.5])
+#theoretical_xmins = [2]
+#theoretical_alphas = [2.5]
+distribution_types = ['continuous','discrete']
+n_trials = 10
+n_data = 10000
+
+ind = [(d,a,x) for d in distribution_types for a in theoretical_alphas for x in theoretical_xmins]
+ind = pd.MultiIndex.from_tuples(ind, names=['type', 'alpha','xmin'])
+df = pd.DataFrame(columns=['alpha_mean', 'alpha_sd', 'xmin_mean', 'xmin_sd'], index=ind)
+
+# <codecell>
+
+i = 0
+for dt, alpha, xmin in ind:
+    i += 1
+    print(i)
+    data = validate(xmin, alpha, discrete=dt, n_data=n_data, n_trials=n_trials)
+    df.ix[dt,alpha,xmin] = (mean(data[1]), std(data[1]), mean(data[0]), std(data[0]))
+
+filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
+df.to_hdf(filename,'df')
+
+# <codecell>
+
+filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
+df = pd.read_hdf(filename,'df')
+
+# <codecell>
+
+subplot(2,2,1)
+for a in theoretical_alphas:
+    y_vals = df.ix['continuous', a]['alpha_mean']
+    error = df.ix['continuous', a]['alpha_sd']
+
+    plot(theoretical_xmins, y_vals, label=a)
+    fill_between(theoretical_xmins, y_vals-error, y_vals+error, alpha=.1)
+
+xscale('log')
+#xlabel(r"$x_{min}$")
+ylabel(r"Fitted $\alpha$")
+yticks(theoretical_alphas)
+setp(gca().get_xticklabels(), visible=False)
+title("Continuous")
+
+#########
+subplot(2,2,2)
+for a in theoretical_alphas:
+    y_vals = df.ix['discrete', a]['alpha_mean']
+    error = df.ix['discrete', a]['alpha_sd']
+
+    plot(theoretical_xmins, y_vals, label=a)
+    fill_between(theoretical_xmins, y_vals-error, y_vals+error, alpha=.1)
+
+xscale('log')
+#xlabel(r"$x_{min}$")
+#ylabel(r"Fitted $\alpha$")
+setp(gca().get_xticklabels(), visible=False)
+setp(gca().get_yticklabels(), visible=False)
+title("Discrete")
+
+########
+subplot(2,2,3)
+for a in theoretical_alphas:
+    y_vals = df.ix['continuous', a]['xmin_mean']
+    error = df.ix['continuous', a]['xmin_sd']
+    up = y_vals+error
+    down = y_vals-error
+    ind = down<theoretical_xmins
+    down[ind] = theoretical_xmins[ind]
+    
+    plot(theoretical_xmins, y_vals, label=a)
+    fill_between(theoretical_xmins, down, up, alpha=.1)
+
+xlim(xmin=1)
+ylim(ymin=1)
+plot(xlim(),xlim(),linestyle='--', color='k')
+xscale('log')
+yscale('log')
+xlabel(r"$x_{min}$ of Data")
+ylabel(r"Fitted $x_{min}$")
+
+
+########
+legend_refs = []
+########
+subplot(2,2,4,sharey=gca())
+for a in theoretical_alphas:
+    y_vals = df.ix['discrete', a]['xmin_mean']
+    error = df.ix['discrete', a]['xmin_sd']
+    up = y_vals+error
+    down = y_vals-error
+    ind = down<theoretical_xmins
+    down[ind] = theoretical_xmins[ind]
+
+    line = plot(theoretical_xmins, y_vals, label=a)
+    legend_refs += line
+    fill_between(theoretical_xmins, down, up, alpha=.1)
+
+xlim(xmin=1)
+ylim(ymin=1)
+plot(xlim(),xlim(),linestyle='--', color='k')
+xscale('log')
+yscale('log')
+xlabel(r"$x_{min}$ of Data")
+#ylabel(r"Fitted $x_{min}$")
+setp(gca().get_yticklabels(), visible=False)
+
+
+#######
+#figlegend(legend_refs[::-1], theoretical_alphas[::-1],'center right', title=r'$\alpha$ of Data')
+subplots_adjust(wspace=.15, hspace=.1)
+legend( legend_refs[::-1], theoretical_alphas[::-1], loc = 'center right', bbox_to_anchor = (.1,0,1,1),
+            bbox_transform = plt.gcf().transFigure, title=r'$\alpha$ of Data' )
+savefig('Fig_powerlaw_validation_%itrials_%idata.pdf'%(int(n_trials),int(n_data)), bbox_inches='tight')
+
+# <markdowncell>
+
+# # Working Section
+
+# <codecell>
+
+import powerlaw
+
+# <codecell>
+
+param = [1.5, .5]
+dist = powerlaw.Truncated_Power_Law
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=True)
+
+simulated_data = theoretical_dist.generate_random(100)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=False)
+
+figure()
+simulated_data = theoretical_dist.generate_random(100)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+# <codecell>
+
+param = [.5, 1.5]
+dist = powerlaw.Streched_Exponential
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=True)
+
+simulated_data = theoretical_dist.generate_random(1000)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=False)
+
+figure()
+simulated_data = theoretical_dist.generate_random(1000)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+# <codecell>
+
+param = [1.5]
+dist = powerlaw.Exponential
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=True)
+
+simulated_data = theoretical_dist.generate_random(1000)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=False)
+
+figure()
+simulated_data = theoretical_dist.generate_random(1000)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+# <codecell>
+
+param = [1.5, 1.5]
+dist = powerlaw.Lognormal
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=True)
+
+simulated_data = theoretical_dist.generate_random(100)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
+
+theoretical_dist = dist(xmin=2.0, parameters=param,discrete=False)
+
+figure()
+simulated_data = theoretical_dist.generate_random(100)
+powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_ccdf(simulated_data)
+figure()
+powerlaw.plot_pdf(simulated_data, linewidth=2, linestyle='--')
+theoretical_dist.plot_pdf(simulated_data)
 
