@@ -323,6 +323,26 @@ fit = powerlaw.Fit(data, discrete=True)
 fit.distribution_compare('power_law', 'exponential')
 fit.distribution_compare('power_law', 'truncated_power_law')
 
+# <codecell>
+
+data = worm
+fit = powerlaw.Fit(data, discrete=True)
+####
+fit.distribution_compare('power_law', 'exponential')
+fit.distribution_compare('power_law', 'truncated_power_law')
+
+# <codecell>
+
+data = words
+fit = powerlaw.Fit(data, discrete=True)
+####
+print fit.distribution_compare('power_law', 'exponential', normalized_ratio=True)
+print fit.distribution_compare('power_law', 'truncated_power_law')
+
+# <codecell>
+
+print fit.distribution_compare('power_law', 'truncated_power_law')
+
 # <markdowncell>
 
 # ### Figure 4
@@ -569,8 +589,8 @@ df.to_hdf(filename,'df')
 
 # <codecell>
 
-filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
-df = pd.read_hdf(filename,'df')
+#filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
+#df = pd.read_hdf(filename,'df')
 
 # <codecell>
 
@@ -662,19 +682,15 @@ savefig('Fig_powerlaw_validation_%itrials_%idata.pdf'%(int(n_trials),int(n_data)
 
 # <markdowncell>
 
-# # Working Section
+# # Validation of Simulated Data Generators for Other Distributions
 
 # <codecell>
 
-import powerlaw
-
-# <codecell>
-
-param = [1.5, .5]
+param = [2.5, .5]
 dist = powerlaw.Truncated_Power_Law
 theoretical_dist = dist(xmin=2.0, parameters=param,discrete=True)
 
-simulated_data = theoretical_dist.generate_random(100)
+simulated_data = theoretical_dist.generate_random(1000)
 powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
 theoretical_dist.plot_ccdf(simulated_data)
 figure()
@@ -684,7 +700,7 @@ theoretical_dist.plot_pdf(simulated_data)
 theoretical_dist = dist(xmin=2.0, parameters=param,discrete=False)
 
 figure()
-simulated_data = theoretical_dist.generate_random(100)
+simulated_data = theoretical_dist.generate_random(1000)
 powerlaw.plot_ccdf(simulated_data, linewidth=2, linestyle='--')
 theoretical_dist.plot_ccdf(simulated_data)
 figure()
