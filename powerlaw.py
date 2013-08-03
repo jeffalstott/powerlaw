@@ -957,6 +957,28 @@ class Distribution(object):
         return ax
 
     def generate_random(self,n=1, estimate_discrete=None):
+        """
+        Generates random numbers from the theoretical probability distribution.
+        If xmax is present, it is currently ignored.
+
+        Parameters
+        ----------
+        n : int or float
+            The number of random numbers to generate
+        estimate_discrete : boolean
+            For discrete distributions, whether to use a faster approximation of
+            the random number generator. If None, attempts to inherit
+            the estimate_discrete behavior used for fitting from the Distribution
+            object or the parent Fit object, if present. Approximations only
+            exist for some distributions (namely the power law). If an
+            approximation does not exist an estimate_discrete setting of True
+            will not be inherited. 
+
+        Returns
+        -------
+        r : array
+            Random numbers drawn from the distribution
+        """
         from numpy.random import rand
         from numpy import array
         r = rand(n)
