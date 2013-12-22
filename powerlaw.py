@@ -1,3 +1,25 @@
+#The MIT License (MIT)
+#
+#Copyright (c) 2013 Jeff Alstott
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in
+#all copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+#THE SOFTWARE.
+
 class Fit(object):
     """
     A fit of a data set to various probability distributions, namely power
@@ -38,6 +60,7 @@ class Fit(object):
         sigma_threshold=None,
         parameter_range=None,
         fit_optimizer=None,
+	xmin_distance='D',
         **kwargs):
 
         self.data_original = data
@@ -56,6 +79,8 @@ class Fit(object):
         self.given_xmax = xmax
         self.xmin = self.given_xmin
         self.xmax = self.given_xmax
+
+	self.xmin_distance = xmin_distance
 
         if 0 in self.data:
             print("Value 0 in data. Throwing out 0 values")
@@ -84,7 +109,7 @@ class Fit(object):
                 estimate_discrete = self.estimate_discrete,
                 data = self.data,
                 parameter_range = self.parameter_range)
-            self.D = pl.D
+	    setattr(self,self.xmin_distance, getattr(pl, self.xmin_distance))
             self.alpha = pl.alpha
             self.sigma = pl.sigma
             #self.power_law = pl
@@ -126,7 +151,7 @@ class Fit(object):
             return getattr(self, name)
         else:  raise AttributeError, name
 
-    def find_xmin(self):
+    def find_xmin(self, xmin_distance=None):
         """
         Returns the optimal xmin beyond which the scaling regime of the power
         law fits best. The attribute self.xmin of the Fit object is also set.
@@ -150,22 +175,30 @@ class Fit(object):
 #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
         xmins = xmins[:-1]
         xmin_indices = xmin_indices[:-1] 
+
+	if xmin_distance == None:
+	    xmin_distance = self.xmin_distance
+
         if len(xmins)<=0:
             print("Less than 2 unique data values left after xmin and xmax "
                     "options! Cannot fit. Returning nans.")
             from numpy import nan, array
             self.xmin = nan
             self.D = nan
+            self.V = nan
+	    self.Asquare = nan
+	    self.Kappa = nan
             self.alpha = nan
             self.sigma = nan
             self.n_tail = nan
-            self.Ds = array([nan])
+	    setattr(self, xmin_distance+'s', array([nan]))
             self.alphas = array([nan])
             self.sigmas = array([nan])
             self.in_ranges = array([nan])
             self.xmins = array([nan])
             self.noise_flag = True
             return self.xmin
+
 
         def fit_function(xmin):
             pl = Power_Law(xmin = xmin,
@@ -176,10 +209,10 @@ class Fit(object):
                 data = self.data,
                 parameter_range = self.parameter_range,
                 parent_Fit = self)
-            return pl.D, pl.alpha, pl.sigma, pl.in_range()
+            return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
         fits  = asarray( map(fit_function, xmins))
-        self.Ds = fits[:,0]
+	setattr(self, xmin_distance+'s', fits[:,0])
         self.alphas = fits[:,1]
         self.sigmas = fits[:,2]
         self.in_ranges = fits[:,3].astype(bool)
@@ -191,14 +224,14 @@ class Fit(object):
             good_values = good_values * (self.sigmas < self.sigma_threshold)
 
         if good_values.all():
-            min_D_index = argmin(self.Ds)
+            min_D_index = argmin(getattr(self, xmin_distance+'s'))
             self.noise_flag = False
         elif not good_values.any():
-            min_D_index = argmin(self.Ds)
+            min_D_index = argmin(getattr(self, xmin_distance+'s'))
             self.noise_flag = True
         else:
             from numpy.ma import masked_array
-            masked_Ds = masked_array(self.Ds, mask=-good_values)
+            masked_Ds = masked_array(getattr(self, xmin_distance+'s'), mask=-good_values)
             min_D_index = masked_Ds.argmin()
             self.noise_flag = False
 
@@ -206,7 +239,7 @@ class Fit(object):
             print("No valid fits found.")
 
         self.xmin = xmins[min_D_index]
-        self.D = self.Ds[min_D_index]
+	setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
         self.alpha = self.alphas[min_D_index]
         self.sigma = self.sigmas[min_D_index]
         return self.xmin
@@ -605,6 +638,8 @@ class Distribution(object):
             self.D_plus = nan
             self.D_minus = nan
             self.Kappa = nan
+	    self.V = nan
+	    self.Asquare = nan
             return self.D
 
         bins, Actual_CDF = cdf(data)
@@ -619,7 +654,10 @@ class Distribution(object):
 
         self.V = self.D_plus + self.D_minus
         self.D = max(self.D_plus, self.D_minus)
-
+	self.Asquare = sum(( 
+			(CDF_diff**2) / 
+			(Theoretical_CDF * (1 - Theoretical_CDF))
+			)[1:] )
         return self.D
 
     def ccdf(self,data=None, survival=True):
@@ -1297,7 +1335,7 @@ class Truncated_Power_Law(Distribution):
         CDF = ( (gammainc(1-self.alpha,self.Lambda*x)).astype('float') /
                 self.Lambda**(1-self.alpha)
                     )
-        CDF = 1 - CDF
+        CDF = 1 -CDF
         return CDF
 
     def _pdf_base_function(self, x):
