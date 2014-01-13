@@ -1090,12 +1090,12 @@ class Power_Law(Distribution):
         self.n = len(data)
         from numpy import log, sum
         if not self.discrete and not self.xmax:
-            self.alpha = 1 + ( self.n / sum( log( data / self.xmin ) ))
+            self.alpha = 1 + (self.n / sum(log(data/self.xmin)))
             if not self.in_range():
                 Distribution.fit(self, data, suppress_output=True)
             self.KS(data)
         elif self.discrete and self.estimate_discrete and not self.xmax:
-            self.alpha = 1 + ( self.n / sum( log( data / ( self.xmin - .5 ) ) ))
+            self.alpha = 1 + (self.n / sum(log(data / (self.xmin - .5))))
             if not self.in_range():
                 Distribution.fit(self, data, suppress_output=True)
             self.KS(data)
@@ -1109,7 +1109,7 @@ class Power_Law(Distribution):
 
     def _initial_parameters(self, data):
         from numpy import log, sum
-        return 1 + len(data)/sum( log( data / (self.xmin) ))
+        return 1 + len(data)/sum(log(data / (self.xmin)))
 
     def _cdf_base_function(self, x):
         if self.discrete:
@@ -1250,8 +1250,8 @@ class Streched_Exponential(Distribution):
 
     def _pdf_base_function(self, x):
         from numpy import exp
-        return ( ((x*self.Lambda)**(self.beta-1)) *
-            exp(-((self.Lambda*x)**self.beta)) )
+        return (((x*self.Lambda)**(self.beta-1)) *
+                exp(-((self.Lambda*x)**self.beta)))
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -1269,10 +1269,10 @@ class Streched_Exponential(Distribution):
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import exp
-            likelihoods = ( (data*self.Lambda)**(self.beta-1) *
-                self.beta * self.Lambda *
-                exp((self.Lambda*self.xmin)**self.beta -
-                    (self.Lambda*data)**self.beta))
+            likelihoods = ((data*self.Lambda)**(self.beta-1) *
+                           self.beta * self.Lambda *
+                           exp((self.Lambda*self.xmin)**self.beta -
+                               (self.Lambda*data)**self.beta))
             #Simplified so as not to throw a nan from infs being divided by each other
             from sys import float_info
             likelihoods[likelihoods==0] = 10**float_info.min_10_exp
@@ -2172,8 +2172,8 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 
 
 def distribution_compare(data, distribution1, parameters1,
-        distribution2, parameters2,
-        discrete, xmin, xmax, nested=None, **kwargs):
+                         distribution2, parameters2,
+                         discrete, xmin, xmax, nested=None, **kwargs):
     no_data = False
     if xmax and all((data > xmax) + (data < xmin)):
         #Everything is beyond the bounds of the xmax and xmin
