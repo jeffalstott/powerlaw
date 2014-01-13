@@ -36,32 +36,32 @@ class Fit(object):
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
         None an optimal one will be calculated.
-    xmax : int or float, optional 
+    xmax : int or float, optional
         The maximum value of the fitted distributions.
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
         slow numerical methods. Very accurate with xmin>6
     sigma_threshold : float, optional
-        Upper limit on the standard error of the power law fit. Used after 
+        Upper limit on the standard error of the power law fit. Used after
         fitting, when identifying valid xmin values.
     parameter_range : dict, optional
-        Dictionary of valid parameter ranges for fitting. Formatted as a 
-        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        Dictionary of valid parameter ranges for fitting. Formatted as a
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
     """
 
     def __init__(self, data,
-        discrete=False,
-        xmin=None, xmax=None,
-        fit_method='Likelihood',
-        estimate_discrete=True,
-        discrete_approximation='round',
-        sigma_threshold=None,
-        parameter_range=None,
-        fit_optimizer=None,
-        xmin_distance='D',
-        **kwargs):
+                 discrete=False,
+                 xmin=None, xmax=None,
+                 fit_method='Likelihood',
+                 estimate_discrete=True,
+                 discrete_approximation='round',
+                 sigma_threshold=None,
+                 parameter_range=None,
+                 fit_optimizer=None,
+                 xmin_distance='D',
+                 **kwargs):
 
         self.data_original = data
         from numpy import asarray
