@@ -60,7 +60,7 @@ class Fit(object):
         sigma_threshold=None,
         parameter_range=None,
         fit_optimizer=None,
-	xmin_distance='D',
+        xmin_distance='D',
         **kwargs):
 
         self.data_original = data
@@ -80,7 +80,7 @@ class Fit(object):
         self.xmin = self.given_xmin
         self.xmax = self.given_xmax
 
-	self.xmin_distance = xmin_distance
+        self.xmin_distance = xmin_distance
 
         if 0 in self.data:
             print("Value 0 in data. Throwing out 0 values")
@@ -109,7 +109,7 @@ class Fit(object):
                 estimate_discrete = self.estimate_discrete,
                 data = self.data,
                 parameter_range = self.parameter_range)
-	    setattr(self,self.xmin_distance, getattr(pl, self.xmin_distance))
+            setattr(self,self.xmin_distance, getattr(pl, self.xmin_distance))
             self.alpha = pl.alpha
             self.sigma = pl.sigma
             #self.power_law = pl
@@ -176,8 +176,8 @@ class Fit(object):
         xmins = xmins[:-1]
         xmin_indices = xmin_indices[:-1] 
 
-	if xmin_distance == None:
-	    xmin_distance = self.xmin_distance
+        if xmin_distance == None:
+            xmin_distance = self.xmin_distance
 
         if len(xmins)<=0:
             print("Less than 2 unique data values left after xmin and xmax "
@@ -186,12 +186,12 @@ class Fit(object):
             self.xmin = nan
             self.D = nan
             self.V = nan
-	    self.Asquare = nan
-	    self.Kappa = nan
+            self.Asquare = nan
+            self.Kappa = nan
             self.alpha = nan
             self.sigma = nan
             self.n_tail = nan
-	    setattr(self, xmin_distance+'s', array([nan]))
+            setattr(self, xmin_distance+'s', array([nan]))
             self.alphas = array([nan])
             self.sigmas = array([nan])
             self.in_ranges = array([nan])
@@ -212,7 +212,7 @@ class Fit(object):
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
         fits  = asarray( map(fit_function, xmins))
-	setattr(self, xmin_distance+'s', fits[:,0])
+        setattr(self, xmin_distance+'s', fits[:,0])
         self.alphas = fits[:,1]
         self.sigmas = fits[:,2]
         self.in_ranges = fits[:,3].astype(bool)
@@ -239,7 +239,7 @@ class Fit(object):
             print("No valid fits found.")
 
         self.xmin = xmins[min_D_index]
-	setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
+        setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
         self.alpha = self.alphas[min_D_index]
         self.sigma = self.sigmas[min_D_index]
         return self.xmin
@@ -638,8 +638,8 @@ class Distribution(object):
             self.D_plus = nan
             self.D_minus = nan
             self.Kappa = nan
-	    self.V = nan
-	    self.Asquare = nan
+            self.V = nan
+            self.Asquare = nan
             return self.D
 
         bins, Actual_CDF = cdf(data)
@@ -654,10 +654,10 @@ class Distribution(object):
 
         self.V = self.D_plus + self.D_minus
         self.D = max(self.D_plus, self.D_minus)
-	self.Asquare = sum(( 
-			(CDF_diff**2) / 
-			(Theoretical_CDF * (1 - Theoretical_CDF))
-			)[1:] )
+        self.Asquare = sum(( 
+                        (CDF_diff**2) / 
+                        (Theoretical_CDF * (1 - Theoretical_CDF))
+                        )[1:] )
         return self.D
 
     def ccdf(self,data=None, survival=True):
