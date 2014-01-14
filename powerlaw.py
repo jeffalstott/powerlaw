@@ -645,6 +645,10 @@ class Distribution(object):
             self.Asquare = nan
             return self.D
 
+#        if hasattr(self, 'parent_Fit'):
+#        	bins, Actual_CDF = self.parent_Fit.cdf_bins, self.parent_Fit.cdf
+#	else:
+#        	bins, Actual_CDF = cdf(data)
         bins, Actual_CDF = cdf(data)
         Theoretical_CDF = self.cdf(bins)
 
