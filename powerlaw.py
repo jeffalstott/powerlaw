@@ -83,8 +83,8 @@ class Fit(object):
 	self.xmin_distance = xmin_distance
 
         if 0 in self.data:
-            print("Value 0 in data. Throwing out 0 values")
-            self.data = self.data[self.data!=0]
+            print("Values less than or equal to 0 in data. Throwing out 0 or negative values")
+            self.data = self.data[self.data>0]
 
         if self.xmax:
             self.fixed_xmax = True
