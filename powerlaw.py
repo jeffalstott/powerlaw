@@ -36,32 +36,32 @@ class Fit(object):
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
         None an optimal one will be calculated.
-    xmax : int or float, optional 
+    xmax : int or float, optional
         The maximum value of the fitted distributions.
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
         slow numerical methods. Very accurate with xmin>6
     sigma_threshold : float, optional
-        Upper limit on the standard error of the power law fit. Used after 
+        Upper limit on the standard error of the power law fit. Used after
         fitting, when identifying valid xmin values.
     parameter_range : dict, optional
-        Dictionary of valid parameter ranges for fitting. Formatted as a 
-        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        Dictionary of valid parameter ranges for fitting. Formatted as a
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
     """
 
     def __init__(self, data,
-        discrete=False,
-        xmin=None, xmax=None,
-        fit_method='Likelihood',
-        estimate_discrete=True,
-        discrete_approximation='round',
-        sigma_threshold=None,
-        parameter_range=None,
-        fit_optimizer=None,
-	xmin_distance='D',
-        **kwargs):
+                 discrete=False,
+                 xmin=None, xmax=None,
+                 fit_method='Likelihood',
+                 estimate_discrete=True,
+                 discrete_approximation='round',
+                 sigma_threshold=None,
+                 parameter_range=None,
+                 fit_optimizer=None,
+                 xmin_distance='D',
+                 **kwargs):
 
         self.data_original = data
         from numpy import asarray
@@ -80,7 +80,7 @@ class Fit(object):
         self.xmin = self.given_xmin
         self.xmax = self.given_xmax
 
-	self.xmin_distance = xmin_distance
+        self.xmin_distance = xmin_distance
 
         if 0 in self.data:
             print("Values less than or equal to 0 in data. Throwing out 0 or negative values")
@@ -102,14 +102,14 @@ class Fit(object):
             self.fixed_xmin = True
             self.xmin = xmin
             self.noise_flag = None
-            pl = Power_Law(xmin = self.xmin,
-                xmax = self.xmax,
-                discrete = self.discrete,
-                fit_method = self.fit_method,
-                estimate_discrete = self.estimate_discrete,
-                data = self.data,
-                parameter_range = self.parameter_range)
-	    setattr(self,self.xmin_distance, getattr(pl, self.xmin_distance))
+            pl = Power_Law(xmin=self.xmin,
+                           xmax=self.xmax,
+                           discrete=self.discrete,
+                           fit_method=self.fit_method,
+                           estimate_discrete=self.estimate_discrete,
+                           data=self.data,
+                           parameter_range=self.parameter_range)
+            setattr(self,self.xmin_distance, getattr(pl, self.xmin_distance))
             self.alpha = pl.alpha
             self.sigma = pl.sigma
             #self.power_law = pl
@@ -123,11 +123,11 @@ class Fit(object):
         self.n_tail = self.n + n_above_max
 
         self.supported_distributions = {'power_law': Power_Law,
-                    'lognormal': Lognormal,
-                    'exponential': Exponential,
-                    'truncated_power_law': Truncated_Power_Law,
-                    'stretched_exponential': Streched_Exponential,
-                    'gamma': None}
+                                        'lognormal': Lognormal,
+                                        'exponential': Exponential,
+                                        'truncated_power_law': Truncated_Power_Law,
+                                        'stretched_exponential': Streched_Exponential,
+                                        'gamma': None}
 
     def __getattr__(self, name):
         if name in self.supported_distributions.keys():
@@ -139,17 +139,20 @@ class Fit(object):
                 parameter_range = self.parameter_range
             else:
                 parameter_range = None
-            setattr(self, name,
-                dist(data=self.data,
-                xmin=self.xmin, xmax=self.xmax,
-                discrete=self.discrete,
-                fit_method=self.fit_method,
-                estimate_discrete=self.estimate_discrete,
-                discrete_approximation=self.discrete_approximation,
-                parameter_range=parameter_range,
-                parent_Fit=self))
+            setattr(self,
+                    name,
+                    dist(data=self.data,
+                         xmin=self.xmin,
+                         xmax=self.xmax,
+                         discrete=self.discrete,
+                         fit_method=self.fit_method,
+                         estimate_discrete=self.estimate_discrete,
+                         discrete_approximation=self.discrete_approximation,
+                         parameter_range=parameter_range,
+                         parent_Fit=self))
             return getattr(self, name)
-        else:  raise AttributeError, name
+        else:
+            raise AttributeError(name)
 
     def find_xmin(self, xmin_distance=None):
         """
@@ -174,24 +177,24 @@ class Fit(object):
         xmins, xmin_indices = unique(possible_xmins, return_index=True)
 #Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
         xmins = xmins[:-1]
-        xmin_indices = xmin_indices[:-1] 
+        xmin_indices = xmin_indices[:-1]
 
-	if xmin_distance == None:
-	    xmin_distance = self.xmin_distance
+        if xmin_distance is None:
+            xmin_distance = self.xmin_distance
 
         if len(xmins)<=0:
             print("Less than 2 unique data values left after xmin and xmax "
-                    "options! Cannot fit. Returning nans.")
+                  "options! Cannot fit. Returning nans.")
             from numpy import nan, array
             self.xmin = nan
             self.D = nan
             self.V = nan
-	    self.Asquare = nan
-	    self.Kappa = nan
+            self.Asquare = nan
+            self.Kappa = nan
             self.alpha = nan
             self.sigma = nan
             self.n_tail = nan
-	    setattr(self, xmin_distance+'s', array([nan]))
+            setattr(self, xmin_distance+'s', array([nan]))
             self.alphas = array([nan])
             self.sigmas = array([nan])
             self.in_ranges = array([nan])
@@ -201,18 +204,18 @@ class Fit(object):
 
 
         def fit_function(xmin):
-            pl = Power_Law(xmin = xmin,
-                xmax = self.xmax,
-                discrete = self.discrete,
-                estimate_discrete = self.estimate_discrete,
-                fit_method = self.fit_method,
-                data = self.data,
-                parameter_range = self.parameter_range,
-                parent_Fit = self)
+            pl = Power_Law(xmin=xmin,
+                           xmax=self.xmax,
+                           discrete=self.discrete,
+                           estimate_discrete=self.estimate_discrete,
+                           fit_method=self.fit_method,
+                           data=self.data,
+                           parameter_range=self.parameter_range,
+                           parent_Fit=self)
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
-        fits  = asarray( map(fit_function, xmins))
-	setattr(self, xmin_distance+'s', fits[:,0])
+        fits = asarray(map(fit_function, xmins))
+        setattr(self, xmin_distance+'s', fits[:,0])
         self.alphas = fits[:,1]
         self.sigmas = fits[:,2]
         self.in_ranges = fits[:,3].astype(bool)
@@ -239,7 +242,7 @@ class Fit(object):
             print("No valid fits found.")
 
         self.xmin = xmins[min_D_index]
-	setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
+        setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
         self.alpha = self.alphas[min_D_index]
         self.sigma = self.sigmas[min_D_index]
         return self.xmin
@@ -257,7 +260,7 @@ class Fit(object):
         dist2 : string
             Name of the second candidate distribution (ex. 'exponential')
         nested : bool or None, optional
-            Whether to assume the candidate distributions are nested versions 
+            Whether to assume the candidate distributions are nested versions
             of each other. None assumes not unless the name of one distribution
             is a substring of the other. True by default.
 
@@ -284,7 +287,7 @@ class Fit(object):
         dist2 : string
             Name of the second candidate distribution (ex. 'exponential')
         nested : bool or None, optional
-            Whether to assume the candidate distributions are nested versions 
+            Whether to assume the candidate distributions are nested versions
             of each other. None assumes not unless the name of one distribution
             is a substring of the other.
 
@@ -297,7 +300,7 @@ class Fit(object):
         p : float
             Significance of R
         """
-        if (dist1 in dist2) or (dist2 in dist1) and nested==None:
+        if (dist1 in dist2) or (dist2 in dist1) and nested is None:
             print "Assuming nested distributions"
             nested = True
 
@@ -348,7 +351,7 @@ class Fit(object):
             xmin = self.xmin
             xmax = self.xmax
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                **kwargs) 
+                   **kwargs) 
 
     def ccdf(self, original_data=False, survival=True, **kwargs):
         """
@@ -381,7 +384,7 @@ class Fit(object):
             xmin = self.xmin
             xmax = self.xmax
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                **kwargs) 
+                   **kwargs)
 
     def pdf(self, original_data=False, **kwargs):
         """
@@ -467,7 +470,7 @@ class Fit(object):
         return plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
     def plot_pdf(self, ax=None, original_data=False,
-            linear_bins=False, **kwargs):
+                 linear_bins=False, **kwargs):
         """
         Plots the probability density function (PDF) or the data to a new figure
         or to axis ax if provided.
@@ -523,8 +526,8 @@ class Distribution(object):
         The parameters of the distribution. Will be overridden if data is
         given or the fit method is called.
     parameter_range : dict, optional
-        Dictionary of valid parameter ranges for fitting. Formatted as a 
-        dictionary of parameter names ('alpha' and/or 'sigma') and tuples 
+        Dictionary of valid parameter ranges for fitting. Formatted as a
+        dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
     initial_parameters : tuple or list, optional
         Initial values for the parameter in the fitting search.
@@ -541,16 +544,16 @@ class Distribution(object):
     """
 
     def __init__(self,
-        xmin=1, xmax=None,
-        discrete=False,
-        fit_method='Likelihood',
-        data = None,
-        parameters = None,
-        parameter_range = None,
-        initial_parameters = None,
-        discrete_approximation = 'round',
-        parent_Fit = None,
-        **kwargs):
+                 xmin=1, xmax=None,
+                 discrete=False,
+                 fit_method='Likelihood',
+                 data=None,
+                 parameters=None,
+                 parameter_range=None,
+                 initial_parameters=None,
+                 discrete_approximation='round',
+                 parent_Fit=None,
+                 **kwargs):
 
         self.xmin = xmin
         self.xmax = xmax
@@ -567,7 +570,7 @@ class Distribution(object):
 
         self.parent_Fit = parent_Fit
 
-        if parameters!=None:
+        if parameters is not None:
             self.parameters(parameters)
 
         if parameter_range:
@@ -576,7 +579,7 @@ class Distribution(object):
         if initial_parameters:
             self._given_initial_parameters(initial_parameters)
 
-        if data!=None and not (parameter_range and self.parent_Fit):
+        if (data is None) and not (parameter_range and self.parent_Fit):
             self.fit(data)
 
 
@@ -586,7 +589,7 @@ class Distribution(object):
         at initialization.
         """
 
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if self.fit_method=='Likelihood':
@@ -619,7 +622,7 @@ class Distribution(object):
         """
         Returns the Kolmogorov-Smirnov distance D between the distribution and
         the data. Also sets the properties D+, D-, V (the Kuiper testing
-        statistic), and Kappa (1 + the average difference between the 
+        statistic), and Kappa (1 + the average difference between the
         theoretical and empirical distributions).
 
         Parameters
@@ -628,7 +631,7 @@ class Distribution(object):
             If not provided, attempts to use the data from the Fit object in
             which the Distribution object is contained.
         """
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if len(data)<2:
@@ -638,8 +641,8 @@ class Distribution(object):
             self.D_plus = nan
             self.D_minus = nan
             self.Kappa = nan
-	    self.V = nan
-	    self.Asquare = nan
+            self.V = nan
+            self.Asquare = nan
             return self.D
 
         bins, Actual_CDF = cdf(data)
@@ -654,10 +657,11 @@ class Distribution(object):
 
         self.V = self.D_plus + self.D_minus
         self.D = max(self.D_plus, self.D_minus)
-	self.Asquare = sum(( 
-			(CDF_diff**2) / 
-			(Theoretical_CDF * (1 - Theoretical_CDF))
-			)[1:] )
+        self.Asquare = sum((
+                            (CDF_diff**2) / 
+                            (Theoretical_CDF * (1 - Theoretical_CDF))
+                            )[1:]
+                           )
         return self.D
 
     def ccdf(self,data=None, survival=True):
@@ -706,7 +710,7 @@ class Distribution(object):
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
@@ -760,7 +764,7 @@ class Distribution(object):
         -------
         probabilities : array
         """
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
@@ -864,7 +868,7 @@ class Distribution(object):
             for k in r.keys():
 #For any attributes we've specificed, make sure we're above the lower bound
 #and below the lower bound (if they exist). This must be true of all of them.
-                if r[k][1]!=None:
+                if r[k][1] is not None:
                     result *= r[k][1]> getattr(self, k)
                 result *= r[k][0]< getattr(self, k)
             return result
@@ -945,7 +949,7 @@ class Distribution(object):
         ax : matplotlib axis
             The axis to which the plot was made.
         """
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
         bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
@@ -979,7 +983,7 @@ class Distribution(object):
         ax : matplotlib axis
             The axis to which the plot was made.
         """
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         from numpy import unique
         bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
@@ -1010,7 +1014,7 @@ class Distribution(object):
             object or the parent Fit object, if present. Approximations only
             exist for some distributions (namely the power law). If an
             approximation does not exist an estimate_discrete setting of True
-            will not be inherited. 
+            will not be inherited.
 
         Returns
         -------
@@ -1023,12 +1027,11 @@ class Distribution(object):
         if not self.discrete:
             x = self._generate_random_continuous(r)
         else:
-            if ( estimate_discrete and
-                not hasattr(self, '_generate_random_discrete_estimate') ):
+            if (estimate_discrete and not hasattr(self, '_generate_random_discrete_estimate') ):
                 raise AttributeError("This distribution does not have an "
-                    "estimation of the discrete form for generating simulated "
-                    "data. Try the exact form with estimate_discrete=False.")
-            if estimate_discrete==None:
+                                     "estimation of the discrete form for generating simulated "
+                                     "data. Try the exact form with estimate_discrete=False.")
+            if estimate_discrete is None:
                 if not hasattr(self, '_generate_random_discrete_estimate'):
                     estimate_discrete = False
                 elif hasattr(self, 'estimate_discrete'):
@@ -1040,9 +1043,8 @@ class Distribution(object):
             if estimate_discrete:
                 x = self._generate_random_discrete_estimate(r)
             else:
-                x = array(
-                    [self._double_search_discrete(R) for R in r]
-                    ).astype('float')
+                x = array([self._double_search_discrete(R) for R in r],
+                          dtype='float')
         return x
 
     def _double_search_discrete(self, r):
@@ -1082,18 +1084,18 @@ class Power_Law(Distribution):
         return self.alpha>1
 
     def fit(self, data=None):
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         self.n = len(data)
         from numpy import log, sum
         if not self.discrete and not self.xmax:
-            self.alpha = 1 + ( self.n / sum( log( data / self.xmin ) ))
+            self.alpha = 1 + (self.n / sum(log(data/self.xmin)))
             if not self.in_range():
                 Distribution.fit(self, data, suppress_output=True)
             self.KS(data)
         elif self.discrete and self.estimate_discrete and not self.xmax:
-            self.alpha = 1 + ( self.n / sum( log( data / ( self.xmin - .5 ) ) ))
+            self.alpha = 1 + (self.n / sum(log(data / (self.xmin - .5))))
             if not self.in_range():
                 Distribution.fit(self, data, suppress_output=True)
             self.KS(data)
@@ -1107,7 +1109,7 @@ class Power_Law(Distribution):
 
     def _initial_parameters(self, data):
         from numpy import log, sum
-        return 1 + len(data)/sum( log( data / (self.xmin) ))
+        return 1 + len(data)/sum(log(data / (self.xmin)))
 
     def _cdf_base_function(self, x):
         if self.discrete:
@@ -1185,7 +1187,7 @@ class Exponential(Distribution):
         return C
 
     def pdf(self, data=None):
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -1201,7 +1203,7 @@ class Exponential(Distribution):
         return likelihoods
 
     def loglikelihoods(self, data=None):
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -1248,8 +1250,8 @@ class Streched_Exponential(Distribution):
 
     def _pdf_base_function(self, x):
         from numpy import exp
-        return ( ((x*self.Lambda)**(self.beta-1)) *
-            exp(-((self.Lambda*x)**self.beta)) )
+        return (((x*self.Lambda)**(self.beta-1)) *
+                exp(-((self.Lambda*x)**self.beta)))
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -1262,15 +1264,15 @@ class Streched_Exponential(Distribution):
         return False
 
     def pdf(self, data=None):
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import exp
-            likelihoods = ( (data*self.Lambda)**(self.beta-1) *
-                self.beta * self.Lambda *
-                exp((self.Lambda*self.xmin)**self.beta -
-                    (self.Lambda*data)**self.beta))
+            likelihoods = ((data*self.Lambda)**(self.beta-1) *
+                           self.beta * self.Lambda *
+                           exp((self.Lambda*self.xmin)**self.beta -
+                               (self.Lambda*data)**self.beta))
             #Simplified so as not to throw a nan from infs being divided by each other
             from sys import float_info
             likelihoods[likelihoods==0] = 10**float_info.min_10_exp
@@ -1279,7 +1281,7 @@ class Streched_Exponential(Distribution):
         return likelihoods
 
     def loglikelihoods(self, data=None):
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -1365,7 +1367,7 @@ class Truncated_Power_Law(Distribution):
         return C
 
     def pdf(self, data=None):
-        if data==None and hasattr(self, 'parent_Fit'):
+        if data is None and hasattr(self, 'parent_Fit'):
             data = self.parent_Fit.data
         if not self.discrete and self.in_range() and False:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -2170,8 +2172,8 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 
 
 def distribution_compare(data, distribution1, parameters1,
-        distribution2, parameters2,
-        discrete, xmin, xmax, nested=None, **kwargs):
+                         distribution2, parameters2,
+                         discrete, xmin, xmax, nested=None, **kwargs):
     no_data = False
     if xmax and all((data > xmax) + (data < xmin)):
         #Everything is beyond the bounds of the xmax and xmin
@@ -2190,14 +2192,15 @@ def distribution_compare(data, distribution1, parameters1,
     likelihoods1 = likelihood_function1(parameters1, data)
     likelihoods2 = likelihood_function2(parameters2, data)
 
-    if (distribution1 in distribution2) or (distribution2 in distribution1)\
-        and nested==None:
+    if ((distribution1 in distribution2) or
+        (distribution2 in distribution1)
+            and nested is None):
         print "Assuming nested distributions"
         nested = True
 
     from numpy import log
     R, p = loglikelihood_ratio(log(likelihoods1), log(likelihoods2),
-            nested=nested, **kwargs)
+                               nested=nested, **kwargs)
 
     return R, p
 
