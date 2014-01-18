@@ -98,7 +98,7 @@ class Fit(object):
             from numpy import sort
             self.data = sort(self.data)
 
-        self.fitting_cdf_bins, self.fitting_cdf = self.cdf()
+        self.fitting_cdf_bins, self.fitting_cdf = cdf(self.data, xmin=None, xmax=self.xmax)
 
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.fixed_xmin = True
@@ -357,6 +357,8 @@ class Fit(object):
             data = self.data
             xmin = self.xmin
             xmax = self.xmax
+        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
+                   **kwargs) 
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
                    **kwargs) 
 
