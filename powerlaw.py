@@ -98,6 +98,8 @@ class Fit(object):
             from numpy import sort
             self.data = sort(self.data)
 
+        self.fitting_cdf_bins, self.fitting_cdf = self.cdf()
+
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.fixed_xmin = True
             self.xmin = xmin
@@ -202,7 +204,6 @@ class Fit(object):
             self.noise_flag = True
             return self.xmin
 
-
         def fit_function(xmin):
             pl = Power_Law(xmin=xmin,
                            xmax=self.xmax,
@@ -240,11 +241,17 @@ class Fit(object):
 
         if self.noise_flag:
             print("No valid fits found.")
-
+        
+        #Set the Fit's xmin to the optimal xmin
         self.xmin = xmins[min_D_index]
         setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
         self.alpha = self.alphas[min_D_index]
         self.sigma = self.sigmas[min_D_index]
+
+        #Update the fitting CDF given the new xmin, in case other objects, like
+        #Distributions, want to use it for fitting (like if they do KS fitting)
+        self.fitting_cdf_bins, self.fitting_cdf = self.cdf()
+
         return self.xmin
 
 
@@ -568,7 +575,8 @@ class Distribution(object):
         self.parameter2_name = None
         self.parameter3_name = None
 
-        self.parent_Fit = parent_Fit
+        if parent_Fit:
+            self.parent_Fit = parent_Fit
 
         if parameters is not None:
             self.parameters(parameters)
@@ -645,11 +653,17 @@ class Distribution(object):
             self.Asquare = nan
             return self.D
 
-#        if hasattr(self, 'parent_Fit'):
-#        	bins, Actual_CDF = self.parent_Fit.cdf_bins, self.parent_Fit.cdf
-#	else:
-#        	bins, Actual_CDF = cdf(data)
-        bins, Actual_CDF = cdf(data)
+        if hasattr(self, 'parent_Fit'):
+            bins = self.parent_Fit.fitting_cdf_bins
+            Actual_CDF = self.parent_Fit.fitting_cdf
+            ind = bins>=self.xmin
+            bins = bins[ind]
+            Actual_CDF = Actual_CDF[ind]
+            Actual_CDF -= Actual_CDF[0]
+            Actual_CDF /= Actual_CDF[-1]
+        else:
+           	bins, Actual_CDF = cdf(data)
+
         Theoretical_CDF = self.cdf(bins)
 
         CDF_diff = Theoretical_CDF - Actual_CDF
@@ -1682,7 +1696,7 @@ def cumulative_distribution_function(data,
         from numpy import arange
         CDF = arange(n)/n
     else:
-#This clever bit way of using searchsorted to rapidly calculate the 
+#This clever bit is a way of using searchsorted to rapidly calculate the 
 #CDF of data with repeated values comes from Adam Ginsburg's plfit code,
 #specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
         from numpy import searchsorted, unique
