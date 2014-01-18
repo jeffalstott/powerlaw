@@ -579,7 +579,7 @@ class Distribution(object):
         if initial_parameters:
             self._given_initial_parameters(initial_parameters)
 
-        if (data is None) and not (parameter_range and self.parent_Fit):
+        if (data is not None) and not (parameter_range and self.parent_Fit):
             self.fit(data)
 
 
