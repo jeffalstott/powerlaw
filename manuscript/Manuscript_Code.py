@@ -10,10 +10,20 @@
 import pylab
 pylab.rcParams['xtick.major.pad']='8'
 pylab.rcParams['ytick.major.pad']='8'
-#import matplotlib.gridspec as gridspec
+#pylab.rcParams['font.sans-serif']='Arial'
+
 from matplotlib import rc
+rc('font', family='sans-serif')
+rc('font', size=10.0)
 rc('text', usetex=False)
-rc('font', family='serif')
+
+
+from matplotlib.font_manager import FontProperties
+
+panel_label_font = FontProperties().copy()
+panel_label_font.set_weight("bold")
+panel_label_font.set_size(12.0)
+panel_label_font.set_family("sans-serif")
 
 # <codecell>
 
@@ -37,13 +47,16 @@ words = genfromtxt('words.txt')
 worm = genfromtxt('worm.txt')
 worm = worm[worm>0]
 
+# <markdowncell>
+
+# ### Figure 1
+
 # <codecell>
 
 def plot_basics(data, data_inst, fig, units):
     from powerlaw import plot_pdf, Fit, pdf
     annotate_coord = (-.4, .95)
     ax1 = fig.add_subplot(n_graphs,n_data,data_inst)
-    plot_pdf(data[data>0], ax=ax1, linear_bins=True, color='r', linewidth=.5)
     x, y = pdf(data, linear_bins=True)
     ind = y>0
     y = y[ind]
@@ -53,12 +66,9 @@ def plot_basics(data, data_inst, fig, units):
     plot_pdf(data[data>0], ax=ax1, color='b', linewidth=2)
     from pylab import setp
     setp( ax1.get_xticklabels(), visible=False)
-    #ax1.set_xticks(ax1.get_xticks()[::2])
-    ax1.set_yticks(ax1.get_yticks()[::2])
-    locs,labels = yticks()
-    #yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
+
     if data_inst==1:
-        ax1.annotate("A", annotate_coord, xycoords="axes fraction", fontsize=14)
+        ax1.annotate("A", annotate_coord, xycoords="axes fraction", fontproperties=panel_label_font)
 
     
     from mpl_toolkits.axes_grid.inset_locator import inset_axes
@@ -73,46 +83,30 @@ def plot_basics(data, data_inst, fig, units):
     fit = Fit(data, xmin=1, discrete=True)
     fit.power_law.plot_pdf(ax=ax2, linestyle=':', color='g')
     p = fit.power_law.pdf()
-    #ax2.set_ylim(min(p), max(p))
+
     ax2.set_xlim(ax1.get_xlim())
     
     fit = Fit(data, discrete=True)
     fit.power_law.plot_pdf(ax=ax2, linestyle='--', color='g')
     from pylab import setp
     setp( ax2.get_xticklabels(), visible=False)
-    #ax2.set_xticks(ax2.get_xticks()[::2])
-    if ax2.get_ylim()[1] >1:
-        ax2.set_ylim(ax2.get_ylim()[0], 1)
-    
-    ax2.set_yticks(ax2.get_yticks()[::2])
-    #locs,labels = yticks()
-    #yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
+
     if data_inst==1:
-       ax2.annotate("B", annotate_coord, xycoords="axes fraction", fontsize=14)        
-       ax2.set_ylabel(r"$p(X)$")# (10^n)")
+       ax2.annotate("B", annotate_coord, xycoords="axes fraction", fontproperties=panel_label_font)        
+       ax2.set_ylabel(u"p(X)")# (10^n)")
         
     ax3 = fig.add_subplot(n_graphs,n_data,n_data*2+data_inst)#, sharex=ax1)#, sharey=ax2)
     fit.power_law.plot_pdf(ax=ax3, linestyle='--', color='g')
     fit.exponential.plot_pdf(ax=ax3, linestyle='--', color='r')
     fit.plot_pdf(ax=ax3, color='b', linewidth=2)
     
-    #p = fit.power_law.pdf()
     ax3.set_ylim(ax2.get_ylim())
-    ax3.set_yticks(ax3.get_yticks()[::2])
     ax3.set_xlim(ax1.get_xlim())
     
-    #locs,labels = yticks()
-    #yticks(locs, map(lambda x: "%.0f" % x, log10(locs)))
     if data_inst==1:
-        ax3.annotate("C", annotate_coord, xycoords="axes fraction", fontsize=14)
+        ax3.annotate("C", annotate_coord, xycoords="axes fraction", fontproperties=panel_label_font)
 
-    #if ax2.get_xlim()!=ax3.get_xlim():
-    #    zoom_effect01(ax2, ax3, ax3.get_xlim()[0], ax3.get_xlim()[1])
     ax3.set_xlabel(units)
-
-# <markdowncell>
-
-# ### Figure 1
 
 # <codecell>
 
@@ -138,7 +132,9 @@ units = 'Population Affected\nby Blackouts'
 plot_basics(data, data_inst, f, units)
 
 f.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=.3, hspace=.2)
-f.savefig('FigWorkflow.eps', bbox_inches='tight')
+figname = 'FigWorkflow'
+f.savefig(figname+'.eps', bbox_inches='tight')
+#f.savefig(figname+'.tiff', bbox_inches='tight', dpi=300)
 
 # <codecell>
 
@@ -177,9 +173,11 @@ data = words
 figPDF = powerlaw.plot_pdf(data, color='b')
 powerlaw.plot_pdf(data, linear_bins=True, color='r', ax=figPDF)
 ####
-figPDF.set_ylabel(r"$p(X)$")
+figPDF.set_ylabel("p(X)")
 figPDF.set_xlabel(r"Word Frequency")
-savefig('FigPDF.eps', bbox_inches='tight')
+figname = 'FigPDF'
+savefig(figname+'.eps', bbox_inches='tight')
+#savefig(figname+'.tiff', bbox_inches='tight', dpi=300)
 
 # <markdowncell>
 
@@ -195,9 +193,12 @@ fit.power_law.plot_pdf(color='b', linestyle='--', ax=figCCDF)
 fit.plot_ccdf(color='r', linewidth=2, ax=figCCDF)
 fit.power_law.plot_ccdf(color='r', linestyle='--', ax=figCCDF)
 ####
-figCCDF.set_ylabel(r"$p(X)$,  $p(X\geq x)$")
+figCCDF.set_ylabel(u"p(X),  p(X≥x)")
 figCCDF.set_xlabel(r"Word Frequency")
-savefig('FigCCDF.eps', bbox_inches='tight')
+
+figname = 'FigCCDF'
+savefig(figname+'.eps', bbox_inches='tight')
+#savefig(figname+'.tiff', bbox_inches='tight', dpi=300)
 
 # <codecell>
 
@@ -264,12 +265,16 @@ fit.power_law.plot_ccdf(color='r', linestyle='--', ax=FigCCDFmax, label=r"Fit, $
 #x, y = powerlaw.ccdf(data, xmax=max(data))
 #fig1.plot(x,y)
 ####
-FigCCDFmax.set_ylabel(r"$p(X\geq x)$")
+#FigCCDFmax.set_ylabel(r"$p(X\geq x)$")
+FigCCDFmax.set_ylabel(u"p(X≥x)")
 FigCCDFmax.set_xlabel(r"Word Frequency")
 handles, labels = FigCCDFmax.get_legend_handles_labels()
 leg = FigCCDFmax.legend(handles, labels, loc=3)
 leg.draw_frame(False)
-savefig('FigCCDFmax.eps', bbox_inches='tight')
+
+figname = 'FigCCDFmax'
+savefig(figname+'.eps', bbox_inches='tight')
+#savefig(figname+'.tiff', bbox_inches='tight', dpi=300)
 
 # <markdowncell>
 
@@ -357,11 +362,14 @@ fig = fit.plot_ccdf(linewidth=3, label='Empirical Data')
 fit.power_law.plot_ccdf(ax=fig, color='r', linestyle='--', label='Power law fit')
 fit.lognormal.plot_ccdf(ax=fig, color='g', linestyle='--', label='Lognormal fit')
 ####
-fig.set_ylabel(r"$p(X\geq x)$")
-fig.set_xlabel(r"Word Frequency")
+fig.set_ylabel(u"p(X≥x)")
+fig.set_xlabel("Word Frequency")
 handles, labels = fig.get_legend_handles_labels()
 fig.legend(handles, labels, loc=3)
-savefig('FigLognormal.eps', bbox_inches='tight')
+
+figname = 'FigLognormal'
+savefig(figname+'.eps', bbox_inches='tight')
+#savefig(figname+'.tiff', bbox_inches='tight', dpi=300)
 
 # <markdowncell>
 
@@ -498,7 +506,10 @@ ylim(0, .4)
 legend(loc=4)
 xlabel(r'$x_{min}$')
 ylabel(r'$D,\sigma,\alpha$')
-savefig('FigD.eps', bbox_inches='tight')
+
+figname = 'FigD'
+savefig(figname+'.eps', bbox_inches='tight')
+#savefig(figname+'.tiff', bbox_inches='tight', dpi=300)
 
 # <markdowncell>
 
@@ -521,6 +532,21 @@ fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
 initial_parameters = (12, .7)
 fit.lognormal.parameter_range(range_dict, initial_parameters)
 fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
+
+# <markdowncell>
+
+# ## Selecting x<sub>min</sub> with Other Distance Metrics
+
+# <codecell>
+
+data = blackouts
+####
+fit = powerlaw.Fit(data, xmin_distance='D')
+print fit.xmin, fit.power_law.alpha, fit.D
+fit = powerlaw.Fit(data, xmin_distance='V')
+print fit.xmin, fit.power_law.alpha, fit.V
+fit = powerlaw.Fit(data, xmin_distance='Asquare')
+print fit.xmin, fit.power_law.alpha, fit.Asquare
 
 # <markdowncell>
 
@@ -554,50 +580,41 @@ def validate(xmin, alpha, discrete='continuous', n_data=10000, n_trials=1):
 
 # <codecell>
 
-%%prun
-xmin=1
-alpha=1.5
-n_data=10000
-discrete='continuous'
-validate(xmin, alpha, discrete=discrete, n_data=n_data, n_trials=10)
-
-# <codecell>
-
-theoretical_xmins = unique(floor(logspace(0.0,2.0,num=20)))
-theoretical_alphas = array([1.5,2.0,2.5,3.0,3.5])
-#theoretical_xmins = [2]
-#theoretical_alphas = [2.5]
-distribution_types = ['continuous','discrete']
 n_trials = 10
 n_data = 10000
-
-ind = [(d,a,x) for d in distribution_types for a in theoretical_alphas for x in theoretical_xmins]
-ind = pd.MultiIndex.from_tuples(ind, names=['type', 'alpha','xmin'])
-df = pd.DataFrame(columns=['alpha_mean', 'alpha_sd', 'xmin_mean', 'xmin_sd'], index=ind)
-
-# <codecell>
-
-i = 0
-for dt, alpha, xmin in ind:
-    i += 1
-    print(i)
-    data = validate(xmin, alpha, discrete=dt, n_data=n_data, n_trials=n_trials)
-    df.ix[dt,alpha,xmin] = (mean(data[1]), std(data[1]), mean(data[0]), std(data[0]))
+theoretical_xmins = unique(floor(logspace(0.0,2.0,num=20)))
+theoretical_alphas = array([1.5,2.0,2.5,3.0,3.5])
+distribution_types = ['continuous','discrete']
 
 filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
-df.to_hdf(filename,'df')
 
-# <codecell>
+from os import listdir
+files = listdir('.')
+if filename in files:
+    df = pd.read_hdf(filename,'df')
+else:
+    print("Calculating validation fits on %i synthetic datasets of %i data points each. "
+          "Could take a long time.")%(n_trials*len(theoretical_alphas)*len(theoretical_xmins)*len(distribution_types), n_data) 
 
-#filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
-#df = pd.read_hdf(filename,'df')
+    ind = [(d,a,x) for d in distribution_types for a in theoretical_alphas for x in theoretical_xmins]
+    ind = pd.MultiIndex.from_tuples(ind, names=['type', 'alpha','xmin'])
+    df = pd.DataFrame(columns=['alpha_mean', 'alpha_sd', 'xmin_mean', 'xmin_sd'], index=ind)
+    
+    i = 0
+    for dt, alpha, xmin in ind:
+        i += 1
+        print(i)
+        data = validate(xmin, alpha, discrete=dt, n_data=n_data, n_trials=n_trials)
+        df.ix[dt,alpha,xmin] = (mean(data[1]), std(data[1]), mean(data[0]), std(data[0]))
+
+    df.to_hdf(filename,'df')
 
 # <codecell>
 
 subplot(2,2,1)
 for a in theoretical_alphas:
-    y_vals = df.ix['continuous', a]['alpha_mean']
-    error = df.ix['continuous', a]['alpha_sd']
+    y_vals = df.ix['continuous', a]['alpha_mean'].astype('float')
+    error = df.ix['continuous', a]['alpha_sd'].astype('float')
 
     plot(theoretical_xmins, y_vals, label=a)
     fill_between(theoretical_xmins, y_vals-error, y_vals+error, alpha=.1)
@@ -612,8 +629,8 @@ title("Continuous")
 #########
 subplot(2,2,2)
 for a in theoretical_alphas:
-    y_vals = df.ix['discrete', a]['alpha_mean']
-    error = df.ix['discrete', a]['alpha_sd']
+    y_vals = df.ix['discrete', a]['alpha_mean'].astype('float')
+    error = df.ix['discrete', a]['alpha_sd'].astype('float')
 
     plot(theoretical_xmins, y_vals, label=a)
     fill_between(theoretical_xmins, y_vals-error, y_vals+error, alpha=.1)
@@ -628,8 +645,8 @@ title("Discrete")
 ########
 subplot(2,2,3)
 for a in theoretical_alphas:
-    y_vals = df.ix['continuous', a]['xmin_mean']
-    error = df.ix['continuous', a]['xmin_sd']
+    y_vals = df.ix['continuous', a]['xmin_mean'].astype('float')
+    error = df.ix['continuous', a]['xmin_sd'].astype('float')
     up = y_vals+error
     down = y_vals-error
     ind = down<theoretical_xmins
@@ -652,8 +669,8 @@ legend_refs = []
 ########
 subplot(2,2,4,sharey=gca())
 for a in theoretical_alphas:
-    y_vals = df.ix['discrete', a]['xmin_mean']
-    error = df.ix['discrete', a]['xmin_sd']
+    y_vals = df.ix['discrete', a]['xmin_mean'].astype('float')
+    error = df.ix['discrete', a]['xmin_sd'].astype('float')
     up = y_vals+error
     down = y_vals-error
     ind = down<theoretical_xmins
@@ -679,4 +696,5 @@ subplots_adjust(wspace=.15, hspace=.1)
 legend( legend_refs[::-1], theoretical_alphas[::-1], loc = 'center right', bbox_to_anchor = (.1,0,1,1),
             bbox_transform = plt.gcf().transFigure, title=r'$\alpha$ of Data' )
 savefig('Fig_powerlaw_validation_%itrials_%idata.pdf'%(int(n_trials),int(n_data)), bbox_inches='tight')
+savefig('Fig_powerlaw_validation_%itrials_%idata.tiff'%(int(n_trials),int(n_data)), bbox_inches='tight', dpi=300)
 
