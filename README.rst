@@ -2,11 +2,14 @@
 `Clauset et al. 2007`__ and `Klaus et al. 2011`__ to determine if a
 probability distribution fits a power law. Academics, please cite as:
 
-Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2013). powerlaw: a Python package
-for analysis of heavy-tailed distributions. `arXiv:1305.0215 [physics.data-an]`__
+Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2014). powerlaw: a Python package
+for analysis of heavy-tailed distributions. `PLoS ONE 9(1): e85777`__
+
+Also available at `arXiv:1305.0215 [physics.data-an]`__
 
 __ http://arxiv.org/abs/0706.1062 
 __ http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779
+__ http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0085777
 __ http://arxiv.org/abs/1305.0215
 
 Basic Usage 
@@ -29,7 +32,7 @@ Quick Links
 -----------------
 `Installation`__
 
-`Working paper illustrating all of powerlaw's features, with figures`__
+`Paper illustrating all of powerlaw's features, with figures`__
 
 `Code examples from manuscript, as an IPython Notebook`__
 
