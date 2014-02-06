@@ -77,8 +77,8 @@ class Fit(object):
 
         self.given_xmin = xmin
         self.given_xmax = xmax
-        self.xmin = self.given_xmin
-        self.xmax = self.given_xmax
+        self.xmin = float(self.given_xmin)
+        self.xmax = float(self.given_xmax)
 
         self.xmin_distance = xmin_distance
 
