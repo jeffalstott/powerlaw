@@ -65,7 +65,7 @@ class Fit(object):
 
         self.data_original = data
         from numpy import asarray
-        self.data = asarray(self.data_original)
+        self.data = asarray(self.data_original, dtype='float')
 
         self.discrete = discrete
 
