@@ -656,16 +656,17 @@ class Distribution(object):
             self.Asquare = nan
             return self.D
 
-        if hasattr(self, 'parent_Fit'):
+        if  hasattr(self, 'parent_Fit'):
             bins = self.parent_Fit.fitting_cdf_bins
             Actual_CDF = self.parent_Fit.fitting_cdf
             ind = bins>=self.xmin
             bins = bins[ind]
             Actual_CDF = Actual_CDF[ind]
-            Actual_CDF -= Actual_CDF[0]
-            Actual_CDF /= Actual_CDF[-1]
+            dropped_probability = Actual_CDF[0]
+            Actual_CDF -= dropped_probability
+            Actual_CDF /= 1-dropped_probability
         else:
-           	bins, Actual_CDF = cdf(data)
+            bins, Actual_CDF = cdf(data)
 
         Theoretical_CDF = self.cdf(bins)
 
