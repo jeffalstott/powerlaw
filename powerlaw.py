@@ -77,8 +77,8 @@ class Fit(object):
 
         self.given_xmin = xmin
         self.given_xmax = xmax
-        self.xmin = float(self.given_xmin)
-        self.xmax = float(self.given_xmax)
+        self.xmin = self.given_xmin
+        self.xmax = self.given_xmax
 
         self.xmin_distance = xmin_distance
 
@@ -87,6 +87,7 @@ class Fit(object):
             self.data = self.data[self.data>0]
 
         if self.xmax:
+            self.xmax = float(self.xmax)
             self.fixed_xmax = True
             n_above_max = sum(self.data>self.xmax)
             self.data = self.data[self.data<=self.xmax]
@@ -102,7 +103,7 @@ class Fit(object):
 
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.fixed_xmin = True
-            self.xmin = xmin
+            self.xmin = float(xmin)
             self.noise_flag = None
             pl = Power_Law(xmin=self.xmin,
                            xmax=self.xmax,
