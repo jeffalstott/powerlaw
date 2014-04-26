@@ -15,7 +15,7 @@ __ http://arxiv.org/abs/1305.0215
 Basic Usage
 -----------------
 For the simplest, typical use cases, this tells you everything you need to
-know.:
+know.::
 
     import powerlaw
     data = array([1.7, 3.2 ...]) # data can be list or numpy array
