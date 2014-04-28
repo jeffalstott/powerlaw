@@ -5,7 +5,7 @@ with open('README.rst') as file:
 setup(
     name='powerlaw',
     py_modules=['powerlaw'],
-    version='1.2.1',
+    version='1.3',
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
     author='Jeff Alstott',
@@ -17,6 +17,7 @@ setup(
             'License :: OSI Approved :: MIT License',
             'Programming Language :: Python',
             'Programming Language :: Python :: 2.7',
+            'Programming Language :: Python :: 3',
             'Operating System :: OS Independent',
             'Topic :: Scientific/Engineering :: Mathematics',
             'Development Status :: 5 - Production/Stable',
