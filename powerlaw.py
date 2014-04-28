@@ -130,7 +130,7 @@ class Fit(object):
                                         'lognormal': Lognormal,
                                         'exponential': Exponential,
                                         'truncated_power_law': Truncated_Power_Law,
-                                        'stretched_exponential': Streched_Exponential,
+                                        'stretched_exponential': Stretched_Exponential,
                                         'gamma': None}
 
     def __getattr__(self, name):
@@ -1246,7 +1246,7 @@ class Exponential(Distribution):
         from numpy import log
         return self.xmin - (1/self.Lambda) * log(1-r)
 
-class Streched_Exponential(Distribution):
+class Stretched_Exponential(Distribution):
 
     def parameters(self, params):
         self.Lambda = params[0]
