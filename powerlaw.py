@@ -64,6 +64,7 @@ class Fit(object):
                  **kwargs):
 
         self.data_original = data
+        # import logging
         from numpy import asarray
         self.data = asarray(self.data_original, dtype='float')
 
@@ -95,7 +96,7 @@ class Fit(object):
             n_above_max = 0
             self.fixed_xmax = False
 
-        if not all(self.data[i] <= self.data[i+1] for i in xrange(len(self.data)-1)):
+        if not all(self.data[i] <= self.data[i+1] for i in range(len(self.data)-1)):
             from numpy import sort
             self.data = sort(self.data)
 
@@ -217,6 +218,7 @@ class Fit(object):
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
         fits = asarray(map(fit_function, xmins))
+        # logging.warning(fits.shape)
         setattr(self, xmin_distance+'s', fits[:,0])
         self.alphas = fits[:,1]
         self.sigmas = fits[:,2]
@@ -309,7 +311,7 @@ class Fit(object):
             Significance of R
         """
         if (dist1 in dist2) or (dist2 in dist1) and nested is None:
-            print "Assuming nested distributions"
+            print("Assuming nested distributions")
             nested = True
 
         dist1 = getattr(self, dist1)
@@ -2217,7 +2219,7 @@ def distribution_compare(data, distribution1, parameters1,
     if ((distribution1 in distribution2) or
         (distribution2 in distribution1)
             and nested is None):
-        print "Assuming nested distributions"
+        print("Assuming nested distributions")
         nested = True
 
     from numpy import log
@@ -2274,7 +2276,7 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', retur
     if xmax:
         data = data[data <= xmax]
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code, specifically around lines 131-143 of this version: http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
-    if not all(data[i] <= data[i + 1] for i in xrange(len(data) - 1)):
+    if not all(data[i] <= data[i + 1] for i in range(len(data) - 1)):
         data = sort(data)
     if xmin_range == 'find' or xmin_range is None:
         possible_xmins = data
