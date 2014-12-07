@@ -217,7 +217,7 @@ class Fit(object):
                            parent_Fit=self)
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
-        fits = asarray(map(fit_function, xmins))
+        fits = asarray(list(map(fit_function, xmins)))
         # logging.warning(fits.shape)
         setattr(self, xmin_distance+'s', fits[:,0])
         self.alphas = fits[:,1]
@@ -1424,7 +1424,7 @@ class Truncated_Power_Law(Distribution):
                     return x
                 r = rand()
         from numpy import array
-        return array(map(helper, r))
+        return array(list(map(helper, r)))
 
 class Lognormal(Distribution):
 
@@ -2306,17 +2306,17 @@ def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', retur
 
     if search_method == 'Likelihood':
         alpha_MLE_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='Likelihood', estimate_discrete=estimate_discrete)
-        fits = asarray(map(alpha_MLE_function, xmins))
+        fits = asarray(list(map(alpha_MLE_function, xmins)))
     elif search_method == 'KS':
         alpha_KS_function = lambda xmin: distribution_fit(data, 'power_law', xmin=xmin, xmax=xmax, discrete=discrete, search_method='KS', estimate_discrete=estimate_discrete)[0]
-        fits = asarray(map(alpha_KS_function, xmins))
+        fits = asarray(list(map(alpha_KS_function, xmins)))
 
     params = fits[:, 0]
     alphas = vstack(params)[:, 0]
     loglikelihoods = fits[:, 1]
 
     ks_function = lambda index: power_law_ks_distance(data, alphas[index], xmins[index], xmax=xmax, discrete=discrete)
-    Ds = asarray(map(ks_function, arange(len(xmins))))
+    Ds = asarray(list(map(ks_function, arange(len(xmins)))))
 
     sigmas = (alphas - 1) / sqrt(len(data) - xmin_indices + 1)
     good_values = sigmas < .1
@@ -2433,12 +2433,12 @@ def negative_binomial_likelihoods(data, r, p, xmin=0, xmax=False):
     from numpy import asarray
     from scipy.misc import comb
     pmf = lambda k: comb(k + r - 1, k) * (1 - p) ** r * p ** k
-    likelihoods = asarray(map(pmf, data)).flatten()
+    likelihoods = asarray(list(map(pmf, data))).flatten()
 
     if xmin != 0 or xmax:
         xmax = max(data)
         from numpy import arange
-        normalization_constant = sum(map(pmf, arange(xmin, xmax + 1)))
+        normalization_constant = sum(list(map(pmf, arange(xmin, xmax + 1))))
         likelihoods = likelihoods / normalization_constant
 
     from sys import float_info
@@ -2596,7 +2596,7 @@ def lognormal_likelihoods(data, mu, sigma, xmin, xmax=False, discrete=False):
 #            from mpmath import exp
             X = arange(xmin, xmax + 1)
 #            PDF_function = lambda x: (1.0/x)*exp(-( (log(x) - mu)**2 ) / 2*sigma**2)
-#            PDF = asarray(map(PDF_function,X))
+#            PDF = asarray(list(map(PDF_function,X)))
             PDF = (1.0 / X) * exp(-((log(X) - mu) ** 2) / (2 * (sigma ** 2)))
             PDF = (PDF / sum(PDF)).astype(float)
             likelihoods = PDF[(data - xmin).astype(int)]
