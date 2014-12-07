@@ -892,9 +892,11 @@ class Distribution(object):
             for k in r.keys():
 #For any attributes we've specificed, make sure we're above the lower bound
 #and below the lower bound (if they exist). This must be true of all of them.
-                if r[k][1] is not None:
-                    result *= r[k][1]> getattr(self, k)
-                result *= r[k][0]< getattr(self, k)
+                lower_bound, upper_bound = r[k]
+                if upper_bound:
+                    result *= getattr(self, k) < upper_bound
+                if lower_bound:
+                    result *= getattr(self, k) > lower_bound
             return result
         except AttributeError:
             try:
