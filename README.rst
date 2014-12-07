@@ -49,7 +49,7 @@ compatible with 3.x. The full version of Enthought is
 
 __ http://code.google.com/p/powerlaw/wiki/Installation
 __ http://arxiv.org/abs/1305.0215 
-__ http://nbviewer.ipython.org/bb4e1dfafd9e90d5bc3d
+__ http://nbviewer.ipython.org/github/jeffalstott/powerlaw/blob/master/manuscript/Manuscript_Code.ipynb
 __ http://pythonhosted.org/powerlaw/
 __ https://code.google.com/p/powerlaw/wiki/KnownIssues
 __ http://code.google.com/p/powerlaw/wiki/Interact
