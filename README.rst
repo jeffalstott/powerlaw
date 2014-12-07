@@ -1,3 +1,5 @@
+[![Downloads](https://pypip.in/d/powerlaw/badge.png)](https://crate.io/packages/powerlaw) [![Downloads](https://pypip.in/v/powerlaw/badge.png)](https://crate.io/packages/powerlaw)
+
 `powerlaw` is a toolbox using the statistical methods developed in
 `Clauset et al. 2007`__ and `Klaus et al. 2011`__ to determine if a
 probability distribution fits a power law. Academics, please cite as:
