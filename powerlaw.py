@@ -1012,6 +1012,8 @@ class Distribution(object):
         from numpy import unique
         bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
         PDF = self.pdf(bins)
+        from numpy import nan
+        PDF[PDF==0] = nan
         if not ax:
             import matplotlib.pyplot as plt
             plt.plot(bins, PDF, **kwargs)
@@ -1867,6 +1869,8 @@ def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     """
     edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
     bin_centers = (edges[1:]+edges[:-1])/2.0
+    from numpy import nan
+    hist[hist==0] = nan
     if not ax:
         import matplotlib.pyplot as plt
         plt.plot(bin_centers, hist, **kwargs)
