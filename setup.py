@@ -2,7 +2,7 @@ from distutils.core import setup
 with open('README.rst') as file:
         long_description = file.read()
 
-exec(open('yourpackage/version.py').read())
+exec(open('version.py').read())
 
 setup(
     name='powerlaw',
