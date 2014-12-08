@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 # <nbformat>3.0</nbformat>
 
+# <codecell>
+
+import powerlaw
+print(powerlaw.__version__)
+
+# <codecell>
+
+%pylab inline
+
 # <markdowncell>
 
 # # Set up 
@@ -314,7 +323,7 @@ data = blackouts
 ####
 fit = powerlaw.Fit(data)
 R, p = fit.distribution_compare('power_law', 'exponential', normalized_ratio=True)
-print R, p
+print(R, p)
 
 # <markdowncell>
 
@@ -341,12 +350,12 @@ fit.distribution_compare('power_law', 'truncated_power_law')
 data = words
 fit = powerlaw.Fit(data, discrete=True)
 ####
-print fit.distribution_compare('power_law', 'exponential', normalized_ratio=True)
-print fit.distribution_compare('power_law', 'truncated_power_law')
+print(fit.distribution_compare('power_law', 'exponential', normalized_ratio=True))
+print(fit.distribution_compare('power_law', 'truncated_power_law'))
 
 # <codecell>
 
-print fit.distribution_compare('power_law', 'truncated_power_law')
+print(fit.distribution_compare('power_law', 'truncated_power_law'))
 
 # <markdowncell>
 
@@ -477,7 +486,7 @@ fit.power_law.alpha, fit.power_law.sigma, fit.xmin
 
 # <codecell>
 
-parameter_range = lambda(self): self.sigma/self.alpha < .05
+parameter_range = lambda self: self.sigma/self.alpha < .05
 fit = powerlaw.Fit(data, parameter_range=parameter_range)
 fit.power_law.alpha, fit.power_law.sigma, fit.xmin
 
@@ -493,9 +502,9 @@ fit.power_law.alpha, fit.power_law.sigma, fit.xmin
 
 data = blackouts
 fit = powerlaw.Fit(data, sigma_threshold=.1)
-print fit.xmin, fit.D, fit.alpha
+print(fit.xmin, fit.D, fit.alpha)
 fit = powerlaw.Fit(data)
-print fit.xmin, fit.D, fit.alpha
+print(fit.xmin, fit.D, fit.alpha)
 ####
 from matplotlib.pylab import plot
 plot(fit.xmins, fit.Ds, label=r'$D$')
@@ -542,11 +551,11 @@ fit.lognormal.mu, fit.lognormal.sigma, fit.lognormal.noise_flag
 data = blackouts
 ####
 fit = powerlaw.Fit(data, xmin_distance='D')
-print fit.xmin, fit.power_law.alpha, fit.D
+print(fit.xmin, fit.power_law.alpha, fit.D)
 fit = powerlaw.Fit(data, xmin_distance='V')
-print fit.xmin, fit.power_law.alpha, fit.V
+print(fit.xmin, fit.power_law.alpha, fit.V)
 fit = powerlaw.Fit(data, xmin_distance='Asquare')
-print fit.xmin, fit.power_law.alpha, fit.Asquare
+print(fit.xmin, fit.power_law.alpha, fit.Asquare)
 
 # <markdowncell>
 
@@ -586,28 +595,32 @@ theoretical_xmins = unique(floor(logspace(0.0,2.0,num=20)))
 theoretical_alphas = array([1.5,2.0,2.5,3.0,3.5])
 distribution_types = ['continuous','discrete']
 
-filename = 'powerlaw_validation_%itrials_%idata.h5'%(int(n_trials),int(n_data))
+filename = 'powerlaw_validation_%itrials_%idata.csv'%(int(n_trials),int(n_data))
 
 from os import listdir
 files = listdir('.')
 if filename in files:
-    df = pd.read_hdf(filename,'df')
+    print("Reading previously calculated data from file %s"%filename)
+    df = pd.read_csv(filename)
+    df.set_index(['type', 'alpha', 'xmin'], inplace=True)
 else:
-    print("Calculating validation fits on %i synthetic datasets of %i data points each. "
-          "Could take a long time.")%(n_trials*len(theoretical_alphas)*len(theoretical_xmins)*len(distribution_types), n_data) 
 
     ind = [(d,a,x) for d in distribution_types for a in theoretical_alphas for x in theoretical_xmins]
+    
+    print("Calculating validation fits on %i parameter conditions, with %i trials for each conditions, with %i data points each. "
+      "Could take a long time."%(len(ind), n_trials, n_data))
+
     ind = pd.MultiIndex.from_tuples(ind, names=['type', 'alpha','xmin'])
     df = pd.DataFrame(columns=['alpha_mean', 'alpha_sd', 'xmin_mean', 'xmin_sd'], index=ind)
     
     i = 0
     for dt, alpha, xmin in ind:
         i += 1
-        print(i)
+        print("Parameter condition number %i"%i)
         data = validate(xmin, alpha, discrete=dt, n_data=n_data, n_trials=n_trials)
         df.ix[dt,alpha,xmin] = (mean(data[1]), std(data[1]), mean(data[0]), std(data[0]))
 
-    df.to_hdf(filename,'df')
+    df.to_csv(filename)
 
 # <codecell>
 
@@ -645,8 +658,8 @@ title("Discrete")
 ########
 subplot(2,2,3)
 for a in theoretical_alphas:
-    y_vals = df.ix['continuous', a]['xmin_mean'].astype('float')
-    error = df.ix['continuous', a]['xmin_sd'].astype('float')
+    y_vals = df.ix['continuous', a]['xmin_mean'].astype('float').values
+    error = df.ix['continuous', a]['xmin_sd'].astype('float').values
     up = y_vals+error
     down = y_vals-error
     ind = down<theoretical_xmins
@@ -669,8 +682,8 @@ legend_refs = []
 ########
 subplot(2,2,4,sharey=gca())
 for a in theoretical_alphas:
-    y_vals = df.ix['discrete', a]['xmin_mean'].astype('float')
-    error = df.ix['discrete', a]['xmin_sd'].astype('float')
+    y_vals = df.ix['discrete', a]['xmin_mean'].astype('float').values
+    error = df.ix['discrete', a]['xmin_sd'].astype('float').values
     up = y_vals+error
     down = y_vals-error
     ind = down<theoretical_xmins
