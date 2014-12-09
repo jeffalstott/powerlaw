@@ -12,7 +12,7 @@ setup(
     long_description=long_description,
     author='Jeff Alstott',
     author_email='jeffalstott@gmail.com',
-    url='github.com/jeffalstott/powerlaw',
+    url='http://www.github.com/jeffalstott/powerlaw',
         requires=['scipy', 'numpy', 'matplotlib', 'mpmath'],
         license='MIT',
         classifiers=[
