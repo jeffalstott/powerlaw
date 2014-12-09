@@ -7,12 +7,12 @@ exec(open('version.py').read())
 setup(
     name='powerlaw',
     py_modules=['powerlaw'],
-    version=__version__,
+    version= __version__,
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
     author='Jeff Alstott',
     author_email='jeffalstott@gmail.com',
-    url='http://code.google.com/p/powerlaw/',
+    url='github.com/jeffalstott/powerlaw',
         requires=['scipy', 'numpy', 'matplotlib', 'mpmath'],
         license='MIT',
         classifiers=[
