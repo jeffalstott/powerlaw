@@ -2,6 +2,15 @@ from distutils.core import setup
 with open('README.rst') as file:
         long_description = file.read()
 
+### Crap to be able to create a binary installer for Windows
+import codecs
+try:
+    codecs.lookup('mbcs')
+except LookupError:
+    ascii = codecs.lookup('ascii')
+    func = lambda name, enc=ascii: {True: enc}.get(name=='mbcs')
+    codecs.register(func)
+
 exec(open('version.py').read())
 
 setup(
