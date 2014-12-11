@@ -11,12 +11,10 @@ except LookupError:
     func = lambda name, enc=ascii: {True: enc}.get(name=='mbcs')
     codecs.register(func)
 
-exec(open('version.py').read())
-
 setup(
     name='powerlaw',
     py_modules=['powerlaw'],
-    version= __version__,
+    version= '1.3.1',
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
     author='Jeff Alstott',
