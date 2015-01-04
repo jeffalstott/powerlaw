@@ -112,11 +112,11 @@ class FirstTestCase(unittest.TestCase):
             results[k]['alpha'] = fit.alpha
             results[k]['xmin'] = fit.xmin
 
-            #assert_allclose(fit.alpha, references[k]['alpha'],
-            #        rtol=rtol, atol=atol, err_msg=k)
+            assert_allclose(fit.alpha, references[k]['alpha'],
+                    rtol=rtol, atol=atol, err_msg=k)
 
-            #assert_allclose(fit.xmin, references[k]['xmin'],
-            #        rtol=rtol, atol=atol, err_msg=k)
+            assert_allclose(fit.xmin, references[k]['xmin'],
+                    rtol=rtol, atol=atol, err_msg=k)
 
     def test_lognormal(self):
         print("Testing lognormal fits")

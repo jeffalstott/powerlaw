@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+from __future__ import (print_function, absolute_import,
+                        unicode_literals, division)
+import six
+
+
 #The MIT License (MIT)
 #
 #Copyright (c) 2013 Jeff Alstott
@@ -100,7 +106,7 @@ class Fit(object):
             from numpy import sort
             self.data = sort(self.data)
 
-        self.fitting_cdf_bins, self.fitting_cdf = cdf(self.data, xmin=None, xmax=self.xmax)
+        self.fitting_cdf_bins, self.fitting_cdf = cdf(self.data, xmin=None, xmax=self.xmax, discrete=discrete)
 
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.fixed_xmin = True
@@ -361,9 +367,9 @@ class Fit(object):
             xmin = self.xmin
             xmax = self.xmax
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs) 
-        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs) 
+                   discrete=self.discrete, **kwargs) 
+#        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
+#                   **kwargs) 
 
     def ccdf(self, original_data=False, survival=True, **kwargs):
         """
@@ -396,7 +402,7 @@ class Fit(object):
             xmin = self.xmin
             xmax = self.xmax
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs)
+                   discrete=self.discrete, **kwargs)
 
     def pdf(self, original_data=False, **kwargs):
         """
@@ -668,7 +674,7 @@ class Distribution(object):
             Actual_CDF -= dropped_probability
             Actual_CDF /= 1-dropped_probability
         else:
-            bins, Actual_CDF = cdf(data)
+            bins, Actual_CDF = cdf(data, discrete=self.discrete)
 
         Theoretical_CDF = self.cdf(bins)
 
@@ -1666,7 +1672,7 @@ def ccdf(data, survival=True, **kwargs):
 
 def cumulative_distribution_function(data,
     xmin=None, xmax=None,
-    survival=False, **kwargs):
+    survival=False, discrete=False, **kwargs):
     """
     The cumulative distribution function (CDF) of the data.
 
@@ -1700,9 +1706,10 @@ def cumulative_distribution_function(data,
     n = float(len(data))
     from numpy import sort
     data = sort(data)
-    all_unique = not( any( data[:-1]==data[1:] ) )
+#    all_unique = not( any( data[:-1]==data[1:] ) )
 
-    if all_unique:
+#    if all_unique:
+    if not discrete:
         from numpy import arange
         CDF = arange(n)/n
     else:
