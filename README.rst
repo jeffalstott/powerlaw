@@ -60,6 +60,11 @@ __ http://code.google.com/p/powerlaw/wiki/Interact
 __ http://www.enthought.com/products/epd.php
 __ http://www.enthought.com/products/edudownload.php 
 
+Further Development
+-----------------
+`powerlaw` is open for further development. If there's a feature you'd like to see in `powerlaw`, `submit an issue <https://github.com/jeffalstott/powerlaw/issues>`_. 
+Pull requests and offers for expansion or inclusion in other projects are welcomed and encouraged. The original author of `powerlaw`, Jeff Alstott, is now only writing minor tweaks, so contributions are very helpful.
+
 Acknowledgements
 -----------------
 Many thanks to Andreas Klaus, Mika Rubinov and Shan Yu for helpful
