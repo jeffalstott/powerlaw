@@ -20,6 +20,10 @@
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 #THE SOFTWARE.
 
+# as described in https://docs.python.org/2/library/functions.html#print
+from __future__ import print_function
+import sys
+
 class Fit(object):
     """
     A fit of a data set to various probability distributions, namely power
@@ -84,7 +88,7 @@ class Fit(object):
         self.xmin_distance = xmin_distance
 
         if 0 in self.data:
-            print("Values less than or equal to 0 in data. Throwing out 0 or negative values")
+            print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
             self.data = self.data[self.data>0]
 
         if self.xmax:
@@ -119,7 +123,7 @@ class Fit(object):
             #self.power_law = pl
         else:
             self.fixed_xmin=False
-            print("Calculating best minimal value for power law fit")
+            print("Calculating best minimal value for power law fit", file=sys.stderr)
             self.find_xmin()
 
         self.data = self.data[self.data>=self.xmin]
@@ -188,7 +192,7 @@ class Fit(object):
 
         if len(xmins)<=0:
             print("Less than 2 unique data values left after xmin and xmax "
-                  "options! Cannot fit. Returning nans.")
+                  "options! Cannot fit. Returning nans.", file=sys.stderr)
             from numpy import nan, array
             self.xmin = nan
             self.D = nan
@@ -243,7 +247,7 @@ class Fit(object):
             self.noise_flag = False
 
         if self.noise_flag:
-            print("No valid fits found.")
+            print("No valid fits found.", file=sys.stderr)
         
         #Set the Fit's xmin to the optimal xmin
         self.xmin = xmins[min_D_index]
@@ -311,7 +315,7 @@ class Fit(object):
             Significance of R
         """
         if (dist1 in dist2) or (dist2 in dist1) and nested is None:
-            print("Assuming nested distributions")
+            print("Assuming nested distributions", file=sys.stderr)
             nested = True
 
         dist1 = getattr(self, dist1)
@@ -627,7 +631,7 @@ class Distribution(object):
         else:
             self.noise_flag=False
         if self.noise_flag and not suppress_output:
-            print("No valid fits found.")
+            print("No valid fits found.", file=sys.stderr)
         self.loglikelihood =-negative_loglikelihood
         self.KS(data)
 
@@ -648,7 +652,7 @@ class Distribution(object):
             data = self.parent_Fit.data
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if len(data)<2:
-            print("Not enough data. Returning nan")
+            print("Not enough data. Returning nan", file=sys.stderr)
             from numpy import nan
             self.D = nan
             self.D_plus = nan
@@ -2006,7 +2010,7 @@ class Distribution_Fit(object):
                     candidate distribution, and the very large number of samples will make the Monte Carlo simulations very close to a perfect\n\
                     fit. As such, such a test will always fail, unless your candidate distribution perfectly describes all elements of the\n\
                     system, including the noise. A more helpful analysis is the comparison between multiple, specific candidate distributions\n\
-                    (the loglikelihood ratio test), which tells you which is the best fit of these distributions.")
+                    (the loglikelihood ratio test), which tells you which is the best fit of these distributions.", file=sys.stderr)
             self.p = None
             return self.p
 #
@@ -2037,16 +2041,16 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     from numpy import log
 
     if distribution == 'negative_binomial' and not is_discrete(data):
-        print("Rounding to integer values for negative binomial fit.")
+        print("Rounding to integer values for negative binomial fit.", file=sys.stderr)
         from numpy import around
         data = around(data)
         discrete = True
 
     #If we aren't given an xmin, calculate the best possible one for a power law. This can take awhile!
     if xmin is None or xmin == 'find' or type(xmin) == tuple or type(xmin) == list:
-        print("Calculating best minimal value")
+        print("Calculating best minimal value", file=sys.stderr)
         if 0 in data:
-            print("Value 0 in data. Throwing out 0 values")
+            print("Value 0 in data. Throwing out 0 values", file=sys.stderr)
             data = data[data != 0]
         xmin, D, alpha, loglikelihood, n_tail, noise_flag = find_xmin(data, discrete=discrete, xmax=xmax, search_method=search_method, estimate_discrete=estimate_discrete, xmin_range=xmin)
     else:
@@ -2064,8 +2068,8 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
 
     #Special case where we call distribution_fit multiple times to do all comparisons
     if distribution == 'all':
-        print("Analyzing all distributions")
-        print("Calculating power law fit")
+        print("Analyzing all distributions", file=sys.stderr)
+        print("Calculating power law fit", file=sys.stderr)
         if alpha:
             pl_parameters = [alpha]
         else:
@@ -2077,7 +2081,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         results['fits'] = {}
         results['fits']['power_law'] = (pl_parameters, loglikelihood)
 
-        print("Calculating truncated power law fit")
+        print("Calculating truncated power law fit", file=sys.stderr)
         tpl_parameters, loglikelihood, R, p = distribution_fit(data, 'truncated_power_law', discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method, estimate_discrete=estimate_discrete)
         results['fits']['truncated_power_law'] = (tpl_parameters, loglikelihood)
         results['power_law_comparison'] = {}
@@ -2087,7 +2091,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         supported_distributions = ['exponential', 'lognormal', 'stretched_exponential', 'gamma']
 
         for i in supported_distributions:
-            print("Calculating %s fit" % i)
+            print("Calculating %s fit" % (i,), file=sys.stderr)
             parameters, loglikelihood, R, p = distribution_fit(data, i, discrete, xmin, xmax, comparison_alpha=pl_parameters[0], search_method=search_method, estimate_discrete=estimate_discrete)
             results['fits'][i] = (parameters, loglikelihood)
             results['power_law_comparison'][i] = (R, p)
@@ -2122,7 +2126,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
     n = float(len(data))
 
     #Initial search parameters, estimated from the data
-#    print("Calculating initial parameters for search")
+#    print("Calculating initial parameters for search", file=sys.stderr)
     if distribution == 'power_law' and not alpha:
         initial_parameters = [1 + n / sum(log(data / (xmin)))]
     elif distribution == 'exponential':
@@ -2145,7 +2149,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
         initial_parameters = [n / sum(log(data / xmin)), mean(data)]
 
     if search_method == 'Likelihood':
-#        print("Searching using maximum likelihood method")
+#        print("Searching using maximum likelihood method", file=sys.stderr)
         #If the distribution is a continuous power law without an xmax, and we're using the maximum likelihood method, we can compute the parameters and likelihood directly
         if distribution == 'power_law' and not discrete and not xmax and not alpha:
             from numpy import array, nan
@@ -2184,7 +2188,7 @@ def distribution_fit(data, distribution='all', discrete=False, xmin=None, xmax=N
             return parameters, loglikelihood
 
     elif search_method == 'KS':
-        print("Not yet supported. Sorry.")
+        print("Not yet supported. Sorry.", file=sys.stderr)
         return
 #        #Search for the best fit parameters for the target distribution, on this data
 #        from scipy.optimize import fmin
@@ -2225,7 +2229,7 @@ def distribution_compare(data, distribution1, parameters1,
     if ((distribution1 in distribution2) or
         (distribution2 in distribution1)
             and nested is None):
-        print("Assuming nested distributions")
+        print("Assuming nested distributions", file=sys.stderr)
         nested = True
 
     from numpy import log
@@ -2277,7 +2281,7 @@ def likelihood_function_generator(distribution_name, discrete=False, xmin=1, xma
 def find_xmin(data, discrete=False, xmax=None, search_method='Likelihood', return_all=False, estimate_discrete=True, xmin_range=None):
     from numpy import sort, unique, asarray, argmin, vstack, arange, sqrt
     if 0 in data:
-        print("Value 0 in data. Throwing out 0 values")
+        print("Value 0 in data. Throwing out 0 values", file=sys.stderr)
         data = data[data != 0]
     if xmax:
         data = data[data <= xmax]
@@ -2427,7 +2431,7 @@ def negative_binomial_likelihoods(data, r, p, xmin=0, xmax=False):
 
     #Better to make this correction earlier on in distribution_fit, so as to not recheck for discreteness and reround every time fmin is used.
     #if not is_discrete(data):
-    #    print("Rounding to nearest integer values for negative binomial fit.")
+    #    print("Rounding to nearest integer values for negative binomial fit.", file=sys.stderr)
     #    from numpy import around
     #    data = around(data)
 
