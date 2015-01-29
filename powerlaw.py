@@ -1449,6 +1449,97 @@ class Lognormal(Distribution):
     def name(self):
         return "lognormal"
 
+    def pdf(self, data=None):
+        """
+        Returns the probability density function (normalized histogram) of the
+        theoretical distribution for the values in data within xmin and xmax,
+        if present.
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+
+        Returns
+        -------
+        probabilities : array
+        """
+        if data is None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+        n = len(data)
+        from sys import float_info
+        if not self.in_range():
+            from numpy import tile
+            return tile(10**float_info.min_10_exp, n)
+
+        if not self.discrete:
+            f = self._pdf_base_function(data)
+            C = self._pdf_continuous_normalizer
+            likelihoods = f*C
+        else:
+            if self._pdf_discrete_normalizer:
+                f = self._pdf_base_function(data)
+                C = self._pdf_discrete_normalizer
+                likelihoods = f*C
+            elif self.discrete_approximation=='round':
+                likelihoods = self._round_discrete_approx(data)
+            else:
+                if self.discrete_approximation=='xmax':
+                    upper_limit = self.xmax
+                else:
+                    upper_limit = self.discrete_approximation
+#            from mpmath import exp
+                from numpy import arange
+                X = arange(self.xmin, upper_limit+1)
+                PDF = self._pdf_base_function(X)
+                PDF = (PDF/sum(PDF)).astype(float)
+                likelihoods = PDF[(data-self.xmin).astype(int)]
+        likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+        return likelihoods
+
+    def _round_discrete_approx(self, data):
+        """
+        This function reformulates the calculation to avoid underflow errors
+        with the erf function. As implemented, erf(x) quickly approaches 1
+        while erfc(x) is more accurate. Since erfc(x) = 1 - erf(x),
+        calculations can be written using erfc(x)
+        """
+        import numpy as np
+        import scipy.special as ss
+        """ Temporarily expand xmin and xmax to be able to grab the extra bit of
+        probability mass beyond the (integer) values of xmin and xmax
+        Note this is a design decision. One could also say this extra 
+        probability "off the edge" of the distribution shouldn't be included,
+        and that implementation is retained below, commented out. Note, however,
+        that such a cliff means values right at xmin and xmax have half the width to
+        grab probability from, and thus are lower probability than they would otherwise
+        be. This is particularly concerning for values at xmin, which are typically 
+        the most likely and greatly influence the distribution's fit.
+        """
+        lower_data = data-.5
+        upper_data = data+.5
+        self.xmin -= .5
+        if self.xmax:
+            self.xmax -= .5
+
+
+        # revised calculation written to avoid underflow errors
+        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.sigma)      
+        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.sigma)      
+        likelihoods = 0.5*(ss.erfc(arg1) - ss.erfc(arg2))
+        if not self.xmax:
+            norm = 0.5*ss.erfc((np.log(self.xmin)-self.mu) / (np.sqrt(2)*self.sigma))
+        else:
+            # may still need to be fixed
+            norm = - self._cdf_xmin + self._cdf_base_function(self.xmax)
+        self.xmin +=.5
+        if self.xmax:
+            self.xmax += .5
+
+        return likelihoods/norm
+
     def _initial_parameters(self, data):
         from numpy import mean, std, log
         logdata = log(data)

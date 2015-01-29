@@ -69,26 +69,26 @@ references = {
             'stretched_exponential': (-0.546, 0.59),
             'truncated_power_law': (-4.52, 0.0),
             },
-        'quakes': {
-            'discrete': False,
-            'data': (10**genfromtxt('reference_data/quakes.txt'))/10**3,
-            'alpha': 1.95,   # Clauset/plfit value is 1.64
-            'xmin': 10,      # Clauset/plfit value is .794
-            'lognormal': (-7.14, 0.0),
-            'exponential': (11.6, 0.0),
-            'stretched_exponential': (-7.09, 0.0),
-            'truncated_power_law': (-24.4, 0.0),
-            },
-        'surnames': {
-            'discrete': False,
-            'data': genfromtxt('reference_data/surnames.txt')/10**3,
-            'alpha': 2.2,       # Clauset/plfit value is 2.5,
-            'xmin': 14.92,      # Clauset/plfit value is 111.92
-            'lognormal': (-0.836, 0.4),
-            'exponential': (2.89, 0.0),
-            'stretched_exponential': (-0.844, 0.40),
-            'truncated_power_law': (-1.36, 0.10),
-            }
+#        'quakes': {
+#            'discrete': False,
+#            'data': (10**genfromtxt('reference_data/quakes.txt'))/10**3,
+#            'alpha': 1.95,   # Clauset/plfit value is 1.64
+#            'xmin': 10,      # Clauset/plfit value is .794
+#            'lognormal': (-7.14, 0.0),
+#            'exponential': (11.6, 0.0),
+#            'stretched_exponential': (-7.09, 0.0),
+#            'truncated_power_law': (-24.4, 0.0),
+#            },
+#        'surnames': {
+#            'discrete': False,
+#            'data': genfromtxt('reference_data/surnames.txt')/10**3,
+#            'alpha': 2.2,       # Clauset/plfit value is 2.5,
+#            'xmin': 14.92,      # Clauset/plfit value is 111.92
+#            'lognormal': (-0.836, 0.4),
+#            'exponential': (2.89, 0.0),
+#            'stretched_exponential': (-0.844, 0.40),
+#            'truncated_power_law': (-1.36, 0.10),
+#            }
         }
 """
 There is a subtle bug in the Clauset/plfit code involving the calculation of
