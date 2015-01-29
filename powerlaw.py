@@ -1477,7 +1477,7 @@ class Lognormal(Distribution):
         if not self.discrete:
             f = self._pdf_base_function(data)
             C = self._pdf_continuous_normalizer
-            likelihoods = f*C
+            likelihoods = f/C
         else:
             if self._pdf_discrete_normalizer:
                 f = self._pdf_base_function(data)
@@ -1566,9 +1566,8 @@ class Lognormal(Distribution):
 #        from scipy.special import erfc
         from scipy.constants import pi
         from numpy import sqrt, log
-        C = ( sqrt(2/(pi*self.sigma**2)) /
-                erfc( (log(self.xmin)-self.mu) / (sqrt(2)*self.sigma))
-                )
+        C = (erfc((log(self.xmin) - self.mu) / (sqrt(2) * self.sigma)) /
+             sqrt(2/(pi*self.sigma**2)))
         return float(C)
 
     @property
