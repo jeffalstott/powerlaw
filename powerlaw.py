@@ -1470,14 +1470,17 @@ class Lognormal(Distribution):
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         n = len(data)
         from sys import float_info
+        from numpy import tile
         if not self.in_range():
-            from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
         if not self.discrete:
             f = self._pdf_base_function(data)
             C = self._pdf_continuous_normalizer
-            likelihoods = f/C
+            if C > 0:
+                likelihoods = f/C
+            else:
+                likelihoods = tile(10**float_info.min_10_exp, n)
         else:
             if self._pdf_discrete_normalizer:
                 f = self._pdf_base_function(data)
