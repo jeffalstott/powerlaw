@@ -122,7 +122,8 @@ class FirstTestCase(unittest.TestCase):
     def setUpClass(cls):
         for k in references.keys():
             data = references[k]['data']
-            fit = powerlaw.Fit(data, discrete=references[k]['discrete'])
+            fit = powerlaw.Fit(data, discrete=references[k]['discrete'],
+                               estimate_discrete=False)
             results[k]['alpha'] = fit.alpha
             results[k]['xmin'] = fit.xmin
             results[k]['fit'] = fit
@@ -154,8 +155,8 @@ class FirstTestCase(unittest.TestCase):
                                             normalized_ratio=True)
             results[k]['lognormal'] = Randp
 
-            #assert_allclose(Randp, references[k]['lognormal'],
-                            #rtol=rtol, atol=atol, err_msg=k)
+            assert_allclose(Randp, references[k]['lognormal'],
+                            rtol=rtol, atol=atol, err_msg=k)
 
     def test_exponential(self):
         print("Testing exponential fits")
