@@ -74,7 +74,7 @@ references = {
             'data': (10**genfromtxt('reference_data/quakes.txt'))/10**3,
             'alpha': 1.95,   # Clauset/plfit value is 1.64
             'xmin': 10,      # Clauset/plfit value is .794
-            'lognormal': (-7.14, 0.0),
+            'lognormal': (-0.796, 0.43),     # Clauset value is (-7.14, 0.0)
             'exponential': (11.6, 0.0),
             'stretched_exponential': (-7.09, 0.0),
             'truncated_power_law': (-24.4, 0.0),
@@ -84,7 +84,7 @@ references = {
             'data': genfromtxt('reference_data/surnames.txt')/10**3,
             'alpha': 2.2,       # Clauset/plfit value is 2.5,
             'xmin': 14.92,      # Clauset/plfit value is 111.92
-            'lognormal': (-0.836, 0.4),
+            'lognormal': (0.148, 0.88),     # Clauset value is (-0.836, 0.4)
             'exponential': (2.89, 0.0),
             'stretched_exponential': (-0.844, 0.40),
             'truncated_power_law': (-1.36, 0.10),
@@ -122,7 +122,8 @@ class FirstTestCase(unittest.TestCase):
     def setUpClass(cls):
         for k in references.keys():
             data = references[k]['data']
-            fit = powerlaw.Fit(data, discrete=references[k]['discrete'])
+            fit = powerlaw.Fit(data, discrete=references[k]['discrete'],
+                               estimate_discrete=False)
             results[k]['alpha'] = fit.alpha
             results[k]['xmin'] = fit.xmin
             results[k]['fit'] = fit
@@ -154,8 +155,8 @@ class FirstTestCase(unittest.TestCase):
                                             normalized_ratio=True)
             results[k]['lognormal'] = Randp
 
-            #assert_allclose(Randp, references[k]['lognormal'],
-                            #rtol=rtol, atol=atol, err_msg=k)
+            assert_allclose(Randp, references[k]['lognormal'],
+                            rtol=rtol, atol=atol, err_msg=k)
 
     def test_exponential(self):
         print("Testing exponential fits")
