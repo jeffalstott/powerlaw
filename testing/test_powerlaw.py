@@ -35,7 +35,7 @@ references = {
             'alpha': 2.3,
             'xmin': 230,
             'lognormal': (-0.412, 0.68),
-            'exponential': (1.21, 0.23),
+            'exponential': (1.43, 0.15),    # Clauset value is (1.21, 0.23),
             'stretched_exponential': (-0.417, 0.68),
             'truncated_power_law': (-0.382, 0.38),
             },
@@ -75,7 +75,7 @@ references = {
             'alpha': 1.95,   # Clauset/plfit value is 1.64
             'xmin': 10,      # Clauset/plfit value is .794
             'lognormal': (-0.796, 0.43),     # Clauset value is (-7.14, 0.0)
-            'exponential': (11.6, 0.0),
+            'exponential': (9.7, 0),   # Clauset value is (11.6, 0.0),
             'stretched_exponential': (-7.09, 0.0),
             'truncated_power_law': (-24.4, 0.0),
             },
@@ -85,7 +85,7 @@ references = {
             'alpha': 2.2,       # Clauset/plfit value is 2.5,
             'xmin': 14.92,      # Clauset/plfit value is 111.92
             'lognormal': (0.148, 0.88),     # Clauset value is (-0.836, 0.4)
-            'exponential': (2.89, 0.0),
+            'exponential': (10, 0),   # Clauset value is (2.89, 0.0),
             'stretched_exponential': (-0.844, 0.40),
             'truncated_power_law': (-1.36, 0.10),
             }
@@ -168,11 +168,11 @@ class FirstTestCase(unittest.TestCase):
             print(k)
             fit = results[k]['fit']
             Randp = fit.loglikelihood_ratio('power_law', 'exponential',
-                    normalized_ratio=True)
+                                            normalized_ratio=True)
             results[k]['exponential'] = Randp
 
-            #assert_allclose(Randp, references[k]['exponential'],
-            #        rtol=rtol, atol=atol, err_msg=k)
+            assert_allclose(Randp, references[k]['exponential'],
+                            rtol=rtol, atol=atol, err_msg=k)
 
     def test_stretched_exponential(self):
         print("Testing stretched_exponential fits")
