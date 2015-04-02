@@ -24,6 +24,8 @@
 from __future__ import print_function
 import sys
 
+__version__ = "1.3.3"
+
 class Fit(object):
     """
     A fit of a data set to various probability distributions, namely power
@@ -824,7 +826,7 @@ class Distribution(object):
 #the most likely and greatly influence the distribution's fit.
                 self.xmin -= .5
                 if self.xmax:
-                    self.xmax -= .5
+                    self.xmax += .5
                 #Clean data for invalid values before handing to cdf, which will purge them
                 #lower_data[lower_data<self.xmin] +=.5
                 #if self.xmax:
@@ -832,7 +834,7 @@ class Distribution(object):
                 likelihoods = self.cdf(upper_data)-self.cdf(lower_data)
                 self.xmin +=.5
                 if self.xmax:
-                    self.xmax += .5
+                    self.xmax -= .5
             else:
                 if self.discrete_approximation=='xmax':
                     upper_limit = self.xmax
@@ -1525,7 +1527,7 @@ class Lognormal(Distribution):
         upper_data = data+.5
         self.xmin -= .5
         if self.xmax:
-            self.xmax -= .5
+            self.xmax += .5
 
 
         # revised calculation written to avoid underflow errors
@@ -1539,7 +1541,7 @@ class Lognormal(Distribution):
             norm = - self._cdf_xmin + self._cdf_base_function(self.xmax)
         self.xmin +=.5
         if self.xmax:
-            self.xmax += .5
+            self.xmax -= .5
 
         return likelihoods/norm
 
