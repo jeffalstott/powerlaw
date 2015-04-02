@@ -137,7 +137,8 @@ class Fit(object):
                                         'exponential': Exponential,
                                         'truncated_power_law': Truncated_Power_Law,
                                         'stretched_exponential': Stretched_Exponential,
-                                        'gamma': None}
+                                        }
+                                        #'gamma': None}
 
     def __getattr__(self, name):
         if name in self.supported_distributions.keys():
