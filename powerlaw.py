@@ -1546,6 +1546,59 @@ class Lognormal(Distribution):
 
         return likelihoods/norm
 
+    def cdf(self, data=None, survival=False):
+        """
+        The cumulative distribution function (CDF) of the lognormal
+        distribution. Calculated for the values given in data within xmin and
+        xmax, if present. Calculation was reformulated to avoid underflow
+        errors
+
+        Parameters
+        ----------
+        data : list or array, optional
+            If not provided, attempts to use the data from the Fit object in
+            which the Distribution object is contained.
+        survival : bool, optional
+            Whether to calculate a CDF (False) or CCDF (True).
+            False by default.
+
+        Returns
+        -------
+        X : array
+            The sorted, unique values in the data.
+        probabilities : array
+            The portion of the data that is less than or equal to X.
+        """
+        from numpy import log, sqrt
+        import scipy.special as ss
+        if data is None and hasattr(self, 'parent_Fit'):
+            data = self.parent_Fit.data
+        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+        n = len(data)
+        from sys import float_info
+        if not self.in_range():
+            from numpy import tile
+            return tile(10**float_info.min_10_exp, n)
+
+        val_data = (log(data)-self.mu) / (sqrt(2)*self.sigma)
+        val_xmin = (log(self.xmin)-self.mu) / (sqrt(2)*self.sigma)
+        CDF = 0.5 * (ss.erfc(val_xmin) - ss.erfc(val_data))
+
+        #if self.xmax:
+        #    CDF = CDF - (1 - self._cdf_base_function(self.xmax))
+
+        norm = 0.5 * ss.erfc(val_xmin)
+        if self.xmax:
+            # still needs to be fixed
+            norm = norm - (1 - self._cdf_base_function(self.xmax))
+
+        CDF = CDF/norm
+
+        if survival:
+            CDF = 1 - CDF
+
+        return CDF
+
     def _initial_parameters(self, data):
         from numpy import mean, std, log
         logdata = log(data)
