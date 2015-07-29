@@ -900,9 +900,9 @@ class Distribution(object):
 #For any attributes we've specificed, make sure we're above the lower bound
 #and below the lower bound (if they exist). This must be true of all of them.
                 lower_bound, upper_bound = r[k]
-                if upper_bound:
+                if upper_bound is not None:
                     result *= getattr(self, k) < upper_bound
-                if lower_bound:
+                if lower_bound is not None:
                     result *= getattr(self, k) > lower_bound
             return result
         except AttributeError:
