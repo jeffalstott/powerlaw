@@ -369,8 +369,6 @@ class Fit(object):
             xmax = self.xmax
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
                    **kwargs) 
-        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs) 
 
     def ccdf(self, original_data=False, survival=True, **kwargs):
         """
@@ -772,6 +770,16 @@ class Distribution(object):
         if survival:
             CDF = 1 - CDF
 
+        possible_numerical_error = False
+        from numpy import isnan, min
+        if isnan(min(CDF)):
+            print("'nan' in fit cumulative distribution values.", file=sys.stderr)
+            possible_numerical_error = True
+        #if 0 in CDF or 1 in CDF:
+        #    print("0 or 1 in fit cumulative distribution values.", file=sys.stderr)
+        #    possible_numerical_error = True
+        if possible_numerical_error:
+            print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
         return CDF
 
     @property
@@ -1597,6 +1605,16 @@ class Lognormal(Distribution):
         if survival:
             CDF = 1 - CDF
 
+        possible_numerical_error = False
+        from numpy import isnan, min
+        if isnan(min(CDF)):
+            print("'nan' in fit cumulative distribution values.", file=sys.stderr)
+            possible_numerical_error = True
+        #if 0 in CDF or 1 in CDF:
+        #    print("0 or 1 in fit cumulative distribution values.", file=sys.stderr)
+        #    possible_numerical_error = True
+        if possible_numerical_error:
+            print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
         return CDF
 
     def _initial_parameters(self, data):
