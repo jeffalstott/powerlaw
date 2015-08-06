@@ -758,8 +758,6 @@ class Distribution(object):
             return CDF
 
         CDF = self._cdf_base_function(data) - self._cdf_xmin
-        #if self.xmax:
-        #    CDF = CDF - (1 - self._cdf_base_function(self.xmax))
 
         norm = 1 - self._cdf_xmin
         if self.xmax:
@@ -1592,12 +1590,9 @@ class Lognormal(Distribution):
         val_xmin = (log(self.xmin)-self.mu) / (sqrt(2)*self.sigma)
         CDF = 0.5 * (ss.erfc(val_xmin) - ss.erfc(val_data))
 
-        #if self.xmax:
-        #    CDF = CDF - (1 - self._cdf_base_function(self.xmax))
-
         norm = 0.5 * ss.erfc(val_xmin)
         if self.xmax:
-            # still needs to be fixed
+            # TO DO: Improve this line further for better numerical accuracy?
             norm = norm - (1 - self._cdf_base_function(self.xmax))
 
         CDF = CDF/norm
