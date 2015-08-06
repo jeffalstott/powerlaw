@@ -39,6 +39,9 @@ Quick Links
 `Paper illustrating all of powerlaw's features, with figures`__
 
 `Code examples from manuscript, as an IPython Notebook`__
+Note: Some results involving lognormals will now be different from the
+manuscript, as the lognormal fitting has been improved to allow for
+greater numerical precision.
 
 `Documentation`__
 
