@@ -561,7 +561,7 @@ class Distribution(object):
         A Fit object from which to use data, if it exists.
     """
 
-    __(self,
+    def __init__(self,
                  xmin=1, xmax=None,
                  discrete=False,
                  fit_method='Likelihood',
@@ -1102,7 +1102,7 @@ class Distribution(object):
 
 class Power_Law(Distribution):
 
-    __(self, estimate_discrete=True, **kwargs):
+    def __init__(self, estimate_discrete=True, **kwargs):
         self.estimate_discrete = estimate_discrete
         Distribution.__init__(self, **kwargs)
 
