@@ -137,6 +137,7 @@ class Fit(object):
                                         'exponential': Exponential,
                                         'truncated_power_law': Truncated_Power_Law,
                                         'stretched_exponential': Stretched_Exponential,
+                                        'lognormal_positive': Lognormal_Positive,
                                         }
                                         #'gamma': None}
 
@@ -560,7 +561,7 @@ class Distribution(object):
         A Fit object from which to use data, if it exists.
     """
 
-    def __init__(self,
+    __(self,
                  xmin=1, xmax=None,
                  discrete=False,
                  fit_method='Likelihood',
@@ -1101,7 +1102,7 @@ class Distribution(object):
 
 class Power_Law(Distribution):
 
-    def __init__(self, estimate_discrete=True, **kwargs):
+    __(self, estimate_discrete=True, **kwargs):
         self.estimate_discrete = estimate_discrete
         Distribution.__init__(self, **kwargs)
 
@@ -1680,6 +1681,16 @@ class Lognormal(Distribution):
 #        else:
 #            return x1
 
+
+class Lognormal_Positive(Lognormal):
+    @property
+    def name(self):
+        return "lognormal_positive"
+    
+    def _in_standard_parameter_range(self):
+#The standard deviation and mean can't be negative
+        return (self.sigma>0 and self.mu>0)
+        
 def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
     """
     Calculates a loglikelihood ratio and the p-value for testing which of two
