@@ -966,7 +966,7 @@ class Distribution(object):
         ax : matplotlib axis
             The axis to which the plot was made.
         """
-        return self.plot_cdf(data, ax=None, survival=survival, **kwargs)
+        return self.plot_cdf(data, ax=ax, survival=survival, **kwargs)
 
     def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
         """
@@ -996,10 +996,8 @@ class Distribution(object):
         CDF = self.cdf(bins, survival=survival)
         if not ax:
             import matplotlib.pyplot as plt
-            plt.plot(bins, CDF, **kwargs)
-            ax = plt.gca()
-        else:
-            ax.plot(bins, CDF, **kwargs)
+            fig, ax = plt.subplots()
+        ax.plot(bins, CDF, **kwargs)
         ax.set_xscale("log")
         ax.set_yscale("log")
         return ax
