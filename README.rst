@@ -1,4 +1,3 @@
-
 powerlaw: A Python Package for Analysis of Heavy-Tailed Distributions
 =====================================================================
 
@@ -70,7 +69,7 @@ or, better yet::
 
     pip install mpmath
 
-This last requirement will change if/when Scipy's gamma, gammainc and gammaincc functions have numerical accuracy for negative numbers.
+The requirement of ``mpmath`` will be dropped if/when the ``scipy`` functions ``gamma``, ``gammainc`` and ``gammaincc`` are updated to have sufficient numerical accuracy for negative numbers.
 
 You can also build from source from the code here on Github, though it may be a development version slightly ahead of the PyPI version.
 
@@ -85,6 +84,7 @@ Questions/discussions/help go on the Google Group `here`__. Also receives update
 
 __ https://groups.google.com/forum/?fromgroups#!forum/powerlaw-updates
 __ https://groups.google.com/forum/?fromgroups#!forum/powerlaw-general
+
 
 Power Laws vs. Lognormals and powerlaw's 'lognormal_positive' option
 -----------------
