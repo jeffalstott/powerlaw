@@ -1719,7 +1719,7 @@ def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
         distribution that produced them is a better fit to the data). If
         negative, the reverse is true.
     p : float
-        The significance of the sign of R. If below a critical values
+        The significance of the sign of R. If below a critical value
         (typically .05) the sign of R is taken to be significant. If above the
         critical value the sign of R is taken to be due to statistical
         fluctuations.
@@ -1757,7 +1757,7 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
         distribution that produced them is a better fit to the data). If
         negative, the reverse is true.
     p : float
-        The significance of the sign of R. If below a critical values
+        The significance of the sign of R. If below a critical value
         (typically .05) the sign of R is taken to be significant. If above the
         critical value the sign of R is taken to be due to statistical
         fluctuations.
