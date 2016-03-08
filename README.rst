@@ -1,8 +1,8 @@
 
 powerlaw: A Python Package for Analysis of Heavy-Tailed Distributions
-=======
+=====================================================================
 
-powerlaw is a toolbox using the statistical methods developed in
+``powerlaw`` is a toolbox using the statistical methods developed in
 `Clauset et al. 2007`__ and `Klaus et al. 2011`__ to determine if a
 probability distribution fits a power law. Academics, please cite as:
 
@@ -17,7 +17,7 @@ __ http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0085777
 __ http://arxiv.org/abs/1305.0215
 
 Basic Usage
------------------
+------------
 For the simplest, typical use cases, this tells you everything you need to
 know.::
 
@@ -33,7 +33,7 @@ which illustrates all of powerlaw's features. For details of the math,
 see Clauset et al. 2007, which developed these methods.
 
 Quick Links
------------------
+------------
 `Paper illustrating all of powerlaw's features, with figures`__
 
 `Code examples from manuscript, as an IPython Notebook`__
@@ -42,8 +42,6 @@ manuscript, as the lognormal fitting has been improved to allow for
 greater numerical precision.
 
 `Documentation`__
-
-`Update Notifications, Mailing List, and Contacts`__
 
 This code was developed and tested for Python 2.x with the 
 `Enthought Python Distribution`__,  and later amended to be
@@ -57,7 +55,7 @@ __ http://www.enthought.com/products/epd.php
 __ http://www.enthought.com/products/edudownload.php 
 
 Installation
------------------
+------------
 ``powerlaw`` is hosted on `PyPI`__, so installation is straightforward. The easiest way to install type this at the command line (Linux, Mac, or Windows)::
 
     easy_install powerlaw
