@@ -24,7 +24,7 @@
 from __future__ import print_function
 import sys
 
-__version__ = "1.3.4"
+__version__ = "1.4.1"
 
 class Fit(object):
     """
@@ -1742,7 +1742,7 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
     loglikelihoods2 : list or array
         The logarithms of the likelihoods of each observation, calculated from
         a particular probability distribution.
-    nested: bool, optional
+    nested : bool, optional
         Whether one of the two probability distributions that generated the
         likelihoods is a nested version of the other. False by default.
     normalized_ratio : bool, optional
