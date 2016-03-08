@@ -63,7 +63,7 @@ or, better yet::
 
     pip install powerlaw
 
-``easy_install`` or ``pip`` just need to be on your PATH, which for Linux or Mac is probably the case. `Here`__ is the Windows installer on PyPI (untested).
+``easy_install`` or ``pip`` just need to be on your PATH, which for Linux or Mac is probably the case.
 
 ``pip`` should install all dependencies automagically. These other dependencies are ``numpy``, ``scipy``, and ``matplotlib``. These are all present in Enthought, Anaconda, and most other scientific Python stacks. To fit truncated power laws or gamma distributions, ``mpmath`` is also required, which is less common and is installable with::
 
