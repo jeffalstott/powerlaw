@@ -7,7 +7,7 @@ powerlaw documentation
 ====================================
 
 Below are documentation for the functions and classes in powerlaw. See the
-`powerlaw home page <http://pypi.python.org/pypi/powerlaw>`_ for more
+`powerlaw home page <https://github.com/jeffalstott/powerlaw>`_ for more
 information and examples.
 
 .. toctree::
