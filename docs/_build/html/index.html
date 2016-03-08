@@ -112,6 +112,56 @@ normalize by their sum. N can be &#8220;xmax&#8221; or an integer.</p>
 </tbody>
 </table>
 <p class="rubric">Methods</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.KS" title="powerlaw.Distribution.KS"><code class="xref py py-obj docutils literal"><span class="pre">KS</span></code></a>([data])</td>
+<td>Returns the Kolmogorov-Smirnov distance D between the distribution and the data.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.ccdf" title="powerlaw.Distribution.ccdf"><code class="xref py py-obj docutils literal"><span class="pre">ccdf</span></code></a>([data,&nbsp;survival])</td>
+<td>The complementary cumulative distribution function (CCDF) of the theoretical distribution.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.cdf" title="powerlaw.Distribution.cdf"><code class="xref py py-obj docutils literal"><span class="pre">cdf</span></code></a>([data,&nbsp;survival])</td>
+<td>The cumulative distribution function (CDF) of the theoretical distribution.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.fit" title="powerlaw.Distribution.fit"><code class="xref py py-obj docutils literal"><span class="pre">fit</span></code></a>([data,&nbsp;suppress_output])</td>
+<td>Fits the parameters of the distribution to the data.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.generate_random" title="powerlaw.Distribution.generate_random"><code class="xref py py-obj docutils literal"><span class="pre">generate_random</span></code></a>([n,&nbsp;estimate_discrete])</td>
+<td>Generates random numbers from the theoretical probability distribution.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.in_range" title="powerlaw.Distribution.in_range"><code class="xref py py-obj docutils literal"><span class="pre">in_range</span></code></a>()</td>
+<td>Whether the current parameters of the distribution are within the range of valid parameters.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.initial_parameters" title="powerlaw.Distribution.initial_parameters"><code class="xref py py-obj docutils literal"><span class="pre">initial_parameters</span></code></a>(data)</td>
+<td>Return previously user-provided initial parameters or, if never provided,  calculate new ones.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.likelihoods" title="powerlaw.Distribution.likelihoods"><code class="xref py py-obj docutils literal"><span class="pre">likelihoods</span></code></a>(data)</td>
+<td>The likelihoods of the observed data from the theoretical distribution.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.loglikelihoods" title="powerlaw.Distribution.loglikelihoods"><code class="xref py py-obj docutils literal"><span class="pre">loglikelihoods</span></code></a>(data)</td>
+<td>The logarithm of the likelihoods of the observed data from the theoretical distribution.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.parameter_range" title="powerlaw.Distribution.parameter_range"><code class="xref py py-obj docutils literal"><span class="pre">parameter_range</span></code></a>(r[,&nbsp;initial_parameters])</td>
+<td>Set the limits on the range of valid parameters to be considered while fitting.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.pdf" title="powerlaw.Distribution.pdf"><code class="xref py py-obj docutils literal"><span class="pre">pdf</span></code></a>([data])</td>
+<td>Returns the probability density function (normalized histogram) of the theoretical distribution for the values in data within xmin and xmax, if present.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.plot_ccdf" title="powerlaw.Distribution.plot_ccdf"><code class="xref py py-obj docutils literal"><span class="pre">plot_ccdf</span></code></a>([data,&nbsp;ax,&nbsp;survival])</td>
+<td>Plots the complementary cumulative distribution function (CDF) of the theoretical distribution for the values given in data within xmin and xmax, if present.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Distribution.plot_cdf" title="powerlaw.Distribution.plot_cdf"><code class="xref py py-obj docutils literal"><span class="pre">plot_cdf</span></code></a>([data,&nbsp;ax,&nbsp;survival])</td>
+<td>Plots the cumulative distribution function (CDF) of the theoretical distribution for the values given in data within xmin and xmax, if present.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Distribution.plot_pdf" title="powerlaw.Distribution.plot_pdf"><code class="xref py py-obj docutils literal"><span class="pre">plot_pdf</span></code></a>([data,&nbsp;ax])</td>
+<td>Plots the probability density function (PDF) of the theoretical distribution for the values given in data within xmin and xmax, if present.</td>
+</tr>
+</tbody>
+</table>
 <dl class="method">
 <dt id="powerlaw.Distribution.KS">
 <code class="descname">KS</code><span class="sig-paren">(</span><em>data=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/powerlaw.html#Distribution.KS"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#powerlaw.Distribution.KS" title="Permalink to this definition">¶</a></dt>
@@ -477,6 +527,44 @@ of their lower and upper limits (ex. (1.5, 2.5), (None, .1)</p>
 </tbody>
 </table>
 <p class="rubric">Methods</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Fit.ccdf" title="powerlaw.Fit.ccdf"><code class="xref py py-obj docutils literal"><span class="pre">ccdf</span></code></a>([original_data,&nbsp;survival])</td>
+<td>Returns the complementary cumulative distribution function of the data.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Fit.cdf" title="powerlaw.Fit.cdf"><code class="xref py py-obj docutils literal"><span class="pre">cdf</span></code></a>([original_data,&nbsp;survival])</td>
+<td>Returns the cumulative distribution function of the data.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Fit.distribution_compare" title="powerlaw.Fit.distribution_compare"><code class="xref py py-obj docutils literal"><span class="pre">distribution_compare</span></code></a>(dist1,&nbsp;dist2[,&nbsp;nested])</td>
+<td>Returns the loglikelihood ratio, and its p-value, between the two distribution fits, assuming the candidate distributions are nested.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Fit.find_xmin" title="powerlaw.Fit.find_xmin"><code class="xref py py-obj docutils literal"><span class="pre">find_xmin</span></code></a>([xmin_distance])</td>
+<td>Returns the optimal xmin beyond which the scaling regime of the power law fits best.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Fit.loglikelihood_ratio" title="powerlaw.Fit.loglikelihood_ratio"><code class="xref py py-obj docutils literal"><span class="pre">loglikelihood_ratio</span></code></a>(dist1,&nbsp;dist2[,&nbsp;nested])</td>
+<td>Another name for distribution_compare.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Fit.nested_distribution_compare" title="powerlaw.Fit.nested_distribution_compare"><code class="xref py py-obj docutils literal"><span class="pre">nested_distribution_compare</span></code></a>(dist1,&nbsp;dist2[,&nbsp;...])</td>
+<td>Returns the loglikelihood ratio, and its p-value, between the two distribution fits, assuming the candidate distributions are nested.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Fit.pdf" title="powerlaw.Fit.pdf"><code class="xref py py-obj docutils literal"><span class="pre">pdf</span></code></a>([original_data])</td>
+<td>Returns the probability density function (normalized histogram) of the data.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Fit.plot_ccdf" title="powerlaw.Fit.plot_ccdf"><code class="xref py py-obj docutils literal"><span class="pre">plot_ccdf</span></code></a>([ax,&nbsp;original_data,&nbsp;survival])</td>
+<td>Plots the CCDF to a new figure or to axis ax if provided.</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#powerlaw.Fit.plot_cdf" title="powerlaw.Fit.plot_cdf"><code class="xref py py-obj docutils literal"><span class="pre">plot_cdf</span></code></a>([ax,&nbsp;original_data,&nbsp;survival])</td>
+<td>Plots the CDF to a new figure or to axis ax if provided.</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#powerlaw.Fit.plot_pdf" title="powerlaw.Fit.plot_pdf"><code class="xref py py-obj docutils literal"><span class="pre">plot_pdf</span></code></a>([ax,&nbsp;original_data,&nbsp;linear_bins])</td>
+<td>Plots the probability density function (PDF) or the data to a new figure or to axis ax if provided.</td>
+</tr>
+</tbody>
+</table>
 <dl class="method">
 <dt id="powerlaw.Fit.ccdf">
 <code class="descname">ccdf</code><span class="sig-paren">(</span><em>original_data=False</em>, <em>survival=True</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/powerlaw.html#Fit.ccdf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#powerlaw.Fit.ccdf" title="Permalink to this definition">¶</a></dt>
@@ -941,7 +1029,7 @@ a particular probability distribution.</p>
 <div><p>The logarithms of the likelihoods of each observation, calculated from
 a particular probability distribution.</p>
 </div></blockquote>
-<p><strong>nested: bool, optional</strong></p>
+<p><strong>nested</strong> : bool, optional</p>
 <blockquote>
 <div><p>Whether one of the two probability distributions that generated the
 likelihoods is a nested version of the other. False by default.</p>
@@ -962,7 +1050,7 @@ negative, the reverse is true.</p>
 </div></blockquote>
 <p><strong>p</strong> : float</p>
 <blockquote class="last">
-<div><p>The significance of the sign of R. If below a critical values
+<div><p>The significance of the sign of R. If below a critical value
 (typically .05) the sign of R is taken to be significant. If above the
 critical value the sign of R is taken to be due to statistical
 fluctuations.</p>
@@ -1015,7 +1103,7 @@ negative, the reverse is true.</p>
 </div></blockquote>
 <p><strong>p</strong> : float</p>
 <blockquote class="last">
-<div><p>The significance of the sign of R. If below a critical values
+<div><p>The significance of the sign of R. If below a critical value
 (typically .05) the sign of R is taken to be significant. If above the
 critical value the sign of R is taken to be due to statistical
 fluctuations.</p>
@@ -1151,7 +1239,9 @@ spaced bins (False). False by default.</p>
         <div class="sphinxsidebarwrapper">
   <h3><a href="#">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">Welcome to powerlaw&#8217;s documentation!</a></li>
+<li><a class="reference internal" href="#">Welcome to powerlaw&#8217;s documentation!</a><ul>
+</ul>
+</li>
 <li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
 </ul>
 <div class="relations">
