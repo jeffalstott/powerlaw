@@ -99,4 +99,4 @@ discussions. Thanks also to `Andreas Klaus <http://neuroscience.nih.gov/Fellows/
 `Aaron Clauset, Cosma Shalizi <http://tuvalu.santafe.edu/~aaronc/powerlaws/>`_,
 and `Adam Ginsburg <http://code.google.com/p/agpy/wiki/PowerLaw>`_ for making 
 their code available. Their implementations were a critical starting point for
-making powerlaw.
+making ``powerlaw``.
