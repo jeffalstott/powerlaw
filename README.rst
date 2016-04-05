@@ -1,4 +1,3 @@
-
 powerlaw: A Python Package for Analysis of Heavy-Tailed Distributions
 =====================================================================
 
