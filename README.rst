@@ -3,7 +3,7 @@ powerlaw: A Python Package for Analysis of Heavy-Tailed Distributions
 =====================================================================
 
 ``powerlaw`` is a toolbox using the statistical methods developed in
-`Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`_ and `Klaus et al. 2011 <http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779>`_to determine if a
+`Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`_ and `Klaus et al. 2011 <http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779>`_ to determine if a
 probability distribution fits a power law. Academics, please cite as:
 
 Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2014). powerlaw: a Python package
@@ -30,25 +30,20 @@ see Clauset et al. 2007, which developed these methods.
 
 Quick Links
 ------------
-`Paper illustrating all of powerlaw's features, with figures`__
+`Paper illustrating all of powerlaw's features, with figures <http://arxiv.org/abs/1305.0215>`__
 
-`Code examples from manuscript, as an IPython Notebook`__
+`Code examples from manuscript, as an IPython Notebook <http://nbviewer.ipython.org/github/jeffalstott/powerlaw/blob/master/manuscript/Manuscript_Code.ipynb>`__
 Note: Some results involving lognormals will now be different from the
 manuscript, as the lognormal fitting has been improved to allow for
 greater numerical precision.
 
-`Documentation`__
+`Documentation <http://pythonhosted.org/powerlaw/>`__
 
 This code was developed and tested for Python 2.x with the 
-`Enthought Python Distribution`__,  and later amended to be
+`Enthought Python Distribution <http://www.enthought.com/products/epd.php>`__,  and later amended to be
 compatible with 3.x. The full version of Enthought is 
-`available for free for academic use`__.
+`available for free for academic use <http://www.enthought.com/products/edudownload.php>`__.
 
-__ http://arxiv.org/abs/1305.0215 
-__ http://nbviewer.ipython.org/github/jeffalstott/powerlaw/blob/master/manuscript/Manuscript_Code.ipynb
-__ http://pythonhosted.org/powerlaw/
-__ http://www.enthought.com/products/epd.php
-__ http://www.enthought.com/products/edudownload.php 
 
 Installation
 ------------
