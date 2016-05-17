@@ -1941,17 +1941,32 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
         xmax = max(data)
     if not xmin:
         xmin = min(data)
+    
+   
+    if xmin<1:  #To compute the pdf also from the data below x=1, the data, xmax and xmin are rescaled dividing them by xmin.
+        xmax2=xmax/xmin
+        xmin2=1
+    else: 
+        xmax2=xmax
+        xmin2=xmin
+    
     if linear_bins:
-        bins = range(int(xmin), int(xmax))
+        bins = range(xmin2, int(xmax2))
     else:
-        log_min_size = log10(xmin)
-        log_max_size = log10(xmax)
+        log_min_size = log10(xmin2)
+        log_max_size = log10(xmax2)
         number_of_bins = ceil((log_max_size-log_min_size)*10)
         bins=unique(
                 floor(
                     logspace(
                         log_min_size, log_max_size, num=number_of_bins)))
-    hist, edges = histogram(data, bins, density=True)
+    
+    if xmin<1: #Needed to include also data x<1 in pdf.
+        hist, edges = histogram(data/xmin, bins, density=True)
+        edges=edges*xmin # transform result back to original   
+    else:
+        hist, edges = histogram(data, bins, density=True)
+    
     return edges, hist
 
 def checkunique(data):
