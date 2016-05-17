@@ -1951,7 +1951,7 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
         xmin2=xmin
     
     if linear_bins:
-        bins = range(xmin2, int(xmax2))
+        bins = range(int(xmin2), int(xmax2))
     else:
         log_min_size = log10(xmin2)
         log_max_size = log10(xmax2)
