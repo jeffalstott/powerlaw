@@ -1964,6 +1964,7 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
     if xmin<1: #Needed to include also data x<1 in pdf.
         hist, edges = histogram(data/xmin, bins, density=True)
         edges=edges*xmin # transform result back to original   
+        hist=hist/xmin # rescale hist, so that np.sum(hist*edges)==1
     else:
         hist, edges = histogram(data, bins, density=True)
     
