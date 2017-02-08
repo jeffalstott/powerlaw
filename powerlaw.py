@@ -67,6 +67,7 @@ class Fit(object):
                  parameter_range=None,
                  fit_optimizer=None,
                  xmin_distance='D',
+                 verbose=True,
                  **kwargs):
 
         self.data_original = data
@@ -89,7 +90,7 @@ class Fit(object):
 
         self.xmin_distance = xmin_distance
 
-        if 0 in self.data:
+        if 0 in self.data and verbose:
             print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
             self.data = self.data[self.data>0]
 
@@ -125,7 +126,8 @@ class Fit(object):
             #self.power_law = pl
         else:
             self.fixed_xmin=False
-            print("Calculating best minimal value for power law fit", file=sys.stderr)
+            if verbose:
+                print("Calculating best minimal value for power law fit", file=sys.stderr)
             self.find_xmin()
 
         self.data = self.data[self.data>=self.xmin]
