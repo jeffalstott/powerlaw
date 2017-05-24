@@ -19,12 +19,12 @@ know.::
     import powerlaw
     data = array([1.7, 3.2 ...]) # data can be list or numpy array
     results = powerlaw.Fit(data)
-    print results.power_law.alpha
-    print results.power_law.xmin
+    print(results.power_law.alpha)
+    print(results.power_law.xmin)
     R, p = results.distribution_compare('power_law', 'lognormal')
 
 For more explanation, understanding, and figures, see the paper,
-which illustrates all of powerlaw's features. For details of the math, 
+which illustrates all of ``powerlaw``'s features. For details of the math, 
 see Clauset et al. 2007, which developed these methods.
 
 Quick Links
