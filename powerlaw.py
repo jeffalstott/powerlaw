@@ -1,6 +1,6 @@
 #The MIT License (MIT)
 #
-#Copyright (c) 2013 Jeff Alstott
+#Copyright (c) 2013-2017 Jeff Alstott
 #
 #Permission is hereby granted, free of charge, to any person obtaining a copy
 #of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 from __future__ import print_function
 import sys
 
-__version__ = "1.4.1"
+__version__ = "1.4.3"
 
 class Fit(object):
     """
@@ -44,6 +44,9 @@ class Fit(object):
         None an optimal one will be calculated.
     xmax : int or float, optional
         The maximum value of the fitted distributions.
+    verbose: bool, optional
+        Whether to print updates about where we are in the fitting process.
+        Default True.
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
@@ -60,6 +63,7 @@ class Fit(object):
     def __init__(self, data,
                  discrete=False,
                  xmin=None, xmax=None,
+                 verbose=True,
                  fit_method='Likelihood',
                  estimate_discrete=True,
                  discrete_approximation='round',
@@ -67,7 +71,6 @@ class Fit(object):
                  parameter_range=None,
                  fit_optimizer=None,
                  xmin_distance='D',
-                 verbose=True,
                  **kwargs):
 
         self.data_original = data
@@ -254,7 +257,7 @@ class Fit(object):
 
         if self.noise_flag:
             print("No valid fits found.", file=sys.stderr)
-        
+
         #Set the Fit's xmin to the optimal xmin
         self.xmin = xmins[min_D_index]
         setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
@@ -371,7 +374,7 @@ class Fit(object):
             xmin = self.xmin
             xmax = self.xmax
         return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs) 
+                   **kwargs)
 
     def ccdf(self, original_data=False, survival=True, **kwargs):
         """
@@ -690,7 +693,7 @@ class Distribution(object):
         self.V = self.D_plus + self.D_minus
         self.D = max(self.D_plus, self.D_minus)
         self.Asquare = sum((
-                            (CDF_diff**2) / 
+                            (CDF_diff**2) /
                             (Theoretical_CDF * (1 - Theoretical_CDF))
                             )[1:]
                            )
@@ -827,12 +830,12 @@ class Distribution(object):
                 upper_data = data+.5
 #Temporarily expand xmin and xmax to be able to grab the extra bit of
 #probability mass beyond the (integer) values of xmin and xmax
-#Note this is a design decision. One could also say this extra 
+#Note this is a design decision. One could also say this extra
 #probability "off the edge" of the distribution shouldn't be included,
 #and that implementation is retained below, commented out. Note, however,
 #that such a cliff means values right at xmin and xmax have half the width to
 #grab probability from, and thus are lower probability than they would otherwise
-#be. This is particularly concerning for values at xmin, which are typically 
+#be. This is particularly concerning for values at xmin, which are typically
 #the most likely and greatly influence the distribution's fit.
                 self.xmin -= .5
                 if self.xmax:
@@ -879,7 +882,7 @@ class Distribution(object):
         Parameters
         ----------
         r : dict
-            A dictionary of the parameter range. Restricted parameter 
+            A dictionary of the parameter range. Restricted parameter
             names are keys, and with tuples of the form (lower_bound,
             upper_bound) as values.
         initial_parameters : tuple or list, optional
@@ -937,7 +940,7 @@ class Distribution(object):
         The likelihoods of the observed data from the theoretical distribution.
         Another name for the probabilities or probability density function.
         """
-        return self.pdf(data) 
+        return self.pdf(data)
 
     def loglikelihoods(self, data):
         """
@@ -1328,10 +1331,10 @@ class Stretched_Exponential(Distribution):
         if not self.discrete and self.in_range() and not self.xmax:
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
             from numpy import log
-            loglikelihoods = ( 
+            loglikelihoods = (
                     log((data*self.Lambda)**(self.beta-1) *
-                        self.beta * self. Lambda) + 
-                    (self.Lambda*self.xmin)**self.beta - 
+                        self.beta * self. Lambda) +
+                    (self.Lambda*self.xmin)**self.beta -
                         (self.Lambda*data)**self.beta)
             #Simplified so as not to throw a nan from infs being divided by each other
             from sys import float_info
@@ -1523,12 +1526,12 @@ class Lognormal(Distribution):
         import scipy.special as ss
         """ Temporarily expand xmin and xmax to be able to grab the extra bit of
         probability mass beyond the (integer) values of xmin and xmax
-        Note this is a design decision. One could also say this extra 
+        Note this is a design decision. One could also say this extra
         probability "off the edge" of the distribution shouldn't be included,
         and that implementation is retained below, commented out. Note, however,
         that such a cliff means values right at xmin and xmax have half the width to
         grab probability from, and thus are lower probability than they would otherwise
-        be. This is particularly concerning for values at xmin, which are typically 
+        be. This is particularly concerning for values at xmin, which are typically
         the most likely and greatly influence the distribution's fit.
         """
         lower_data = data-.5
@@ -1539,8 +1542,8 @@ class Lognormal(Distribution):
 
 
         # revised calculation written to avoid underflow errors
-        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.sigma)      
-        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.sigma)      
+        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.sigma)
+        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.sigma)
         likelihoods = 0.5*(ss.erfc(arg1) - ss.erfc(arg2))
         if not self.xmax:
             norm = 0.5*ss.erfc((np.log(self.xmin)-self.mu) / (np.sqrt(2)*self.sigma))
@@ -1625,7 +1628,7 @@ class Lognormal(Distribution):
     def _cdf_base_function(self, x):
         from numpy import sqrt, log
         from scipy.special import erf
-        return  0.5 + ( 0.5 * 
+        return  0.5 + ( 0.5 *
                 erf((log(x)-self.mu) / (sqrt(2)*self.sigma)))
 
     def _pdf_base_function(self, x):
@@ -1686,11 +1689,11 @@ class Lognormal_Positive(Lognormal):
     @property
     def name(self):
         return "lognormal_positive"
-    
+
     def _in_standard_parameter_range(self):
 #The standard deviation and mean can't be negative
         return (self.sigma>0 and self.mu>0)
-        
+
 def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
     """
     Calculates a loglikelihood ratio and the p-value for testing which of two
@@ -1716,7 +1719,7 @@ def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
     Returns
     -------
     R : float
-        The loglikelihood ratio of the two sets of likelihoods. If positive, 
+        The loglikelihood ratio of the two sets of likelihoods. If positive,
         the first set of likelihoods is more likely (and so the probability
         distribution that produced them is a better fit to the data). If
         negative, the reverse is true.
@@ -1754,7 +1757,7 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
     Returns
     -------
     R : float
-        The loglikelihood ratio of the two sets of likelihoods. If positive, 
+        The loglikelihood ratio of the two sets of likelihoods. If positive,
         the first set of likelihoods is more likely (and so the probability
         distribution that produced them is a better fit to the data). If
         negative, the reverse is true.
@@ -1883,7 +1886,7 @@ def cumulative_distribution_function(data,
         from numpy import arange
         CDF = arange(n)/n
     else:
-#This clever bit is a way of using searchsorted to rapidly calculate the 
+#This clever bit is a way of using searchsorted to rapidly calculate the
 #CDF of data with repeated values comes from Adam Ginsburg's plfit code,
 #specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
         from numpy import searchsorted, unique
@@ -1943,15 +1946,15 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
         xmax = max(data)
     if not xmin:
         xmin = min(data)
-    
-   
+
+
     if xmin<1:  #To compute the pdf also from the data below x=1, the data, xmax and xmin are rescaled dividing them by xmin.
         xmax2=xmax/xmin
         xmin2=1
-    else: 
+    else:
         xmax2=xmax
         xmin2=xmin
-    
+
     if linear_bins:
         bins = range(int(xmin2), int(xmax2))
     else:
@@ -1962,14 +1965,14 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
                 floor(
                     logspace(
                         log_min_size, log_max_size, num=number_of_bins)))
-    
+
     if xmin<1: #Needed to include also data x<1 in pdf.
         hist, edges = histogram(data/xmin, bins, density=True)
-        edges=edges*xmin # transform result back to original   
+        edges=edges*xmin # transform result back to original
         hist=hist/xmin # rescale hist, so that np.sum(hist*edges)==1
     else:
         hist, edges = histogram(data, bins, density=True)
-    
+
     return edges, hist
 
 def checkunique(data):
@@ -2091,7 +2094,7 @@ def bisect_map(mn, mx, function, target):
     Returns
     -------
     value : the input value that yields the target solution. If there is no
-    exact solution in the input sequence, finds the nearest value k such that 
+    exact solution in the input sequence, finds the nearest value k such that
     function(k) <= target < function(k+1). This is similar to the behavior of
     bisect_left in the bisect package. If even the first, leftmost value of seq
     does not satisfy this condition, -1 is returned.
