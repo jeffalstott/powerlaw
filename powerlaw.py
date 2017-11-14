@@ -1940,13 +1940,13 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
         The portion of the data that is within the bin. Length 1 less than
         bin_edges, as it corresponds to the spaces between them.
     """
-    from numpy import logspace, histogram, floor, unique
+    from numpy import logspace, histogram, floor, unique,asarray
     from math import ceil, log10
+    data = asarray(data)
     if not xmax:
         xmax = max(data)
     if not xmin:
         xmin = min(data)
-
 
     if xmin<1:  #To compute the pdf also from the data below x=1, the data, xmax and xmin are rescaled dividing them by xmin.
         xmax2=xmax/xmin
@@ -1955,7 +1955,9 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
         xmax2=xmax
         xmin2=xmin
 
-    if linear_bins:
+    if 'bins' in kwargs.keys():
+        bins = kwargs.pop('bins')
+    elif linear_bins:
         bins = range(int(xmin2), int(xmax2))
     else:
         log_min_size = log10(xmin2)
