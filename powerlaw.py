@@ -93,8 +93,8 @@ class Fit(object):
 
         self.xmin_distance = xmin_distance
 
-        if 0 in self.data and verbose:
-            print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
+        if 0 in self.data:
+            if verbose: print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
             self.data = self.data[self.data>0]
 
         if self.xmax:
@@ -2553,7 +2553,7 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
     data = data[data >= xmin]
     if xmax:
         data = data[data <= xmax]
-    n = float(len(data))
+    n = len(data)
     if n < 2:
         if kuiper:
             return 1, 1, 2
@@ -2563,7 +2563,7 @@ def power_law_ks_distance(data, alpha, xmin, xmax=None, discrete=False, kuiper=F
         data = sort(data)
 
     if not discrete:
-        Actual_CDF = arange(n) / n
+        Actual_CDF = arange(n) / float(n)
         Theoretical_CDF = 1 - (data / xmin) ** (-alpha + 1)
 
     if discrete:
