@@ -78,6 +78,9 @@ class Fit(object):
         from numpy import asarray
         self.data = asarray(self.data_original, dtype='float')
 
+        if self.data.ndim != 1:
+            raise ValueError("Input data must be one-dimensional")
+
         self.discrete = discrete
 
         self.fit_method = fit_method
