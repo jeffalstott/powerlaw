@@ -254,7 +254,7 @@ class Fit(object):
             self.noise_flag = True
         else:
             from numpy.ma import masked_array
-            masked_Ds = masked_array(getattr(self, xmin_distance+'s'), mask=-good_values)
+            masked_Ds = masked_array(getattr(self, xmin_distance+'s'), mask=~good_values)
             min_D_index = masked_Ds.argmin()
             self.noise_flag = False
 
