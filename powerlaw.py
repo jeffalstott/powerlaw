@@ -1,6 +1,6 @@
 #The MIT License (MIT)
 #
-#Copyright (c) 2013-2017 Jeff Alstott
+#Copyright (c) 2013-2018 Jeff Alstott
 #
 #Permission is hereby granted, free of charge, to any person obtaining a copy
 #of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 from __future__ import print_function
 import sys
 
-__version__ = "1.4.3"
+__version__ = "1.4.4"
 
 class Fit(object):
     """
