@@ -14,7 +14,7 @@ except LookupError:
 setup(
     name='powerlaw',
     py_modules=['powerlaw'],
-    version= '1.4.4',
+    version= '1.4.5',
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
     author='Jeff Alstott',
