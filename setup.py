@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 with open('README.rst') as file:
         long_description = file.read()
 
@@ -20,16 +20,16 @@ setup(
     author='Jeff Alstott',
     author_email='jeffalstott@gmail.com',
     url='http://www.github.com/jeffalstott/powerlaw',
-        requires=['scipy', 'numpy', 'matplotlib', 'mpmath'],
-        license='MIT',
-        classifiers=[
-            'License :: OSI Approved :: MIT License',
-            'Programming Language :: Python',
-            'Programming Language :: Python :: 2.7',
-            'Programming Language :: Python :: 3',
-            'Operating System :: OS Independent',
-            'Topic :: Scientific/Engineering :: Mathematics',
-            'Development Status :: 5 - Production/Stable',
-            'Intended Audience :: Science/Research'
-        ]
+    install_requires=['scipy', 'numpy', 'matplotlib', 'mpmath'],
+    license='MIT',
+    classifiers=[
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Operating System :: OS Independent',
+        'Topic :: Scientific/Engineering :: Mathematics',
+        'Development Status :: 5 - Production/Stable',
+        'Intended Audience :: Science/Research'
+    ]
 )
