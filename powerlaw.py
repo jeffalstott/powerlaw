@@ -1961,15 +1961,15 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
     if 'bins' in kwargs.keys():
         bins = kwargs.pop('bins')
     elif linear_bins:
-        bins = range(int(xmin2), int(xmax2))
+        bins = range(int(xmin2), ceil(xmax2)+1)
     else:
         log_min_size = log10(xmin2)
         log_max_size = log10(xmax2)
         number_of_bins = ceil((log_max_size-log_min_size)*10)
-        bins=unique(
-                floor(
-                    logspace(
-                        log_min_size, log_max_size, num=number_of_bins)))
+        bins = logspace(log_min_size, log_max_size, num=number_of_bins)
+        bins[:-1] = floor(bins[:-1])
+        bins[-1] = ceil(bins[-1])
+        bins = unique(bins)
 
     if xmin<1: #Needed to include also data x<1 in pdf.
         hist, edges = histogram(data/xmin, bins, density=True)
