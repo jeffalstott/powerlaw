@@ -2692,9 +2692,9 @@ def stretched_exponential_likelihoods(data, Lambda, beta, xmin, xmax=False, disc
 
     from numpy import exp
     if not discrete:
-#        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
-#            (beta*Lambda*exp(Lambda*(xmin**beta)))
-        likelihoods = data ** (beta - 1) * beta * Lambda * exp(Lambda * (xmin ** beta - data ** beta))  # Simplified so as not to throw a nan from infs being divided by each other
+        likelihoods = (data * Lambda)**(beta-1) * beta * Lambda *\
+            exp((Lambda * (xmin - data))**beta)
+        # Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
         if not xmax:
             xmax = max(data)
