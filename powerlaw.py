@@ -1961,15 +1961,15 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
     if 'bins' in kwargs.keys():
         bins = kwargs.pop('bins')
     elif linear_bins:
-        bins = range(int(xmin2), int(xmax2))
+        bins = range(int(xmin2), ceil(xmax2)+1)
     else:
         log_min_size = log10(xmin2)
         log_max_size = log10(xmax2)
         number_of_bins = ceil((log_max_size-log_min_size)*10)
-        bins=unique(
-                floor(
-                    logspace(
-                        log_min_size, log_max_size, num=number_of_bins)))
+        bins = logspace(log_min_size, log_max_size, num=number_of_bins)
+        bins[:-1] = floor(bins[:-1])
+        bins[-1] = ceil(bins[-1])
+        bins = unique(bins)
 
     if xmin<1: #Needed to include also data x<1 in pdf.
         hist, edges = histogram(data/xmin, bins, density=True)
@@ -2692,9 +2692,9 @@ def stretched_exponential_likelihoods(data, Lambda, beta, xmin, xmax=False, disc
 
     from numpy import exp
     if not discrete:
-#        likelihoods = (data**(beta-1) * exp(-Lambda*(data**beta)))*\
-#            (beta*Lambda*exp(Lambda*(xmin**beta)))
-        likelihoods = data ** (beta - 1) * beta * Lambda * exp(Lambda * (xmin ** beta - data ** beta))  # Simplified so as not to throw a nan from infs being divided by each other
+        likelihoods = (data * Lambda)**(beta-1) * beta * Lambda *\
+            exp((Lambda * (xmin - data))**beta)
+        # Simplified so as not to throw a nan from infs being divided by each other
     if discrete:
         if not xmax:
             xmax = max(data)
