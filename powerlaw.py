@@ -697,7 +697,7 @@ class Distribution(object):
         self.D = max(self.D_plus, self.D_minus)
         self.Asquare = sum((
                             (CDF_diff**2) /
-                            (Theoretical_CDF * (1 - Theoretical_CDF))
+                            (Theoretical_CDF * (1 - Theoretical_CDF) + 1e-12)
                             )[1:]
                            )
         return self.D
