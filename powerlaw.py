@@ -24,7 +24,7 @@
 from __future__ import print_function
 import sys
 
-__version__ = "1.4.4"
+__version__ = "1.4.4-mdf"
 
 class Fit(object):
     """
@@ -71,6 +71,7 @@ class Fit(object):
                  parameter_range=None,
                  fit_optimizer=None,
                  xmin_distance='D',
+                 xmin_distribution='power_law',
                  **kwargs):
 
         self.data_original = data
@@ -115,6 +116,17 @@ class Fit(object):
 
         self.fitting_cdf_bins, self.fitting_cdf = cdf(self.data, xmin=None, xmax=self.xmax)
 
+        self.supported_distributions = {'power_law': Power_Law,
+                                        'lognormal': Lognormal,
+                                        'exponential': Exponential,
+                                        'truncated_power_law': Truncated_Power_Law,
+                                        'stretched_exponential': Stretched_Exponential,
+                                        'lognormal_positive': Lognormal_Positive,
+                                        }
+                                        #'gamma': None}
+
+        self.xmin_distribution = self.supported_distributions[xmin_distribution]
+
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.fixed_xmin = True
             self.xmin = float(xmin)
@@ -133,21 +145,13 @@ class Fit(object):
         else:
             self.fixed_xmin=False
             if verbose:
-                print("Calculating best minimal value for power law fit", file=sys.stderr)
+                print("Calculating best minimal value for {} fit".format(
+                    xmin_distribution.replace('_',' '), file=sys.stderr))
             self.find_xmin()
 
         self.data = self.data[self.data>=self.xmin]
         self.n = float(len(self.data))
         self.n_tail = self.n + n_above_max
-
-        self.supported_distributions = {'power_law': Power_Law,
-                                        'lognormal': Lognormal,
-                                        'exponential': Exponential,
-                                        'truncated_power_law': Truncated_Power_Law,
-                                        'stretched_exponential': Stretched_Exponential,
-                                        'lognormal_positive': Lognormal_Positive,
-                                        }
-                                        #'gamma': None}
 
     def __getattr__(self, name):
         if name in self.supported_distributions.keys():
@@ -184,7 +188,7 @@ class Fit(object):
         between the data and the theoretical power law fit.
         This is the method of Clauset et al. 2007.
         """
-        from numpy import unique, asarray, argmin
+        from numpy import unique, asarray, argmin, nan, repeat, arange
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
 #specifically the mapping and sigma threshold behavior:
 #http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
@@ -222,8 +226,9 @@ class Fit(object):
             self.noise_flag = True
             return self.xmin
 
-        def fit_function(xmin):
-            pl = Power_Law(xmin=xmin,
+        def fit_function(xmin, idx, num_xmins):
+            print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
+            pl = self.xmin_distribution(xmin=xmin,
                            xmax=self.xmax,
                            discrete=self.discrete,
                            estimate_discrete=self.estimate_discrete,
@@ -231,9 +236,12 @@ class Fit(object):
                            data=self.data,
                            parameter_range=self.parameter_range,
                            parent_Fit=self)
+            if not hasattr(pl, 'sigma'):
+                pl.sigma = nan
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
-        fits = asarray(list(map(fit_function, xmins)))
+        num_xmins = len(xmins)
+        fits = asarray(list(map(fit_function, xmins, arange(num_xmins), repeat(num_xmins, num_xmins))))
         # logging.warning(fits.shape)
         setattr(self, xmin_distance+'s', fits[:,0])
         self.alphas = fits[:,1]
