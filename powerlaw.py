@@ -238,6 +238,8 @@ class Fit(object):
                            parent_Fit=self)
             if not hasattr(pl, 'sigma'):
                 pl.sigma = nan
+            if not hasattr(pl, 'alpha'):
+                pl.alpha = nan
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
         num_xmins = len(xmins)
