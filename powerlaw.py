@@ -1,6 +1,6 @@
 #The MIT License (MIT)
 #
-#Copyright (c) 2013-2018 Jeff Alstott
+#Copyright (c) 2013-2021 Jeff Alstott
 #
 #Permission is hereby granted, free of charge, to any person obtaining a copy
 #of this software and associated documentation files (the "Software"), to deal
@@ -2648,7 +2648,7 @@ def negative_binomial_likelihoods(data, r, p, xmin=0, xmax=False):
         data = data[data <= xmax]
 
     from numpy import asarray
-    from scipy.misc import comb
+    from scipy.special import comb
     pmf = lambda k: comb(k + r - 1, k) * (1 - p) ** r * p ** k
     likelihoods = asarray(list(map(pmf, data))).flatten()
 
