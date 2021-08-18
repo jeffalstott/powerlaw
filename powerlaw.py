@@ -24,7 +24,7 @@
 from __future__ import print_function
 import sys
 
-__version__ = "1.4.4-mdf"
+__version__ = "1.4.5"
 
 class Fit(object):
     """
