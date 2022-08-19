@@ -1094,7 +1094,7 @@ class Distribution(object):
                     estimate_discrete = False
                 elif hasattr(self, 'estimate_discrete'):
                     estimate_discrete = self.estimate_discrete
-                elif hasattr('parent_Fit'):
+                elif hasattr(self, 'parent_Fit'):
                     estimate_discrete = self.parent_Fit.estimate_discrete
                 else:
                     estimate_discrete = False
