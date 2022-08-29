@@ -142,6 +142,15 @@ class FirstTestCase(unittest.TestCase):
             assert_allclose(results[k]['xmin'], references[k]['xmin'],
                             rtol=rtol, atol=atol, err_msg=k)
 
+    def test_power_law_params(self):
+        print("Testing if power law params are set correctly")
+
+        for k in references.keys():
+            print(k)
+            assert results[k]['fit'].power_law.parameter1 == results[k]['fit'].power_law.alpha
+            assert results[k]['fit'].power_law.parameter1_name == 'alpha'
+
+
     def test_lognormal(self):
         print("Testing lognormal fits")
 

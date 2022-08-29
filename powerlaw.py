@@ -1165,6 +1165,9 @@ class Power_Law(Distribution):
         else:
             self.noise_flag=False
 
+        if self.parameter1_name is None or self.parameter1 is None:
+            self.parameters([self.alpha])
+
     def _initial_parameters(self, data):
         from numpy import log, sum
         return 1 + len(data)/sum(log(data / (self.xmin)))
