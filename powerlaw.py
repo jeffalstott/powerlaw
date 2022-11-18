@@ -26,6 +26,18 @@ import sys
 
 __version__ = "1.5"
 
+# This needs to be a list of the keys in the supported_distributions
+# attribute of the Fit class.  The __getattr__ method needs the list.
+# If it uses supported_distributions.keys(), then it gets into an
+# infinte loop when unpickling a Fit object.  Hence the need for a
+# separate list outside the scope of the Fit class.
+supported_distribution_list = ['power_law',
+                               'lognormal',
+                               'exponential',
+                               'truncated_power_law',
+                               'stretched_exponential',
+                               'lognormal_positive']
+
 class Fit(object):
     """
     A fit of a data set to various probability distributions, namely power
@@ -154,7 +166,7 @@ class Fit(object):
         self.n_tail = self.n + n_above_max
 
     def __getattr__(self, name):
-        if name in self.supported_distributions.keys():
+        if name in supported_distribution_list:
             #from string import capwords
             #dist = capwords(name, '_')
             #dist = globals()[dist] #Seems a hack. Might try import powerlaw; getattr(powerlaw, dist)
