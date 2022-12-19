@@ -216,6 +216,38 @@ class FirstTestCase(unittest.TestCase):
             #assert_allclose(Randp, references[k]['truncated_power_law'],
             #        rtol=rtol, atol=atol, err_msg=k)
 
+class TestPlotPDF(unittest.TestCase):
+    def test_custom_bins(self):
+
+        import numpy as np
+        import powerlaw
+
+        import matplotlib.pyplot as plt
+
+        data = 1. / np.random.power(4., 1000)
+        fit = powerlaw.Fit(data)
+
+        # ax1 = fit.plot_pdf()
+        plt.figure()
+        bins = 2
+        ax = fit.plot_pdf(marker="*", bins=bins)
+        line = ax.lines[0]
+        assert len(line.get_xdata()) == bins
+        plt.close()
+
+        plt.figure()
+        bins = 10
+        ax = fit.plot_pdf(marker="*", bins=bins)
+        line = ax.lines[0]
+        assert len(line.get_xdata()) == bins
+        plt.close()
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # execute all TestCases in the module
     unittest.main()

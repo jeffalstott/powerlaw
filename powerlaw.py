@@ -1932,7 +1932,7 @@ def trim_to_range(data, xmin=None, xmax=None, **kwargs):
         data = data[data<=xmax]
     return data
 
-def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
+def pdf(data, xmin=None, xmax=None, linear_bins=False, bins=None, **kwargs):
     """
     Returns the probability density function (normalized histogram) of the
     data.
@@ -1971,8 +1971,8 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, **kwargs):
         xmax2=xmax
         xmin2=xmin
 
-    if 'bins' in kwargs.keys():
-        bins = kwargs.pop('bins')
+    if bins is not None:
+        bins = bins
     elif linear_bins:
         bins = range(int(xmin2), ceil(xmax2)+1)
     else:
@@ -2083,7 +2083,12 @@ def plot_pdf(data, ax=None, linear_bins=False, **kwargs):
     ax : matplotlib axis
         The axis to which the plot was made.
     """
-    edges, hist = pdf(data, linear_bins=linear_bins, **kwargs)
+    if 'bins' in kwargs.keys():
+        bins = kwargs.pop('bins')
+    else:
+        bins = None
+
+    edges, hist = pdf(data, linear_bins=linear_bins, bins=bins, **kwargs)
     bin_centers = (edges[1:]+edges[:-1])/2.0
     from numpy import nan
     hist[hist==0] = nan
