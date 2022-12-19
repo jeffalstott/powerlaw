@@ -70,6 +70,9 @@ class Fit(object):
         Dictionary of valid parameter ranges for fitting. Formatted as a
         dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+    pdf_ends_at_xmax: bool, optional
+        Whether to use the pdf that has an upper cutoff at xmax to fit the 
+        powerlaw distribution. 
     """
 
     def __init__(self, data,
@@ -84,6 +87,7 @@ class Fit(object):
                  fit_optimizer=None,
                  xmin_distance='D',
                  xmin_distribution='power_law',
+                 pdf_ends_at_xmax=False,
                  **kwargs):
 
         self.data_original = data
@@ -108,6 +112,7 @@ class Fit(object):
         self.xmax = self.given_xmax
 
         self.xmin_distance = xmin_distance
+        self.pdf_ends_at_xmax = pdf_ends_at_xmax
 
         if 0 in self.data:
             if verbose: print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
@@ -138,6 +143,7 @@ class Fit(object):
                                         #'gamma': None}
 
         self.xmin_distribution = self.supported_distributions[xmin_distribution]
+        self.xmin_distribution.pdf_ends_at_xmax = self.pdf_ends_at_xmax
 
         if xmin and type(xmin)!=tuple and type(xmin)!=list:
             self.fixed_xmin = True
@@ -149,7 +155,8 @@ class Fit(object):
                            fit_method=self.fit_method,
                            estimate_discrete=self.estimate_discrete,
                            data=self.data,
-                           parameter_range=self.parameter_range)
+                           parameter_range=self.parameter_range,
+                           pdf_ends_at_xmax=self.pdf_ends_at_xmax)
             setattr(self,self.xmin_distance, getattr(pl, self.xmin_distance))
             self.alpha = pl.alpha
             self.sigma = pl.sigma
@@ -247,7 +254,8 @@ class Fit(object):
                            fit_method=self.fit_method,
                            data=self.data,
                            parameter_range=self.parameter_range,
-                           parent_Fit=self)
+                           parent_Fit=self,
+                           pdf_ends_at_xmax=self.pdf_ends_at_xmax)
             if not hasattr(pl, 'sigma'):
                 pl.sigma = nan
             if not hasattr(pl, 'alpha'):
@@ -1130,8 +1138,9 @@ class Distribution(object):
 
 class Power_Law(Distribution):
 
-    def __init__(self, estimate_discrete=True, **kwargs):
+    def __init__(self, estimate_discrete=True, pdf_ends_at_xmax=False, **kwargs):
         self.estimate_discrete = estimate_discrete
+        self.pdf_ends_at_xmax = pdf_ends_at_xmax
         Distribution.__init__(self, **kwargs)
 
     def parameters(self, params):
@@ -1200,7 +1209,11 @@ class Power_Law(Distribution):
 
     @property
     def _pdf_continuous_normalizer(self):
-        return (self.alpha-1) * self.xmin**(self.alpha-1)
+        # The pdf has a different form when we consider xmax as the upper limit of the distribution
+        if self.pdf_ends_at_xmax:
+            return (1-self.alpha)/(self.xmax**(1-self.alpha) - self.xmin**(1-self.alpha))
+        else:
+            return (self.alpha-1) * self.xmin**(self.alpha-1)
 
     @property
     def _pdf_discrete_normalizer(self):
