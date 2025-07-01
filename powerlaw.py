@@ -58,7 +58,7 @@ class Fit(object):
         The maximum value of the fitted distributions.
     verbose: bool, optional
         Whether to print updates about where we are in the fitting process.
-        Default True.
+        Default False.
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
@@ -78,7 +78,7 @@ class Fit(object):
     def __init__(self, data,
                  discrete=False,
                  xmin=None, xmax=None,
-                 verbose=True,
+                 verbose=False,
                  fit_method='Likelihood',
                  estimate_discrete=True,
                  discrete_approximation='round',
@@ -91,6 +91,7 @@ class Fit(object):
                  **kwargs):
 
         self.data_original = data
+        self.verbose = verbose
         # import logging
         from numpy import asarray
         self.data = asarray(self.data_original, dtype='float')
@@ -115,7 +116,7 @@ class Fit(object):
         self.pdf_ends_at_xmax = pdf_ends_at_xmax
 
         if 0 in self.data:
-            if verbose: print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
+            if self.verbose: print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
             self.data = self.data[self.data>0]
 
         if self.xmax:
@@ -163,9 +164,7 @@ class Fit(object):
             #self.power_law = pl
         else:
             self.fixed_xmin=False
-            if verbose:
-                print("Calculating best minimal value for {} fit".format(
-                    xmin_distribution.replace('_',' '), file=sys.stderr))
+            if self.verbose: print("Calculating best minimal value for {} fit".format(xmin_distribution.replace('_',' ')), file=sys.stderr)
             self.find_xmin()
 
         self.data = self.data[self.data>=self.xmin]
@@ -207,6 +206,7 @@ class Fit(object):
         between the data and the theoretical power law fit.
         This is the method of Clauset et al. 2007.
         """
+        import sys
         from numpy import unique, asarray, argmin, nan, repeat, arange
 #Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
 #specifically the mapping and sigma threshold behavior:
@@ -246,7 +246,7 @@ class Fit(object):
             return self.xmin
 
         def fit_function(xmin, idx, num_xmins):
-            print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
+            if sys.stdout.isatty(): print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
             pl = self.xmin_distribution(xmin=xmin,
                            xmax=self.xmax,
                            discrete=self.discrete,
@@ -344,8 +344,10 @@ class Fit(object):
             Name of the second candidate distribution (ex. 'exponential')
         nested : bool or None, optional
             Whether to assume the candidate distributions are nested versions
-            of each other. None assumes not unless the name of one distribution
-            is a substring of the other.
+            of each other. If None (default), the function will automatically
+            set nested=True if one distribution name is a substring of the other
+            (i.e., if either dist1 in dist2 or dist2 in dist1). Otherwise, it
+            will assume nested=False.
 
         Returns
         -------
@@ -356,9 +358,7 @@ class Fit(object):
         p : float
             Significance of R
         """
-        if (dist1 in dist2) or (dist2 in dist1) and nested is None:
-            print("Assuming nested distributions", file=sys.stderr)
-            nested = True
+        if (dist1 in dist2) or (dist2 in dist1) and nested is None: nested = True
 
         dist1 = getattr(self, dist1)
         dist2 = getattr(self, dist2)
