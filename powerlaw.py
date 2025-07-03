@@ -246,7 +246,8 @@ class Fit(object):
             return self.xmin
 
         def fit_function(xmin, idx, num_xmins):
-            if sys.stdout.isatty(): print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
+            if sys.stdout.isatty():
+                print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
             pl = self.xmin_distribution(xmin=xmin,
                            xmax=self.xmax,
                            discrete=self.discrete,
