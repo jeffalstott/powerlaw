@@ -116,7 +116,8 @@ class Fit(object):
         self.pdf_ends_at_xmax = pdf_ends_at_xmax
 
         if 0 in self.data:
-            if self.verbose: print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
+            if self.verbose:
+                print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
             self.data = self.data[self.data>0]
 
         if self.xmax:
