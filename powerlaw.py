@@ -358,7 +358,8 @@ class Fit(object):
         p : float
             Significance of R
         """
-        if (dist1 in dist2) or (dist2 in dist1) and nested is None: nested = True
+        if (dist1 in dist2) or (dist2 in dist1) and nested is None:
+            nested = True
 
         dist1 = getattr(self, dist1)
         dist2 = getattr(self, dist2)
