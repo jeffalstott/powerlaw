@@ -1928,13 +1928,13 @@ def cumulative_distribution_function(data,
 
     if all_unique:
         from numpy import arange
-        CDF = arange(n)/n
+        CDF = arange(1, n+1)/n
     else:
 #This clever bit is a way of using searchsorted to rapidly calculate the
 #CDF of data with repeated values comes from Adam Ginsburg's plfit code,
 #specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
         from numpy import searchsorted, unique
-        CDF = searchsorted(data, data,side='left')/n
+        CDF = searchsorted(data, data,side='right')/n
         unique_data, unique_indices = unique(data, return_index=True)
         data=unique_data
         CDF = CDF[unique_indices]
