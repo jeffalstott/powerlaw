@@ -42,15 +42,14 @@ greater numerical precision.
 
 `Documentation <http://pythonhosted.org/powerlaw/>`__
 
-This code was developed and tested for Python 2.x with the
-`Enthought Python Distribution <http://www.enthought.com/products/epd.php>`__,  and later amended to be
-compatible with 3.x. The full version of Enthought is
-`available for free for academic use <http://www.enthought.com/products/edudownload.php>`__.
+This code was developed and tested for Python 2.x and later amended to be
+compatible with 3.x. For scientific Python distributions, consider using
+`Anaconda <https://www.anaconda.com/>`__ or `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`__.
 
 
 Installation
 ------------
-``powerlaw`` is hosted on `PyPI <https://pypi.python.org/pypi/powerlaw>`__, so installation is straightforward. The easiest way to install type this at the command line (Linux, Mac, or Windows)::
+``powerlaw`` is hosted on `PyPI <https://pypi.org/project/powerlaw/>`__, so installation is straightforward. The easiest way to install type this at the command line (Linux, Mac, or Windows)::
 
     easy_install powerlaw
 
@@ -87,11 +86,9 @@ Continuous Integration
 ~~~~~~~~~~~~~~~~~~~~~~
 This repository uses GitHub Actions for continuous integration. Tests are automatically run on every push and pull request across multiple Python versions (3.8-3.12) and operating systems (Ubuntu, Windows, macOS). The CI status is shown in the badge above.
 
-Update Notifications and Mailing List
------------------
-Get notified of updates by joining the Google Group `here <https://groups.google.com/forum/?fromgroups#!forum/powerlaw-updates>`__.
-
-Questions/discussions/help go on the Google Group `here <https://groups.google.com/forum/?fromgroups#!forum/powerlaw-general>`__. Also receives update info.
+Mailing List
+~~~~~~~~~~~~
+Questions/discussions/help go on the Google Group `here <https://groups.google.com/g/powerlaw-general>`__. Also receives update info.
 
 Further Development
 -----------------
@@ -100,9 +97,9 @@ The original author of `powerlaw`, Jeff Alstott, is now only writing minor tweak
 Acknowledgements
 -----------------
 Many thanks to Andreas Klaus, Mika Rubinov and Shan Yu for helpful
-discussions. Thanks also to `Andreas Klaus <http://neuroscience.nih.gov/Fellows/Fellow.asp?People_ID=2709>`_,
-`Aaron Clauset, Cosma Shalizi <http://tuvalu.santafe.edu/~aaronc/powerlaws/>`_,
-and `Adam Ginsburg <http://code.google.com/p/agpy/wiki/PowerLaw>`_ for making
+discussions. Thanks also to Andreas Klaus,
+`Aaron Clauset, Cosma Shalizi <https://aaronclauset.github.io/powerlaws/>`_,
+and `Adam Ginsburg <https://github.com/keflavich/plfit>`_ for making
 their code available. Their implementations were a critical starting point for
 making ``powerlaw``.
 
