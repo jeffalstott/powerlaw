@@ -115,6 +115,38 @@ results = {
         'surnames': {}
         }
 
+class BaseTestCase(unittest.TestCase):
+    """
+    Test simple mathematical properties
+    """
+
+    def test_cumulative_distribution_function(self):
+        # Test all unique, and repeated values
+        X1 = [10, 30, 20, 20]
+        X2 = [10, 30, 20]
+
+        for test_data in [X1, X2]:
+            X_sorted, CDF = powerlaw.cumulative_distribution_function(test_data)
+            # Check array is sorted
+            assert_allclose(X_sorted[-1], max(test_data))
+            # CDF gives probability of less than or equal to some value.
+            # The last element is the max of the sample. All other elements
+            # are therefore smaller than or equal, and the CDF should be 1.
+            assert_allclose(CDF[-1], 1.0)
+
+    def test_pdf(self):
+        np.random.seed(0)
+        data = np.random.lognormal(mean=0, sigma=1, size=1000)
+        # We test limits
+        xmin = 0.1
+        xmax = 0.2
+        edges, hist = powerlaw.pdf(data, xmin=xmin, xmax=xmax)
+        area = np.sum(hist * np.diff(edges))
+        # The area under a pdf should be 1
+        assert_allclose(area, 1)
+        # Test limits
+        assert_allclose(edges[0], xmin)
+        assert_allclose(edges[-1], xmax)
 
 class FirstTestCase(unittest.TestCase):
 
