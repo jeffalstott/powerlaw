@@ -1163,7 +1163,7 @@ class Power_Law(Distribution):
         return (self.alpha - 1) / sqrt(self.n)
 
     def _in_standard_parameter_range(self):
-        return self.alpha>1
+        return self.alpha>0
 
     def fit(self, data=None):
         if data is None and hasattr(self, 'parent_Fit'):
@@ -1416,7 +1416,7 @@ class Truncated_Power_Law(Distribution):
         return (alpha, Lambda)
 
     def _in_standard_parameter_range(self):
-        return self.Lambda>0 and self.alpha>1
+        return self.Lambda>0 and self.alpha>0
 
     def _cdf_base_function(self, x):
         from mpmath import gammainc
@@ -1928,13 +1928,13 @@ def cumulative_distribution_function(data,
 
     if all_unique:
         from numpy import arange
-        CDF = arange(n)/n
+        CDF = arange(1, n+1)/n
     else:
 #This clever bit is a way of using searchsorted to rapidly calculate the
 #CDF of data with repeated values comes from Adam Ginsburg's plfit code,
 #specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
         from numpy import searchsorted, unique
-        CDF = searchsorted(data, data,side='left')/n
+        CDF = searchsorted(data, data,side='right')/n
         unique_data, unique_indices = unique(data, return_index=True)
         data=unique_data
         CDF = CDF[unique_indices]
