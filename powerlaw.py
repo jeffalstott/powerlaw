@@ -1163,7 +1163,7 @@ class Power_Law(Distribution):
         return (self.alpha - 1) / sqrt(self.n)
 
     def _in_standard_parameter_range(self):
-        return self.alpha>1
+        return self.alpha>0
 
     def fit(self, data=None):
         if data is None and hasattr(self, 'parent_Fit'):
@@ -1416,7 +1416,7 @@ class Truncated_Power_Law(Distribution):
         return (alpha, Lambda)
 
     def _in_standard_parameter_range(self):
-        return self.Lambda>0 and self.alpha>1
+        return self.Lambda>0 and self.alpha>0
 
     def _cdf_base_function(self, x):
         from mpmath import gammainc
