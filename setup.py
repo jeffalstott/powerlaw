@@ -1,4 +1,5 @@
-from setuptools import setup
+import setuptools
+
 with open('README.rst') as file:
         long_description = file.read()
 
@@ -11,10 +12,10 @@ except LookupError:
     func = lambda name, enc=ascii: {True: enc}.get(name=='mbcs')
     codecs.register(func)
 
-setup(
+setuptools.setup(
     name='powerlaw',
-    py_modules=['powerlaw'],
-    version= '1.5.1',
+    packages=setuptools.find_packages(),
+    version= '1.6.0',
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
     author='Jeff Alstott',
