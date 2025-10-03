@@ -1177,7 +1177,7 @@ class Power_Law(Distribution):
 
     def _in_standard_parameter_range(self):
         # DEBUG
-        return self.alpha>1
+        return self.alpha>0
 
     def fit(self, data=None):
         if data is None and self.parent_Fit:

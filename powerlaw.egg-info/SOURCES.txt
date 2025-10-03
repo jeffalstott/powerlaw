@@ -1,0 +1,9 @@
+MANIFEST.in
+README.rst
+powerlaw.py
+setup.py
+powerlaw.egg-info/PKG-INFO
+powerlaw.egg-info/SOURCES.txt
+powerlaw.egg-info/dependency_links.txt
+powerlaw.egg-info/requires.txt
+powerlaw.egg-info/top_level.txt
