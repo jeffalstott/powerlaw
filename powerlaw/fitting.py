@@ -56,27 +56,35 @@ class Fit(object):
     Parameters
     ----------
     data : list or array
+
     discrete : boolean, optional
         Whether the data is discrete (integers).
+
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
         None an optimal one will be calculated.
+
     xmax : int or float, optional
         The maximum value of the fitted distributions.
+
     verbose: bool, optional
         Whether to print updates about where we are in the fitting process.
         Default False.
+
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
         slow numerical methods. Very accurate with xmin>6
+
     sigma_threshold : float, optional
         Upper limit on the standard error of the power law fit. Used after
         fitting, when identifying valid xmin values.
-    parameter_range : dict, optional
+
+    parameter_ranges : dict, optional
         Dictionary of valid parameter ranges for fitting. Formatted as a
         dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+
     pdf_ends_at_xmax: bool, optional
         Whether to use the pdf that has an upper cutoff at xmax to fit the 
         powerlaw distribution. 
@@ -90,7 +98,7 @@ class Fit(object):
                  estimate_discrete=True,
                  discrete_approximation='round',
                  sigma_threshold=None,
-                 parameter_range=None,
+                 parameter_ranges=None,
                  fit_optimizer=None,
                  xmin_distance='D',
                  xmin_distribution='power_law',
@@ -111,7 +119,7 @@ class Fit(object):
         self.estimate_discrete = estimate_discrete
         self.discrete_approximation = discrete_approximation
         self.sigma_threshold = sigma_threshold
-        self.parameter_range = parameter_range
+        self.parameter_ranges = parameter_ranges
 
         # We keep track of the xmin and xmax values if they are provided.
         # I don't really see the purpose for this variable, but I'll leave
@@ -193,19 +201,19 @@ class Fit(object):
             # This is used to tell if we found a valid fit or not
             self.noise_flag = None
 
-            pl = Power_Law(xmin=self.xmin,
-                           xmax=self.xmax,
-                           discrete=self.discrete,
-                           fit_method=self.fit_method,
-                           estimate_discrete=self.estimate_discrete,
-                           data=self.data,
-                           parameter_range=self.parameter_range,
-                           pdf_ends_at_xmax=self.pdf_ends_at_xmax)
+            #pl = Power_Law(xmin=self.xmin,
+            #               xmax=self.xmax,
+            #               discrete=self.discrete,
+            #               fit_method=self.fit_method,
+            #               estimate_discrete=self.estimate_discrete,
+            #               data=self.data,
+            #               parameter_ranges=self.parameter_ranges,
+            #               pdf_ends_at_xmax=self.pdf_ends_at_xmax)
 
-            setattr(self, self.xmin_distance, getattr(pl, self.xmin_distance))
+            #setattr(self, self.xmin_distance, getattr(pl, self.xmin_distance))
             # I removed these because I don't think it's necessary
-            self.alpha = pl.alpha
-            self.sigma = pl.sigma
+            #self.alpha = pl.alpha
+            #self.sigma = pl.sigma
 
             #self.power_law = pl
 
@@ -225,15 +233,14 @@ class Fit(object):
     def __getattr__(self, name):
         # This is used for getting the individual distributions, which we
         # only fit if they are accessed.
-        print(name)
         if name in SUPPORTED_DISTRIBUTION_LIST:
             dist = self.supported_distributions[name]
 
             # TODO: Why is the parameter range only applied to power law?
-            if dist == Power_Law:
-                parameter_range = self.parameter_range
-            else:
-                parameter_range = None
+            #if dist == Power_Law:
+            #    parameter_ranges = self.parameter_ranges
+            #else:
+            #    parameter_ranges = None
 
             # Create the distribution and set it
             # TODO: This recomputes for every access, not sure if that is
@@ -247,7 +254,7 @@ class Fit(object):
                          fit_method=self.fit_method,
                          estimate_discrete=self.estimate_discrete,
                          discrete_approximation=self.discrete_approximation,
-                         parameter_range=parameter_range,
+                         parameter_ranges=self.parameter_ranges,
                          parent_Fit=self))
 
             return getattr(self, name)
@@ -301,10 +308,6 @@ class Fit(object):
             self.sigma = nan
             self.n_tail = nan
             setattr(self, xmin_distance+'s', np.array([nan]))
-            #self.alphas = np.array([nan])
-            #self.sigmas = np.array([nan])
-            #self.in_ranges = np.array([nan])
-            #self.xmins = np.array([nan])
             self.noise_flag = True
             return self.xmin
 
@@ -317,16 +320,15 @@ class Fit(object):
                            estimate_discrete=self.estimate_discrete,
                            fit_method=self.fit_method,
                            data=self.data,
-                           parameter_range=self.parameter_range,
+                           parameter_ranges=self.parameter_ranges,
                            parent_Fit=self,
                            pdf_ends_at_xmax=self.pdf_ends_at_xmax)
 
             # TODO not sure why the object wouldn't have these values.
-            if not hasattr(pl, 'sigma'):
-                pl.sigma = nan
-            if not hasattr(pl, 'alpha'):
-                pl.alpha = nan
-
+            #if not hasattr(pl, 'sigma'):
+            #    pl.sigma = nan
+            #if not hasattr(pl, 'alpha'):
+            #    pl.alpha = nan
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
         num_xmin = len(possible_xmin)
@@ -380,8 +382,8 @@ class Fit(object):
         self.alpha = alphas[min_index]
         self.sigma = sigmas[min_index]
 
-        #Update the fitting CDF given the new xmin, in case other objects, like
-        #Distributions, want to use it for fitting (like if they do KS fitting)
+        # Update the fitting CDF given the new xmin, in case other objects, like
+        # Distributions, want to use it for fitting (like if they do KS fitting)
         self.fitting_cdf_bins, self.fitting_cdf = self.cdf()
 
         return self.xmin

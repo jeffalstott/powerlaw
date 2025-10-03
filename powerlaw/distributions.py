@@ -1,7 +1,11 @@
 import numpy as np
 from numpy import nan
 
+import warnings
+
 import sys
+import types
+import scipy.optimize
 
 from .statistics import *
 from .plotting import *
@@ -25,18 +29,21 @@ class Distribution(object):
     data : list or array, optional
         The data to which to fit the distribution. If provided, the fit will
         be created at initialization.
-    fit_method : "Likelihood" or "KS", optional
-        Method for fitting the distribution. "Likelihood" is maximum Likelihood
-        estimation. "KS" is minimial distance estimation using The
+
+    fit_method : {"likelihood", "ks"}, optional
+        Method for fitting the distribution. "likelihood" is maximum Likelihood
+        estimation. "ks" is minimial distance estimation using The
         Kolmogorov-Smirnov test.
 
     parameters : tuple or list, optional
         The parameters of the distribution. Will be overridden if data is
         given or the fit method is called.
-    parameter_range : dict, optional
+
+    parameter_ranges : dict, optional
         Dictionary of valid parameter ranges for fitting. Formatted as a
         dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+
     initial_parameters : tuple or list, optional
         Initial values for the parameter in the fitting search.
 
@@ -52,22 +59,37 @@ class Distribution(object):
     """
 
     def __init__(self,
-                 xmin=1, xmax=None,
+                 xmin=None,
+                 xmax=None,
                  discrete=False,
                  fit_method='Likelihood',
                  data=None,
                  parameters=None,
-                 parameter_range=None,
+                 parameter_ranges=None,
                  initial_parameters=None,
                  discrete_approximation='round',
                  parent_Fit=None,
+                 verbose=False,
                  **kwargs):
+
+        self.verbose = verbose
 
         self.xmin = xmin
         self.xmax = xmax
         self.discrete = discrete
         self.fit_method = fit_method
         self.discrete_approximation = discrete_approximation
+
+        self.data = data
+
+        # When defining a subclass of this one, you should define this
+        # list in the constructor 
+        #self.parameter_names = []
+        # You also will need to define this in the subclass with the
+        # upper and lower bound for each parameter.
+        #self.DEFAULT_PARAMETER_RANGES = {}
+        # (but we don't define them here because we don't want to overwrite
+        # the values created in the subclass)
 
         self.parameter1 = None
         self.parameter2 = None
@@ -79,59 +101,282 @@ class Distribution(object):
         # If we don't have a parent fit, we still have to make sure that
         # this variable gets assigned, otherwise we'll have logic issues
         # later on.
-        if parent_Fit:
-            self.parent_Fit = parent_Fit
+        self.parent_Fit = parent_Fit
+
+        if self.parent_Fit and not hasattr(data, '__iter__'):
+            self.data = self.parent_Fit.data
+
+        # If we still don't have data even from the parent, we should
+        # raise an error.
+        if not hasattr(self.data, '__iter__'):
+            raise Exception('No data to fit distribution to!')
+
+        self.n = len(self.data)
+
+        # Setup the initial parameters and things
+        self.initialize_parameters(initial_parameters)
+
+        # Setup the parameter ranges
+        # This sets the variable `self.parameter_ranges`
+        self.initialize_parameter_ranges(parameter_ranges)
+
+        print(self.parameter_ranges)
+
+        self.fit(data)
+
+
+    def initialize_parameters(self, initial_parameters=None):
+        """
+        This function sets up the parameters for the distribution.
+
+        Parameters
+        ----------
+        initial_parameters : dict or array-like, optional
+            A dictionary in which each key corresponds to a parameter
+            name and the value corresponds to the initial value of that
+            parameters.
+
+            Can also be given as a list that is exactly the length of
+            `self.parameter_names`, and then the values in that list will
+            be assumed as the initial values for the parameters in the
+            same order as the former list.
+
+            If not provided, the values will be initialized using
+            `self.generate_initial_parameters()` which will try its best
+            to give a reasonable start based on the data.
+        """
+        # If we were given a dictionary of initial parameters, we use
+        # those values as is.
+        if type(initial_parameters) == dict:
+            assert all([k in self.parameter_names for k in initial_parameters.keys()]), f'Invalid initial parameters given: {initial_parameters}'
+            initial_parameters_dict = initial_parameters
+
+        elif hasattr(initial_parameters, '__iter__') and len(initial_parameters) == len(self.parameter_names):
+            # If we are given a list of initial parameters, we assume
+            # the order of them is the same as the order of self.parameter_names.
+            initial_parameters_dict = dict(zip(self.parameter_names, initial_parameters))
+
+        elif initial_parameters is None:
+            # If we aren't given any initial parameters, try to generate
+            # them from the data.
+            initial_parameters_dict = self.generate_initial_parameters(self.data)
+
         else:
-            self.parent_Fit = None
+            # Otherwise, something must be wrong with the initial parameters
+            # provided, so we raise an error.
+            raise Exception(f'Invalid value provided for initial parameters: {initial_parameters}')
 
-        if parameters is not None:
-            self.parameters(parameters)
-
-        if parameter_range:
-            self.parameter_range(parameter_range)
-
-        if initial_parameters:
-            self._given_initial_parameters(initial_parameters)
-
-        if (data is not None) and not (parameter_range and self.parent_Fit):
-            self.fit(data)
+        # Actually set the values
+        for p in self.parameter_names:
+            setattr(self, p, initial_parameters_dict[p])
+        
+        # We also replace initial_parameters with the proper dictionary,
+        # since that is probably more useful
+        self.initial_parameters = initial_parameters_dict
 
 
-    def fit(self, data=None, suppress_output=False):
+    def set_parameters(self, params):
+        """
+        This function sets the parameters for the distribution.
+
+        Intended to be called during fitting, as opposed to `initialize_parameters()`
+        which is designed to be called during construction.
+
+        You could also manually set the parameters with something like:
+
+            dist.param1 = ...
+            dist.param2 = ...
+
+        This function is totally equivalent to that, but just adds some
+        parsing so you can pass the parameters in a list or dict form.
+
+        Parameters
+        ----------
+        params : dict or array-like
+            A dictionary in which each key corresponds to a parameter
+            name and the value corresponds to the initial value of that
+            parameters.
+
+            Can also be given as a list that is exactly the length of
+            `self.parameter_names`, and then the values in that list will
+            be assumed as the initial values for the parameters in the
+            same order as the former list.
+        """
+        # If we were given a dictionary of initial parameters, we use
+        # those values as is.
+        if type(params) == dict:
+            assert all([k in self.parameter_names for k in params.keys()]), f'Invalid initial parameters given: {params}'
+            params_dict = params
+
+        elif hasattr(params, '__iter__') and len(params) == len(self.parameter_names):
+            # If we are given a list of initial parameters, we assume
+            # the order of them is the same as the order of self.parameter_names.
+            params_dict = dict(zip(self.parameter_names, params))
+        
+        for p in self.parameter_names:
+            setattr(self, p, params_dict[p])
+
+
+    @property
+    def parameters(self):
+        """
+        The parameters of the distribution.
+
+        Returns
+        ----------
+        params : dict
+            A dictionary in which each key corresponds to a parameter
+            name and the value corresponds to the initial value of that
+            parameters.
+        """
+        return dict(zip(self.parameter_names, [getattr(self, p) for p in self.parameter_names]))
+
+
+    def initialize_parameter_ranges(self, ranges):
+        """
+        This function sets up the ranges for parameters for the distribution.
+
+        Parameters
+        ----------
+        ranges : dict or array-like, optional
+            A dictionary in which each key corresponds to a parameter
+            name and the value corresponds to the lower and upper bound
+            for that parameter (in the format of a length 2 tuple/list/array).
+
+            Can also be given as a list that is exactly the length of
+            `self.parameter_names`, and then the values in that list will
+            be assumed as the lower and upper bound for the parameter
+            with that same index in `self.parameter_names`.
+
+            If not provided, the values will be initialized using
+            `self.DEFAULT_PARAMETER_RANGES`.
+        """
+        # If we were given a dictionary of ranges, we use
+        # those values as is.
+        if type(ranges) == dict:
+            assert all([k in self.parameter_names for k in ranges.keys()]), f'Invalid parameter ranges given: {ranges}'
+            ranges_dict = ranges
+
+        # Have to make sure that ranges is a 2d list, which involves checking
+        # that it has __iter__, it has at least one entry, and it's entry
+        # has __iter__
+        elif hasattr(ranges, '__iter__') and len(ranges) > 0 and hasattr(ranges[0], '__iter__') and len(ranges) == len(self.parameter_names):
+            # If we are given a list of initial parameters, we assume
+            # the order of them is the same as the order of self.parameter_names.
+            ranges_dict = dict(zip(self.parameter_names, ranges))
+
+        elif ranges is None:
+            ranges_dict = self.DEFAULT_PARAMETER_RANGES
+
+        else:
+            # Otherwise, something must be wrong with the initial parameters
+            # provided, so we raise an error.
+            raise Exception(f'Invalid value provided for parameter ranges: {ranges}')
+
+        self.parameter_ranges = ranges_dict
+
+
+    def generate_initial_parameters(self, data=None):
+        """
+        This function should be implemented in child classes to create an
+        initial guess for each parameter based on the data passed either
+        directly to this function, or to the class instance.
+
+        This can't be implemented in this class because the specific
+        parameters and their values will depend on what type of 
+        distribution you are working with.
+
+        Returns
+        -------
+        params : dict
+            A dictionary where the keys are the parameter names and the values
+            are the initial values of that parameter.
+        """
+        # Of course remove this line when you reimplement this function.
+        raise NotImplementedException('generate_initial_parameters() not implemented')
+
+        params = {}
+
+        # Initialize your parameters here
+        # ...
+
+        return params
+
+
+    def fit(self, data=None):
         """
         Fits the parameters of the distribution to the data. Uses options set
         at initialization.
+
+        Parameters
+        ----------
+        data : array_like, optional
+            The data to fit the distribution to, if different from the
+            data used to initialize the class.
+
+            Most of the time this will not be used.
         """
 
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        if hasattr(self.data, '__iter__'):
+            data = self.data
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        if self.fit_method=='Likelihood':
+
+        # Define our cost function based on the fitting method we've chosen.
+        if self.fit_method.lower() == 'likelihood':
+
             def fit_function(params):
-                self.parameters(params)
-                return -sum(self.loglikelihoods(data))
-        elif self.fit_method=='KS':
+                # Set the parameters
+                self.set_parameters(params)
+                # Compute log likelihood
+                return -np.sum(self.loglikelihoods(data))
+
+        elif self.fit_method.lower() == 'ks':
+
             def fit_function(params):
-                self.parameters(params)
-                self.KS(data)
-                return self.D
-        from scipy.optimize import fmin
-        parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
-            fmin(
-                lambda params: fit_function(params),
-                self.initial_parameters(data),
-                full_output=1,
-                disp=False)
-        self.parameters(parameters)
-        if not self.in_range():
-            self.noise_flag=True
-        else:
-            self.noise_flag=False
-        if self.noise_flag and not suppress_output:
-            print("No valid fits found.", file=sys.stderr)
-        self.loglikelihood =-negative_loglikelihood
+                # Set the parameters
+                self.set_parameters(params)
+                # Compute Kolmogorov-Smirnov 
+                return self.KS(data)
+
+        # Format the bounds as required for scipy's minimize
+        bounds = [b for b in self.parameter_ranges.values()]
+
+        #parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
+        result = scipy.optimize.minimize(lambda params: fit_function(params),
+                                         x0=list(self.parameters.values()),
+                                         bounds=bounds)
+
+        # Save the optimized parameters
+        self.set_parameters(result.x)
+
+        # Flag as noisy (not fit) if the parameters aren't in range
+        self.noise_flag = (not self.in_range()) or (not result.success)
+   
+        if self.noise_flag:
+            warnings.warn("No valid fits found.")
+
+        # Recompute goodness of fit metrics
+        self.loglikelihood = np.sum(self.loglikelihoods(data))
         self.KS(data)
+
+        # Give a warning if the fit parameters are very close to the
+        # boundaries, indicating that the parameter ranges are probably
+        # wrong.
+
+        # The small value to check if we are close to the boundary.
+        # Shouldn't actually be that small.
+        eps = 1e-2
+
+        nearBoundary = False
+
+        for p in self.parameter_names:
+            nearBoundary += getattr(self, p) - eps < self.parameter_ranges[p][0]
+            nearBoundary += getattr(self, p) + eps > self.parameter_ranges[p][1]
+
+        if nearBoundary:
+            warnings.warn('Fitted parameters are very close to the edge of parameter ranges; consider changing these ranges.')
+
 
     def KS(self, data=None):
         """
@@ -152,7 +397,6 @@ class Distribution(object):
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         if len(data)<2:
             print("Not enough data. Returning nan", file=sys.stderr)
-            from numpy import nan
             self.D = nan
             self.D_plus = nan
             self.D_minus = nan
@@ -191,6 +435,7 @@ class Distribution(object):
                            )
         return self.D
 
+
     def ccdf(self,data=None, survival=True):
         """
         The complementary cumulative distribution function (CCDF) of the
@@ -214,6 +459,7 @@ class Distribution(object):
             The portion of the data that is less than or equal to X.
         """
         return self.cdf(data=data, survival=survival)
+
 
     def cdf(self,data=None, survival=False):
         """
@@ -278,6 +524,7 @@ class Distribution(object):
         if possible_numerical_error:
             print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
         return CDF
+
 
     @property
     def _cdf_xmin(self):
@@ -356,6 +603,7 @@ class Distribution(object):
         likelihoods[likelihoods==0] = 10**float_info.min_10_exp
         return likelihoods
 
+
     @property
     def _pdf_continuous_normalizer(self):
         C = 1 - self._cdf_xmin
@@ -364,70 +612,57 @@ class Distribution(object):
         C = 1.0/C
         return C
 
+
     @property
     def _pdf_discrete_normalizer(self):
         return False
 
-    def parameter_range(self, r, initial_parameters=None):
-        """
-        Set the limits on the range of valid parameters to be considered while
-        fitting.
-
-        Parameters
-        ----------
-        r : dict
-            A dictionary of the parameter range. Restricted parameter
-            names are keys, and with tuples of the form (lower_bound,
-            upper_bound) as values.
-        initial_parameters : tuple or list, optional
-            Initial parameter values to start the fitting search from.
-        """
-        from types import FunctionType
-        if type(r)==FunctionType:
-            self._in_given_parameter_range = r
-        else:
-            self._range_dict = r
-
-        if initial_parameters:
-            self._given_initial_parameters = initial_parameters
-
-        if self.parent_Fit:
-            self.fit(self.parent_Fit.data)
 
     def in_range(self):
         """
         Whether the current parameters of the distribution are within the range
         of valid parameters.
         """
-        try:
-            r = self._range_dict
-            result = True
-            for k in r.keys():
-#For any attributes we've specificed, make sure we're above the lower bound
-#and below the lower bound (if they exist). This must be true of all of them.
-                lower_bound, upper_bound = r[k]
-                if upper_bound is not None:
-                    result *= getattr(self, k) < upper_bound
-                if lower_bound is not None:
-                    result *= getattr(self, k) > lower_bound
-            return result
-        except AttributeError:
-            try:
-                in_range = self._in_given_parameter_range(self)
-            except AttributeError:
-                in_range = self._in_standard_parameter_range()
-        return bool(in_range)
+        # Final result of whether all of the parameters are in range
+        result = True
 
-    def initial_parameters(self, data):
-        """
-        Return previously user-provided initial parameters or, if never
-        provided,  calculate new ones. Default initial parameter estimates are
-        unique to each theoretical distribution.
-        """
-        try:
-            return self._given_initial_parameters
-        except AttributeError:
-            return self._initial_parameters(data)
+        for p in self.parameter_names:
+            result *= getattr(self, p) > self.parameter_ranges[p][0]
+            result *= getattr(self, p) < self.parameter_ranges[p][1]
+
+        # TODO add custom boundary functions
+
+        return bool(result)
+
+#        try:
+#            r = self._range_dict
+#            result = True
+#            for k in r.keys():
+#                # For any attributes we've specificed, make sure we're above the lower bound
+#                # and below the lower bound (if they exist). This must be true of all of them.
+#                lower_bound, upper_bound = r[k]
+#                if upper_bound is not None:
+#                    result *= getattr(self, k) < upper_bound
+#                if lower_bound is not None:
+#                    result *= getattr(self, k) > lower_bound
+#            return result
+#        except AttributeError:
+#            try:
+#                in_range = self._in_given_parameter_range(self)
+#            except AttributeError:
+#                in_range = self._in_standard_parameter_range()
+#        return bool(in_range)
+
+#    def initial_parameters(self, data):
+#        """
+#        Return previously user-provided initial parameters or, if never
+#        provided,  calculate new ones. Default initial parameter estimates are
+#        unique to each theoretical distribution.
+#        """
+#        try:
+#            return self._given_initial_parameters
+#        except AttributeError:
+#            return self.generate_initial_parameters(data)
 
     def likelihoods(self, data):
         """
@@ -599,17 +834,48 @@ class Distribution(object):
         x = bisect_map(x1, x2, self.ccdf, 1-r)
         return x
 
+
 class Power_Law(Distribution):
 
     def __init__(self, estimate_discrete=True, pdf_ends_at_xmax=False, **kwargs):
+
+        self.parameter_names = ['alpha']
+        self.DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3]}
+
         self.estimate_discrete = estimate_discrete
         self.pdf_ends_at_xmax = pdf_ends_at_xmax
+
         Distribution.__init__(self, **kwargs)
 
-    def parameters(self, params):
-        self.alpha = params[0]
-        self.parameter1 = self.alpha
-        self.parameter1_name = 'alpha'
+
+    def generate_initial_parameters(self, data=None):
+        r"""
+        Generate initial guesses for the distribution parameters based
+        on the data.
+
+        For alpha, we use:
+
+            $$ \alpha \approx 1 + N / ( \sum \log (x / x_{min})) $$
+        """
+
+        if not hasattr(data, '__iter__'):
+            data = self.data
+
+        params = {}
+
+        # This is generally a very good approximation of the power law
+        # exponent.
+
+        # If we have a discrete distribution (ie only takes on integer
+        # values) we have to shift slightly.
+        if self.discrete and self.estimate_discrete and not self.xmax:
+            params["alpha"] = 1 + self.n / np.sum(np.log(data / (self.xmin - 0.5)))
+
+        else:
+            # For continuous, we just have the usual expression.
+            params["alpha"] = 1 + self.n / np.sum(np.log(data / (self.xmin)))
+
+        return params
 
     @property
     def name(self):
@@ -617,46 +883,44 @@ class Power_Law(Distribution):
 
     @property
     def sigma(self):
-#Only is calculable after self.fit is started, when the number of data points is
-#established
-        from numpy import sqrt
-        return (self.alpha - 1) / sqrt(self.n)
+        # Only is calculable after self.fit is started, when the number of data points is
+        # established
+        return (self.alpha - 1) / np.sqrt(self.n)
 
-    def _in_standard_parameter_range(self):
-        # DEBUG
-        return self.alpha>1
+    def fit2(self, data=None):
+        """
+        We need this wrapper to deal with discrete power law distributions.
+        """
 
-    def fit(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
-
+        print('fitting power law')
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
         self.n = len(data)
-        from numpy import log, sum
+
+        # TODO This is actually just about setting the intial values, so
+        # should be moved to generate_initial_parameters
         if not self.discrete and not self.xmax:
-            self.alpha = 1 + (self.n / sum(log(data/self.xmin)))
+            self.alpha = 1 + (self.n / np.sum(np.log(data/self.xmin)))
             if not self.in_range():
-                Distribution.fit(self, data, suppress_output=True)
+                Distribution.fit(self, data)
             self.KS(data)
+
         elif self.discrete and self.estimate_discrete and not self.xmax:
-            self.alpha = 1 + (self.n / sum(log(data / (self.xmin - .5))))
+            self.alpha = 1 + (self.n / np.sum(np.log(data / (self.xmin - .5))))
             if not self.in_range():
-                Distribution.fit(self, data, suppress_output=True)
+                Distribution.fit(self, data)
             self.KS(data)
+
         else:
-            Distribution.fit(self, data, suppress_output=True)
+            Distribution.fit(self, data)
 
         if not self.in_range():
             self.noise_flag=True
         else:
             self.noise_flag=False
 
-        if self.parameter1_name is None or self.parameter1 is None:
-            self.parameters([self.alpha])
+        #if self.parameter1_name is None or self.parameter1 is None:
+        #    self.initialize_parameters([self.alpha])
 
-    def _initial_parameters(self, data):
-        from numpy import log, sum
-        return 1 + len(data)/sum(log(data / (self.xmin)))
 
     def _cdf_base_function(self, x):
         if self.discrete:
@@ -669,8 +933,10 @@ class Power_Law(Distribution):
             CDF = 1-(x/self.xmin)**(-self.alpha+1)
         return CDF
 
+
     def _pdf_base_function(self, x):
         return x**-self.alpha
+
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -680,6 +946,7 @@ class Power_Law(Distribution):
         else:
             return (self.alpha-1) * self.xmin**(self.alpha-1)
 
+
     @property
     def _pdf_discrete_normalizer(self):
         C = 1.0 - self._cdf_xmin
@@ -688,16 +955,20 @@ class Power_Law(Distribution):
         C = 1.0/C
         return C
 
+
     def _generate_random_continuous(self, r):
             return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
+
+
     def _generate_random_discrete_estimate(self, r):
             x = (self.xmin - 0.5) * (1 - r) ** (-1/(self.alpha - 1)) + 0.5
             from numpy import around
             return around(x)
 
+
 class Exponential(Distribution):
 
-    def parameters(self, params):
+    def initialize_parameters(self, params):
         self.Lambda = params[0]
         self.parameter1 = self.Lambda
         self.parameter1_name = 'lambda'
@@ -706,21 +977,17 @@ class Exponential(Distribution):
     def name(self):
         return "exponential"
 
-    def _initial_parameters(self, data):
-        from numpy import mean
-        return 1/mean(data)
+    def generate_initial_parameters(self, data):
+        return 1/np.mean(data)
 
     def _in_standard_parameter_range(self):
-        return self.Lambda>0
+        return self.Lambda > 0
 
     def _cdf_base_function(self, x):
-        from numpy import exp
-        CDF = 1 - exp(-self.Lambda*x)
-        return CDF
+        return 1 - np.exp(-self.Lambda*x)
 
     def _pdf_base_function(self, x):
-        from numpy import exp
-        return exp(-self.Lambda * x)
+        return np.exp(-self.Lambda * x)
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -771,9 +1038,11 @@ class Exponential(Distribution):
             loglikelihoods = Distribution.loglikelihoods(self, data)
         return loglikelihoods
 
+
     def _generate_random_continuous(self, r):
         from numpy import log
         return self.xmin - (1/self.Lambda) * log(1-r)
+
 
 class Stretched_Exponential(Distribution):
 
@@ -789,7 +1058,7 @@ class Stretched_Exponential(Distribution):
     def name(self):
         return "stretched_exponential"
 
-    def _initial_parameters(self, data):
+    def generate_initial_parameters(self, data):
         from numpy import mean
         return (1/mean(data), 1)
 
@@ -861,6 +1130,7 @@ class Stretched_Exponential(Distribution):
         return (1/self.Lambda)* ( (self.Lambda*self.xmin)**self.beta -
             log(1-r) )**(1/self.beta)
 
+
 class Truncated_Power_Law(Distribution):
 
     def parameters(self, params):
@@ -875,7 +1145,7 @@ class Truncated_Power_Law(Distribution):
     def name(self):
         return "truncated_power_law"
 
-    def _initial_parameters(self, data):
+    def generate_initial_parameters(self, data):
         from numpy import log, sum, mean
         alpha = 1 + len(data)/sum( log( data / (self.xmin) ))
         Lambda = 1/mean(data)
@@ -957,6 +1227,7 @@ class Truncated_Power_Law(Distribution):
                 r = rand()
         from numpy import array
         return array(list(map(helper, r)))
+
 
 class Lognormal(Distribution):
 
@@ -1129,7 +1400,7 @@ class Lognormal(Distribution):
             print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
         return CDF
 
-    def _initial_parameters(self, data):
+    def generate_initial_parameters(self, data):
         from numpy import mean, std, log
         logdata = log(data)
         return (mean(logdata), std(logdata))
@@ -1199,6 +1470,7 @@ class Lognormal(Distribution):
 
 
 class Lognormal_Positive(Lognormal):
+
     @property
     def name(self):
         return "lognormal_positive"
