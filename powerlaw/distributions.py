@@ -125,8 +125,8 @@ class Distribution(object):
         old format (from v1.5, eg. self.parameter1).
 
         It should be removed in a future version along with an update to
-        the test cases (once it is convincing that the refactoring didn't
-        fundamentally change anything).
+        the test cases once it is convincing that the refactoring didn't
+        fundamentally change anything.
         """
         self.parameter1 = None
         self.parameter2 = None
@@ -145,7 +145,10 @@ class Distribution(object):
 
     def initialize_parameters(self, initial_parameters=None):
         """
-        This function sets up the parameters for the distribution.
+        This function sets up the parameters for the distribution. If
+        parameters are passed, they will try to be parsed, otherwise
+        initial guesses for parameters specific to each distribution will
+        be used.
 
         Note that there is also a function `set_parameters()` in this class.
         The primary difference between the two is that this function allows
@@ -157,7 +160,7 @@ class Distribution(object):
 
         Parameters
         ----------
-        initial_parameters : dict or array-like, optional
+        initial_parameters : dict or array_like, optional
             A dictionary in which each key corresponds to a parameter
             name and the value corresponds to the initial value of that
             parameters.
@@ -252,7 +255,7 @@ class Distribution(object):
     @property
     def parameters(self):
         """
-        Return a dictionary of the parameters of the distribution and their
+        A dictionary of the parameters of the distribution and their
         values.
 
         Returns
@@ -338,7 +341,7 @@ class Distribution(object):
             are the initial values of that parameter.
         """
         # Of course remove this line when you reimplement this function.
-        raise NotImplementedException('generate_initial_parameters() not implemented')
+        raise NotImplementedError('generate_initial_parameters() not implemented')
 
         params = {}
 
@@ -360,7 +363,7 @@ class Distribution(object):
         Fitting is performed by minimizing either the loglikelihood or
         KS distance (depending on the value of `Distribution.fit_method`).
 
-        Bounds defined in `self.parameter_ranges` are explicitly during
+        Bounds defined in `self.parameter_ranges` are used explicitly during
         the minimization process.
 
         Parameters
@@ -393,7 +396,8 @@ class Distribution(object):
                 # Set the parameters
                 self.set_parameters(params)
                 # Compute Kolmogorov-Smirnov 
-                cost = self.KS(data)
+                self.compute_distance_metrics()
+                cost = self.D
                 return cost
 
         # Format the bounds as required for scipy's minimize
@@ -415,7 +419,7 @@ class Distribution(object):
         # Maybe it sounds dumb, but an alternative is to switch between
         # two algorithms a few times, since, for example, both Nelder-Mead and Powell
         # will work in each domain (so long as they don't need to traverse
-        #alpha = 1).
+        # alpha = 1).
         # This combination works well for values close to 1 from below
         # (eg. 0.98) but not for values from above (eg. 1.02). Maybe
         # there is some way to fix this; I think the issue stems from
@@ -423,41 +427,38 @@ class Distribution(object):
         # sort of addressed by using `discrete=True` since this just
         # calculates the normalization numerically.
         switches = 2
-        # The order doesn't matter here.
+        # The order doesn't really matter here.
         methods = ['Powell', 'Nelder-Mead']
         #methods = ["COBYQA"]
 
-        initial_parameters = list(self.parameters.values())
-        #print(initial_parameters)
+        # Take the initial parameters
+        parameters = list(self.parameters.values())
 
-#        for i in range(switches):
-#            for m in methods:
-#                result = scipy.optimize.minimize(fit_function,
-#                                                 x0=initial_parameters,
-#                                                 bounds=bounds,
-#                                                 method=m,
-#                                                 tol=1e-4)
-#                parameters = result.x
+        for i in range(switches):
+            for m in methods:
+                result = scipy.optimize.minimize(fit_function,
+                                                 x0=parameters,
+                                                 bounds=bounds,
+                                                 method=m,
+                                                 tol=1e-4)
+                parameters = result.x
 
-        #print(parameters)
+        # In case you'd like to compare, this uses the exact same optimization
+        # as in powerlaw v1.5 and before. The results end up pretty much
+        # the same as with the new method above. This method is slightly
+        # faster than the one above.
+        #self.initialize_parameters()
+        #initial_parameters = list(self.parameters.values())
 
-        self.initialize_parameters()
-        initial_parameters = list(self.parameters.values())
-        #print(initial_parameters)
+        #parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
+        #        scipy.optimize.fmin(
+        #                        lambda params: fit_function(params),
+        #                        initial_parameters,
+        #                        full_output=1,
+        #                        disp=False)
 
-        # DEBUG
-        parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
-                scipy.optimize.fmin(
-                                lambda params: fit_function(params),
-                                initial_parameters,
-                                full_output=1,
-                                disp=False)
-
-        #print(parameters)
 
         # Save the optimized parameters
-        #self.set_parameters(result.x)
-        # DEBUG
         self.set_parameters(parameters)
 
         # Flag as noisy (not fit) if the parameters aren't in range
@@ -468,14 +469,15 @@ class Distribution(object):
 
         # Recompute goodness of fit metrics
         self.loglikelihood = np.sum(self.loglikelihoods(data))
-        self.KS(data)
+        self.compute_distance_metrics(data)
 
         # Give a warning if the fit parameters are very close to the
         # boundaries, indicating that the parameter ranges are probably
         # wrong.
 
         # The small value to check if we are close to the boundary.
-        # Shouldn't actually be that small.
+        # Doesn't actually need to be that small, just enough to see that
+        # the value is close to the edge.
         eps = 1e-2
         nearBoundary = False
 
@@ -492,10 +494,39 @@ class Distribution(object):
 
     def KS(self, data=None):
         """
-        Returns the Kolmogorov-Smirnov distance D between the distribution and
-        the data. Also sets the properties D+, D-, V (the Kuiper testing
-        statistic), and Kappa (1 + the average difference between the
-        theoretical and empirical distributions).
+        Return the Kolmogorov-Smirnov distance D.
+
+        Included for backwards compatability; this method has been
+        renamed `compute_distance_metrics()` because it compute several
+        distance metrics (including KS).
+        """
+        compute_distance_metrics(data)
+        return self.D
+
+    
+    def compute_distance_metrics(self, data=None):
+        r"""
+        Compute various distance metrics between the fit distribution and
+        the actual distribution of data.
+
+        The following distance metrics will be computed, with $C_d$ and $C_t$
+        as the cumulative distribution function for the data and for the
+        theoretical fit, respectively.
+
+        Kolmogorov-Smirnov distance:
+        $$ D = max( max(C_d - C_t), -min(C_d - C_t) ) $$
+         
+        Kuiper distance:
+        $$ V = max(C_d - C_t) - min(C_d - C_t) $$
+
+        Anderson-Darling distance:
+        $$ A^2 = \sum( (C_d - C_t)^2 / (C_t (1 - C_t))) $$
+
+        Kappa:
+        $$ K = 1 + mean(C_d - C_t) $$
+
+        The names of these distance metrics will be stored as `D`, `V`, 
+        `Asquare`, and `Kappa` respectively.
 
         Parameters
         ----------
@@ -509,8 +540,11 @@ class Distribution(object):
             data = self.data
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
+        # If we don't have enough data, return a bunch of nan values
         if len(data) < 2:
-            print("Not enough data. Returning nan", file=sys.stderr)
+            warnings.warn("Not enough data to compute KS, returning nan")
+
             self.D = nan
             self.D_plus = nan
             self.D_minus = nan
@@ -519,35 +553,64 @@ class Distribution(object):
             self.Asquare = nan
             return self.D
 
+        # In order to compute KS and other distance metrics, we need the
+        # cumulative distribution function for the real data, as well as
+        # for the fit distribution.
+
+        # If we have a parent fit, the one for the real data should already
+        # have been calculated.
         if self.parent_Fit:
             bins = self.parent_Fit.fitting_cdf_bins
             Actual_CDF = self.parent_Fit.fitting_cdf
-            ind = bins>=self.xmin
+            # But since xmin may be specific to this distribution, not the
+            # parent fit, we need to do the filtering here.
+            ind = bins >= self.xmin
             bins = bins[ind]
             Actual_CDF = Actual_CDF[ind]
+
+            # And we remove all the probability that was contained in
+            # bins before xmin
             dropped_probability = Actual_CDF[0]
             Actual_CDF -= dropped_probability
-            Actual_CDF /= 1-dropped_probability
+            Actual_CDF /= 1 - dropped_probability
+
         else:
+            # If we don't have the cdf already computed, we compute it now
             bins, Actual_CDF = cdf(data)
 
+        # Now compute the theoretical cdf of the fit distribution
         Theoretical_CDF = self.cdf(bins)
 
         CDF_diff = Theoretical_CDF - Actual_CDF
 
-        self.D_plus = CDF_diff.max()
-        self.D_minus = -1.0*CDF_diff.min()
-        from numpy import mean
-        self.Kappa = 1 + mean(CDF_diff)
+        # Compute the various metrics of distance between the two
+        # distributions based on the difference in CDFs
+        self.D_plus = np.max(CDF_diff)
+        self.D_minus = -np.min(CDF_diff)
 
-        self.V = self.D_plus + self.D_minus
+        # Not sure if this metric has a proper name, it's not mentioned
+        # anywhere in the documentation.
+        self.Kappa = 1 + np.mean(CDF_diff)
+
+        # Kolmogorov-Smirnov distance, D
+        # Insensitive to differences at the tails of the distributions.
         self.D = max(self.D_plus, self.D_minus)
-        self.Asquare = sum((
+
+        # Kuiper distance, V
+        # Gives additional weight to the tails, but mostly performs the
+        # same as the KS distance
+        self.V = self.D_plus + self.D_minus
+
+        # Anderson-Darling distance, Asquare
+        # Very conservative distance metric, so only works well with
+        # lots of points.
+        self.Asquare = np.sum((
                             (CDF_diff**2) /
                             (Theoretical_CDF * (1 - Theoretical_CDF) + 1e-12)
                             )[1:]
-                           )
-        return self.D
+                             )
+
+        # We don't return anything, just compute the values
 
 
     def ccdf(self,data=None, survival=True):
@@ -757,6 +820,12 @@ class Distribution(object):
         """
         Whether the current parameters of the distribution are within the range
         of valid parameters.
+
+        Returns
+        -------
+        result : bool
+            True if all parameters (defined by `self.parameter_names`) are
+            within the ranges specified by `self.parameter_ranges`.
         """
         # Final result of whether all of the parameters are in range
         result = True
@@ -945,6 +1014,23 @@ class Distribution(object):
 class Power_Law(Distribution):
 
     def __init__(self, estimate_discrete=True, pdf_ends_at_xmax=False, **kwargs):
+        """
+        A power law distribution with form:
+
+            $$ p(x) ~ x^{-alpha} $$
+
+        The exponent alpha should be positive. For a normalizable distribution
+        on an infinite domain (no xmax), we should have alpha greater than 1.
+
+        Accepts all kwargs from `Distribution` super class
+
+        Parameters
+        ----------
+        estimate_discrete : bool
+
+        pdf_ends_at_xmax : bool
+
+        """
 
         self.parameter_names = ['alpha']
         self.DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3]}
@@ -959,7 +1045,8 @@ class Power_Law(Distribution):
         # For more information on this, see the discussion in
         # Distribution.fit().
         if self.alpha > 1.0 and self.alpha < 1.2 and not self.discrete and self.verbose:
-            warnings.warn('Fit detected an alpha value slightly above one. Fitting algorithms in this regime are often error-prone; it might help to set `discrete=True` to numerically calculate the normalization.')
+            warnings.warn('Fit detected an alpha value slightly above one. Fitting algorithms in this regime are \
+                          error-prone; it might help to set `discrete=True` to numerically calculate the normalization.')
 
 
     def generate_initial_parameters(self, data=None):
@@ -997,14 +1084,10 @@ class Power_Law(Distribution):
         # this distribution.
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
-        # If we still don't have data, we just need to choose some static
-        # value. This might be called if we are creating a distribution
-        # without data just with a set exponent (for example for computing
-        # KS distance to a specific exponent tail); in this case, this
-        # value will be overwritten in 
+        # If we still don't have data, we should raise an error since
+        # a distribution with a prescribed exponent should never reach here.
         if not hasattr(data, '__iter__'):
             raise Exception('Trying to generate parameters without data!')
-            return {"alpha": 2.0}
 
         n = len(data)
 
@@ -1033,6 +1116,9 @@ class Power_Law(Distribution):
 
     @property
     def sigma(self):
+        """
+        The standard error of the MLE.
+        """
         # Only is calculable after self.fit is started, when the number of data points is
         # established
         return (self.alpha - 1) / np.sqrt(self.n)

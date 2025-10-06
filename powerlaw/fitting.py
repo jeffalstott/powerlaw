@@ -9,7 +9,16 @@ from numpy import nan
 
 import matplotlib.pyplot as plt
 
+# For float errors
 import sys
+# For checking how many processes are available
+import os
+# For parallelization
+import multiprocessing
+
+# So we can ignore this warning while fitting xmin
+from scipy.optimize import OptimizeWarning
+
 import warnings
 from tqdm import tqdm
 
@@ -41,7 +50,7 @@ SUPPORTED_DISTRIBUTION_LIST = list(SUPPORTED_DISTRIBUTIONS.keys())
 Whether to enable parallelization for certain heavy calculations, eg. 
 fitting the xmin value.
 """
-PARALLEL_ENABLE = True
+PARALLEL_ENABLE = False
 """
 This is the number of cores that the library should leave free when doing
 certain heavy calculations. For example, if you have 8 cores, and this is
@@ -257,118 +266,6 @@ class Fit(object):
             raise AttributeError(name)
 
 
-    def find_xmin_old(self, xmin_distance=None):
-        """
-        OLD VERSION FOR DEBUG
-        Returns the optimal xmin beyond which the scaling regime of the power
-        law fits best. The attribute self.xmin of the Fit object is also set.
-
-        The optimal xmin beyond which the scaling regime of the power law fits
-        best is identified by minimizing the Kolmogorov-Smirnov distance
-        between the data and the theoretical power law fit.
-        This is the method of Clauset et al. 2007.
-        """
-        import sys
-        from numpy import unique, asarray, argmin, nan, repeat, arange
-        self.given_xmin = self.fixed_xmin
-        self.parameter_range = self.parameter_ranges
-
-#Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
-#specifically the mapping and sigma threshold behavior:
-#http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
-        if not self.given_xmin:
-            possible_xmins = self.data
-        else:
-            possible_ind = min(self.given_xmin)<=self.data
-            possible_ind *= self.data<=max(self.given_xmin)
-            possible_xmins = self.data[possible_ind]
-        xmins, xmin_indices = unique(possible_xmins, return_index=True)
-#Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
-        xmins = xmins[:-1]
-        xmin_indices = xmin_indices[:-1]
-
-        if xmin_distance is None:
-            xmin_distance = self.xmin_distance
-
-        if len(xmins)<=0:
-            print("Less than 2 unique data values left after xmin and xmax "
-                  "options! Cannot fit. Returning nans.", file=sys.stderr)
-            from numpy import nan, array
-            self.xmin = nan
-            self.D = nan
-            self.V = nan
-            self.Asquare = nan
-            self.Kappa = nan
-            self.alpha = nan
-            self.sigma = nan
-            self.n_tail = nan
-            setattr(self, xmin_distance+'s', array([nan]))
-            self.alphas = array([nan])
-            self.sigmas = array([nan])
-            self.in_ranges = array([nan])
-            self.xmins = array([nan])
-            self.noise_flag = True
-            return self.xmin
-
-        def fit_function(xmin, idx, num_xmins):
-            if sys.stdout.isatty():
-                print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
-            pl = self.xmin_distribution(xmin=xmin,
-                           xmax=self.xmax,
-                           discrete=self.discrete,
-                           estimate_discrete=self.estimate_discrete,
-                           fit_method=self.fit_method,
-                           data=self.data,
-                           parameter_range=self.parameter_range,
-                           parent_Fit=self,
-                           pdf_ends_at_xmax=self.pdf_ends_at_xmax)
-            if not hasattr(pl, 'sigma'):
-                pl.sigma = nan
-            if not hasattr(pl, 'alpha'):
-                pl.alpha = nan
-            return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
-
-        num_xmins = len(xmins)
-        fits = asarray(list(map(fit_function, xmins, arange(num_xmins), repeat(num_xmins, num_xmins))))
-        # logging.warning(fits.shape)
-        setattr(self, xmin_distance+'s', fits[:,0])
-        self.alphas = fits[:,1]
-        self.sigmas = fits[:,2]
-        self.in_ranges = fits[:,3].astype(bool)
-        self.xmins = xmins
-
-        good_values = self.in_ranges
-
-        if self.sigma_threshold:
-            good_values = good_values * (self.sigmas < self.sigma_threshold)
-
-        if good_values.all():
-            min_D_index = argmin(getattr(self, xmin_distance+'s'))
-            self.noise_flag = False
-        elif not good_values.any():
-            min_D_index = argmin(getattr(self, xmin_distance+'s'))
-            self.noise_flag = True
-        else:
-            from numpy.ma import masked_array
-            masked_Ds = masked_array(getattr(self, xmin_distance+'s'), mask=~good_values)
-            min_D_index = masked_Ds.argmin()
-            self.noise_flag = False
-
-        if self.noise_flag:
-            print("No valid fits found.", file=sys.stderr)
-
-        #Set the Fit's xmin to the optimal xmin
-        self.xmin = xmins[min_D_index]
-        setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
-        self.alpha = self.alphas[min_D_index]
-        self.sigma = self.sigmas[min_D_index]
-
-        #Update the fitting CDF given the new xmin, in case other objects, like
-        #Distributions, want to use it for fitting (like if they do KS fitting)
-        self.fitting_cdf_bins, self.fitting_cdf = self.cdf()
-
-        return self.xmin
-
     def find_xmin(self, xmin_distance=None):
         """
         Returns the optimal xmin beyond which the scaling regime of the power
@@ -383,6 +280,16 @@ class Fit(object):
         plfit code, specifically the mapping and sigma threshold behavior:
 
         http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
+
+        Parameters
+        ----------
+        xmin_distance : {'D', 'V', 'Asquare'}, optional
+            The distance metric used to determine which value of xmin
+            gives the best fit.
+
+            'D' is Kolmogorov-Smirnov, 'V' is Kuiper, 'Asquare' is Anderson-
+            Darling. For more information on these, see the documentation
+            for `Distribution.compute_distance_metrics()`.
         """
         # This function will be called if xmin is None, and we will already
         # have a defined xmin_range from __init__
@@ -403,8 +310,7 @@ class Fit(object):
             xmin_distance = self.xmin_distance
 
         if len(possible_xmin) < 2:
-            print("Less than 2 unique data values left after xmin and xmax "
-                  "options! Cannot fit. Returning nans.", file=sys.stderr)
+            warnings.warn("Less than 2 unique data values for fitting xmin! Returning nans.")
             self.xmin = nan
             self.D = nan
             self.V = nan
@@ -415,8 +321,11 @@ class Fit(object):
             self.n_tail = nan
             setattr(self, xmin_distance+'s', np.array([nan]))
             self.noise_flag = True
+
             return self.xmin
 
+        # TODO: Make sure that this works if you set your xmin distribution
+        # to be something other than powerlaw
         def fit_function(xmin):
 
             # Generate a distribution with the current values of xmin
@@ -432,7 +341,6 @@ class Fit(object):
                                         pdf_ends_at_xmax=self.pdf_ends_at_xmax,
                                         verbose=0)
 
-            # TODO not sure why the object wouldn't have these values.
             if not hasattr(pl, 'sigma'):
                 pl.sigma = nan
             if not hasattr(pl, 'alpha'):
@@ -454,10 +362,43 @@ class Fit(object):
         sigmas = np.zeros(num_xmin)
         in_ranges = np.zeros(num_xmin, dtype=bool)
 
-        # TODO parallelize
-        for i in tqdm(range(num_xmin), desc='Fitting xmin') if self.verbose else range(num_xmin):
-            distances[i], alphas[i], sigmas[i], in_ranges[i] = fit_function(possible_xmin[i])
-       
+        # Disable all warnings so we don't get messages since we'll be
+        # fitting a lot of times. Otherwise, you'll almost always get an
+        # OptimizeWarning from scipy, especially towards the higher values
+        # of xmin.
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=OptimizeWarning)
+
+            # TODO parallelize
+            # This is slightly harder than I thought it would be since I can't
+            # directly parallelize a function that isn't defined at the top
+            # level. The alternative is to use a third-party library like
+            # multiprocess but this is something to ask.
+            if PARALLEL_ENABLE:
+                raise NotImplementedError('Parallelization not yet implemented! Use `PARALLEL_ENABLE=False`')
+
+                # See the os documentation on for this below; note that newer
+                # versions of python (3.13+) have a function `process_cpu_count()`
+                # that does this in a cleaner way, but it's probably better
+                # to be backwards compatible.
+                # https://docs.python.org/3.11/library/os.html#os.cpu_count
+                usable_cores = len(os.sched_getaffinity(0)) - PARALLEL_UNUSED_CORES
+                usable_cores = max(usable_cores, 1)
+
+                # Create a pool of workers
+                with multiprocessing.Pool(usable_cores) as pool:
+                    # We don't need the xmin to be tested in order, so we
+                    # use an unordered map
+                    result_mapping = pool.imap_unordered(fit_function, possible_xmin)
+                    for result in tqdm(result_mapping, desc="Fitting xmin") if self.verbose else result_mapping:
+                        distances[i], alphas[i], sigmas[i], in_ranges[i] = result
+
+            else:
+                # For non-parallel case, we just use a simple for loop
+                for i in tqdm(range(num_xmin), desc='Fitting xmin') if self.verbose else range(num_xmin):
+                    distances[i], alphas[i], sigmas[i], in_ranges[i] = fit_function(possible_xmin[i])
+      
+
         # The possible xmin values should of course have all parameters
         # within the proper range.
         good_indices = in_ranges
