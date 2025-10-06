@@ -10,6 +10,7 @@ from numpy import nan
 import matplotlib.pyplot as plt
 
 import sys
+import warnings
 from tqdm import tqdm
 
 from .plotting import *
@@ -25,12 +26,16 @@ from .distributions import *
 # If it uses supported_distributions.keys(), then it gets into an
 # infinte loop when unpickling a Fit object.  Hence the need for a
 # separate list outside the scope of the Fit class.
-SUPPORTED_DISTRIBUTION_LIST = ['power_law',
-                               'lognormal',
-                               'exponential',
-                               'truncated_power_law',
-                               'stretched_exponential',
-                               'lognormal_positive']
+SUPPORTED_DISTRIBUTIONS = {'power_law': Power_Law,
+                           'lognormal': Lognormal,
+                           'exponential': Exponential,
+                           'truncated_power_law': Truncated_Power_Law,
+                           'stretched_exponential': Stretched_Exponential,
+                           'lognormal_positive': Lognormal_Positive,
+                           }
+                            #'gamma': None}
+
+SUPPORTED_DISTRIBUTION_LIST = list(SUPPORTED_DISTRIBUTIONS.keys())
 
 """
 Whether to enable parallelization for certain heavy calculations, eg. 
@@ -94,7 +99,7 @@ class Fit(object):
                  discrete=False,
                  xmin=None, xmax=None,
                  verbose=False,
-                 fit_method='Likelihood',
+                 fit_method='likelihood',
                  estimate_discrete=True,
                  discrete_approximation='round',
                  sigma_threshold=None,
@@ -173,8 +178,9 @@ class Fit(object):
 
         if 0 in self.data:
             if self.verbose:
-                print("Values less than or equal to 0 in data. Throwing out 0 or negative values", file=sys.stderr)
-            self.data = self.data[self.data>0]
+                warnings.warn("Values less than or equal to 0 in data. Throwing out 0 or negative values")
+
+            self.data = self.data[self.data > 0]
 
         # Sort the data
         if not all(self.data[i] <= self.data[i+1] for i in range(len(self.data)-1)):
@@ -182,14 +188,9 @@ class Fit(object):
 
         self.fitting_cdf_bins, self.fitting_cdf = cdf(self.data, xmin=None, xmax=self.xmax)
 
-        self.supported_distributions = {'power_law': Power_Law,
-                                        'lognormal': Lognormal,
-                                        'exponential': Exponential,
-                                        'truncated_power_law': Truncated_Power_Law,
-                                        'stretched_exponential': Stretched_Exponential,
-                                        'lognormal_positive': Lognormal_Positive,
-                                        }
-                                        #'gamma': None}
+        # No need to define this again, as we can just copy it from the
+        # static variable.
+        self.supported_distributions = SUPPORTED_DISTRIBUTIONS
 
         self.xmin_distribution = self.supported_distributions[xmin_distribution]
         self.xmin_distribution.pdf_ends_at_xmax = self.pdf_ends_at_xmax
@@ -198,28 +199,9 @@ class Fit(object):
         if self.fixed_xmin:
             self.xmin = float(xmin)
 
-            # This is used to tell if we found a valid fit or not
-            self.noise_flag = None
-
-            #pl = Power_Law(xmin=self.xmin,
-            #               xmax=self.xmax,
-            #               discrete=self.discrete,
-            #               fit_method=self.fit_method,
-            #               estimate_discrete=self.estimate_discrete,
-            #               data=self.data,
-            #               parameter_ranges=self.parameter_ranges,
-            #               pdf_ends_at_xmax=self.pdf_ends_at_xmax)
-
-            #setattr(self, self.xmin_distance, getattr(pl, self.xmin_distance))
-            # I removed these because I don't think it's necessary
-            #self.alpha = pl.alpha
-            #self.sigma = pl.sigma
-
-            #self.power_law = pl
-
         else:
             if self.verbose:
-                print("Calculating best minimal value for {} fit".format(xmin_distribution.replace('_',' ')), file=sys.stderr)
+                print(f'Calculating best minimal value for {xmin_distribution.replace("_"," ")} fit')
 
             # This function tries to optimize the fit based on the xmin
             self.find_xmin()
@@ -230,17 +212,29 @@ class Fit(object):
         self.n_tail = self.n + n_above_max
 
 
+    def __dir__(self):
+        """
+        In general, we don't do any actual fitting until a specific
+        distribution is called, like `fit.power_law`. This means we
+        normally can't autocomplete the distribution names since they
+        don't exist until we actually call them.
+
+        As such, we add the list of distribution names to the __dir__
+        function used for autocomplete so we can autocomplete them
+        before they exist.
+        """
+        current_attrs = self.__dict__.keys()
+        total_attrs = list(current_attrs) + list(self.supported_distributions)
+
+        # Take unique values and cast to tuple
+        return tuple(np.unique(total_attrs))
+
+
     def __getattr__(self, name):
         # This is used for getting the individual distributions, which we
         # only fit if they are accessed.
         if name in SUPPORTED_DISTRIBUTION_LIST:
             dist = self.supported_distributions[name]
-
-            # TODO: Why is the parameter range only applied to power law?
-            #if dist == Power_Law:
-            #    parameter_ranges = self.parameter_ranges
-            #else:
-            #    parameter_ranges = None
 
             # Create the distribution and set it
             # TODO: This recomputes for every access, not sure if that is
@@ -262,6 +256,118 @@ class Fit(object):
         else:
             raise AttributeError(name)
 
+
+    def find_xmin_old(self, xmin_distance=None):
+        """
+        OLD VERSION FOR DEBUG
+        Returns the optimal xmin beyond which the scaling regime of the power
+        law fits best. The attribute self.xmin of the Fit object is also set.
+
+        The optimal xmin beyond which the scaling regime of the power law fits
+        best is identified by minimizing the Kolmogorov-Smirnov distance
+        between the data and the theoretical power law fit.
+        This is the method of Clauset et al. 2007.
+        """
+        import sys
+        from numpy import unique, asarray, argmin, nan, repeat, arange
+        self.given_xmin = self.fixed_xmin
+        self.parameter_range = self.parameter_ranges
+
+#Much of the rest of this function was inspired by Adam Ginsburg's plfit code,
+#specifically the mapping and sigma threshold behavior:
+#http://code.google.com/p/agpy/source/browse/trunk/plfit/plfit.py?spec=svn359&r=357
+        if not self.given_xmin:
+            possible_xmins = self.data
+        else:
+            possible_ind = min(self.given_xmin)<=self.data
+            possible_ind *= self.data<=max(self.given_xmin)
+            possible_xmins = self.data[possible_ind]
+        xmins, xmin_indices = unique(possible_xmins, return_index=True)
+#Don't look at last xmin, as that's also the xmax, and we want to at least have TWO points to fit!
+        xmins = xmins[:-1]
+        xmin_indices = xmin_indices[:-1]
+
+        if xmin_distance is None:
+            xmin_distance = self.xmin_distance
+
+        if len(xmins)<=0:
+            print("Less than 2 unique data values left after xmin and xmax "
+                  "options! Cannot fit. Returning nans.", file=sys.stderr)
+            from numpy import nan, array
+            self.xmin = nan
+            self.D = nan
+            self.V = nan
+            self.Asquare = nan
+            self.Kappa = nan
+            self.alpha = nan
+            self.sigma = nan
+            self.n_tail = nan
+            setattr(self, xmin_distance+'s', array([nan]))
+            self.alphas = array([nan])
+            self.sigmas = array([nan])
+            self.in_ranges = array([nan])
+            self.xmins = array([nan])
+            self.noise_flag = True
+            return self.xmin
+
+        def fit_function(xmin, idx, num_xmins):
+            if sys.stdout.isatty():
+                print('xmin progress: {:02d}%'.format(int(idx/num_xmins * 100)), end='\r')
+            pl = self.xmin_distribution(xmin=xmin,
+                           xmax=self.xmax,
+                           discrete=self.discrete,
+                           estimate_discrete=self.estimate_discrete,
+                           fit_method=self.fit_method,
+                           data=self.data,
+                           parameter_range=self.parameter_range,
+                           parent_Fit=self,
+                           pdf_ends_at_xmax=self.pdf_ends_at_xmax)
+            if not hasattr(pl, 'sigma'):
+                pl.sigma = nan
+            if not hasattr(pl, 'alpha'):
+                pl.alpha = nan
+            return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
+
+        num_xmins = len(xmins)
+        fits = asarray(list(map(fit_function, xmins, arange(num_xmins), repeat(num_xmins, num_xmins))))
+        # logging.warning(fits.shape)
+        setattr(self, xmin_distance+'s', fits[:,0])
+        self.alphas = fits[:,1]
+        self.sigmas = fits[:,2]
+        self.in_ranges = fits[:,3].astype(bool)
+        self.xmins = xmins
+
+        good_values = self.in_ranges
+
+        if self.sigma_threshold:
+            good_values = good_values * (self.sigmas < self.sigma_threshold)
+
+        if good_values.all():
+            min_D_index = argmin(getattr(self, xmin_distance+'s'))
+            self.noise_flag = False
+        elif not good_values.any():
+            min_D_index = argmin(getattr(self, xmin_distance+'s'))
+            self.noise_flag = True
+        else:
+            from numpy.ma import masked_array
+            masked_Ds = masked_array(getattr(self, xmin_distance+'s'), mask=~good_values)
+            min_D_index = masked_Ds.argmin()
+            self.noise_flag = False
+
+        if self.noise_flag:
+            print("No valid fits found.", file=sys.stderr)
+
+        #Set the Fit's xmin to the optimal xmin
+        self.xmin = xmins[min_D_index]
+        setattr(self, xmin_distance, getattr(self, xmin_distance+'s')[min_D_index])
+        self.alpha = self.alphas[min_D_index]
+        self.sigma = self.sigmas[min_D_index]
+
+        #Update the fitting CDF given the new xmin, in case other objects, like
+        #Distributions, want to use it for fitting (like if they do KS fitting)
+        self.fitting_cdf_bins, self.fitting_cdf = self.cdf()
+
+        return self.xmin
 
     def find_xmin(self, xmin_distance=None):
         """
@@ -315,20 +421,23 @@ class Fit(object):
 
             # Generate a distribution with the current values of xmin
             pl = self.xmin_distribution(xmin=xmin,
-                           xmax=self.xmax,
-                           discrete=self.discrete,
-                           estimate_discrete=self.estimate_discrete,
-                           fit_method=self.fit_method,
-                           data=self.data,
-                           parameter_ranges=self.parameter_ranges,
-                           parent_Fit=self,
-                           pdf_ends_at_xmax=self.pdf_ends_at_xmax)
+                                        xmax=self.xmax,
+                                        discrete=self.discrete,
+                                        fit_method=self.fit_method,
+                                        data=self.data,
+                                        parameters=None,
+                                        parameter_ranges=self.parameter_ranges,
+                                        parent_Fit=self,
+                                        estimate_discrete=self.estimate_discrete,
+                                        pdf_ends_at_xmax=self.pdf_ends_at_xmax,
+                                        verbose=0)
 
             # TODO not sure why the object wouldn't have these values.
-            #if not hasattr(pl, 'sigma'):
-            #    pl.sigma = nan
-            #if not hasattr(pl, 'alpha'):
-            #    pl.alpha = nan
+            if not hasattr(pl, 'sigma'):
+                pl.sigma = nan
+            if not hasattr(pl, 'alpha'):
+                pl.alpha = nan
+
             return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
 
         num_xmin = len(possible_xmin)
@@ -356,31 +465,38 @@ class Fit(object):
         # If we have a threshold, we throw out any values that are below
         # that
         if self.sigma_threshold:
-            good_indices = good_indices * (self.sigmas < self.sigma_threshold)
+            good_indices = good_indices * (sigmas < self.sigma_threshold)
 
         # If we have no good values, the fit failed
         if not good_indices.any():
-            # TODO fix this
-            raise Exception('No valid fit')
-            # We still grab the lowest
-            #min_D_index = np.argmin(distances)
-            #self.noise_flag = True
+            # We still continue though
+            self.noise_flag = True
+            min_index = np.argmin(distances)
 
-        # Otherwise, we take the lowest distance that is a good index
-        masked_distances = np.ma.masked_array(distances, mask=~good_indices)
-        min_index = masked_distances.argmin()
+        else:
+            # Otherwise, we take the lowest distance that is a good index
+            masked_distances = np.ma.masked_array(distances, mask=~good_indices)
+            min_index = masked_distances.argmin()
+            self.noise_flag = False
 
-        # I think this is deprecated because I can't see it doing anything
-        # useful
-        self.noise_flag = False
         if self.noise_flag:
-            print("No valid fits found.", file=sys.stderr)
+            # I've set this to be a warning as it is more in the spirit of
+            # the previous code, though it's worth discussing if it should
+            # instead just be an error.
+            warnings.warn('No valid fit found.')
 
         # Set the Fit's xmin to the optimal xmin
         self.xmin = possible_xmin[min_index]
         setattr(self, xmin_distance, distances[min_index])
         self.alpha = alphas[min_index]
         self.sigma = sigmas[min_index]
+
+        # DEBUG
+        self.distances = distances
+        self.alphas = alphas
+        self.xmins = possible_xmin
+        self.valid_fits = good_indices
+        self.normalizers = sigmas
 
         # Update the fitting CDF given the new xmin, in case other objects, like
         # Distributions, want to use it for fitting (like if they do KS fitting)
@@ -640,60 +756,4 @@ class Fit(object):
             data = self.data
         return plot_pdf(data, ax=ax, linear_bins=linear_bins, **kwargs)
 
-
-def checkunique(data):
-    """Quickly checks if a sorted array is all unique elements."""
-    for i in range(len(data)-1):
-        if data[i]==data[i+1]:
-            return False
-    return True
-
-#def checksort(data):
-#    """
-#    Checks if the data is sorted, in O(n) time. If it isn't sorted, it then
-#    sorts it in O(nlogn) time. Expectation is that the data will typically
-#    be sorted. Presently slower than numpy's sort, even on large arrays, and
-#    so is useless.
-#    """
-#
-#    n = len(data)
-#    from numpy import arange
-#    if not all(data[i] <= data[i+1] for i in arange(n-1)):
-#        from numpy import sort
-#        data = sort(data)
-#    return data
-
-def bisect_map(mn, mx, function, target):
-    """
-    Uses binary search to find the target solution to a function, searching in
-    a given ordered sequence of integer values.
-
-    Parameters
-    ----------
-    seq : list or array, monotonically increasing integers
-    function : a function that takes a single integer input, which monotonically
-        decreases over the range of seq.
-    target : the target value of the function
-
-    Returns
-    -------
-    value : the input value that yields the target solution. If there is no
-    exact solution in the input sequence, finds the nearest value k such that
-    function(k) <= target < function(k+1). This is similar to the behavior of
-    bisect_left in the bisect package. If even the first, leftmost value of seq
-    does not satisfy this condition, -1 is returned.
-    """
-    if function([mn]) < target or function([mx]) > target:
-        return -1
-    while 1:
-        if mx==mn+1:
-            return mn
-        m = (mn + mx) / 2
-        value = function([m])[0]
-        if value > target:
-            mn = m
-        elif value < target:
-            mx = m
-        else:
-            return m
 

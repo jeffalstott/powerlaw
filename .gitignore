@@ -1,5 +1,6 @@
 ## Images
 images/
+notebooks/
 *.gif
 
 ## C++

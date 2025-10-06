@@ -9,6 +9,7 @@ import scipy.optimize
 
 from .statistics import *
 from .plotting import *
+from .utils import *
 
 class Distribution(object):
     """
@@ -21,8 +22,10 @@ class Distribution(object):
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
         None an optimal one will be calculated.
+
     xmax : int or float, optional
         The maximum value of the fitted distributions.
+
     discrete : boolean, optional
         Whether the distribution is discrete (integers).
 
@@ -36,16 +39,13 @@ class Distribution(object):
         Kolmogorov-Smirnov test.
 
     parameters : tuple or list, optional
-        The parameters of the distribution. Will be overridden if data is
-        given or the fit method is called.
+        The parameters of the distribution. If data is given, these will
+        be used as the initial parameters for fitting.
 
     parameter_ranges : dict, optional
         Dictionary of valid parameter ranges for fitting. Formatted as a
         dictionary of parameter names ('alpha' and/or 'sigma') and tuples
         of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
-
-    initial_parameters : tuple or list, optional
-        Initial values for the parameter in the fitting search.
 
     discrete_approximation : "round", "xmax" or int, optional
         If the discrete form of the theoeretical distribution is not known,
@@ -56,20 +56,24 @@ class Distribution(object):
 
     parent_Fit : Fit object, optional
         A Fit object from which to use data, if it exists.
+
+    verbose : {0, 1, 2}, bool
+        Whether to print debug and status information. `0` or `False` means
+        print no information (including no warnings), `1` means print
+        only warnings, and `2` means print warnings and status messages.
     """
 
     def __init__(self,
                  xmin=None,
                  xmax=None,
                  discrete=False,
-                 fit_method='Likelihood',
+                 fit_method='likelihood',
                  data=None,
                  parameters=None,
                  parameter_ranges=None,
-                 initial_parameters=None,
                  discrete_approximation='round',
                  parent_Fit=None,
-                 verbose=False,
+                 verbose=1,
                  **kwargs):
 
         self.verbose = verbose
@@ -91,13 +95,6 @@ class Distribution(object):
         # (but we don't define them here because we don't want to overwrite
         # the values created in the subclass)
 
-        self.parameter1 = None
-        self.parameter2 = None
-        self.parameter3 = None
-        self.parameter1_name = None
-        self.parameter2_name = None
-        self.parameter3_name = None
-
         # If we don't have a parent fit, we still have to make sure that
         # this variable gets assigned, otherwise we'll have logic issues
         # later on.
@@ -106,28 +103,57 @@ class Distribution(object):
         if self.parent_Fit and not hasattr(data, '__iter__'):
             self.data = self.parent_Fit.data
 
-        # If we still don't have data even from the parent, we should
-        # raise an error.
-        if not hasattr(self.data, '__iter__'):
-            raise Exception('No data to fit distribution to!')
-
-        self.n = len(self.data)
-
         # Setup the initial parameters and things
-        self.initialize_parameters(initial_parameters)
+        self.initialize_parameters(parameters)
 
         # Setup the parameter ranges
         # This sets the variable `self.parameter_ranges`
         self.initialize_parameter_ranges(parameter_ranges)
 
-        print(self.parameter_ranges)
+        # Fit if we have data
+        if hasattr(self.data, '__iter__'):
 
-        self.fit(data)
+            self.n = len(self.data)
+            self.fit(data)
+
+        self.debug_parameter_names()
+
+    
+    def debug_parameter_names(self):
+        """
+        This is solely a debug function that sets up variables in the
+        old format (from v1.5, eg. self.parameter1).
+
+        It should be removed in a future version along with an update to
+        the test cases (once it is convincing that the refactoring didn't
+        fundamentally change anything).
+        """
+        self.parameter1 = None
+        self.parameter2 = None
+        self.parameter3 = None
+        self.parameter1_name = None
+        self.parameter2_name = None
+        self.parameter3_name = None
+
+        for i in range(len(self.parameter_names)): 
+            # Set the name
+            setattr(self, f'parameter{i+1}_name', self.parameter_names[i])
+
+            # Set the value
+            setattr(self, f'parameter{i+1}', getattr(self, self.parameter_names[i]))
 
 
     def initialize_parameters(self, initial_parameters=None):
         """
         This function sets up the parameters for the distribution.
+
+        Note that there is also a function `set_parameters()` in this class.
+        The primary difference between the two is that this function allows
+        the possibility of generating initial guesses of parameters
+        (using the `generate_initial_parameters()` function), whereas
+        the other method requires that parameter values are actually
+        passed. Technically you could just use this one, but I figured
+        it was more clear to have separate functions.
 
         Parameters
         ----------
@@ -164,7 +190,7 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the initial parameters
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for initial parameters: {initial_parameters}')
+            raise Exception(f'Invalid value provided for initial parameters: {initial_parameters}.')
 
         # Actually set the values
         for p in self.parameter_names:
@@ -180,7 +206,8 @@ class Distribution(object):
         This function sets the parameters for the distribution.
 
         Intended to be called during fitting, as opposed to `initialize_parameters()`
-        which is designed to be called during construction.
+        which is designed to be called during construction. See documentation
+        for this other function for more information.
 
         You could also manually set the parameters with something like:
 
@@ -213,6 +240,11 @@ class Distribution(object):
             # the order of them is the same as the order of self.parameter_names.
             params_dict = dict(zip(self.parameter_names, params))
         
+        else:
+            # Otherwise, something must be wrong with the parameters
+            # provided, so we raise an error.
+            raise Exception(f'Invalid value provided for setting parameters: {params}.')
+
         for p in self.parameter_names:
             setattr(self, p, params_dict[p])
 
@@ -220,7 +252,8 @@ class Distribution(object):
     @property
     def parameters(self):
         """
-        The parameters of the distribution.
+        Return a dictionary of the parameters of the distribution and their
+        values.
 
         Returns
         ----------
@@ -232,9 +265,14 @@ class Distribution(object):
         return dict(zip(self.parameter_names, [getattr(self, p) for p in self.parameter_names]))
 
 
-    def initialize_parameter_ranges(self, ranges):
+    def initialize_parameter_ranges(self, ranges=None):
         """
         This function sets up the ranges for parameters for the distribution.
+
+        If not provided, the default range for each parameter will be
+        used; these are specific to each individual distribution. For
+        more information, see the variable `DEFAULT_PARAMETER_RANGES` in
+        children of this class.
 
         Parameters
         ----------
@@ -251,11 +289,17 @@ class Distribution(object):
             If not provided, the values will be initialized using
             `self.DEFAULT_PARAMETER_RANGES`.
         """
+        # We start with the default range, since it's possible that the
+        # user has passed a range for only one or two parameters instead
+        # of all of them. In that case, the parameters that haven't been
+        # specified should follow their default range.
+        ranges_dict = self.DEFAULT_PARAMETER_RANGES
+
         # If we were given a dictionary of ranges, we use
         # those values as is.
         if type(ranges) == dict:
             assert all([k in self.parameter_names for k in ranges.keys()]), f'Invalid parameter ranges given: {ranges}'
-            ranges_dict = ranges
+            ranges_dict.update(ranges)
 
         # Have to make sure that ranges is a 2d list, which involves checking
         # that it has __iter__, it has at least one entry, and it's entry
@@ -263,13 +307,14 @@ class Distribution(object):
         elif hasattr(ranges, '__iter__') and len(ranges) > 0 and hasattr(ranges[0], '__iter__') and len(ranges) == len(self.parameter_names):
             # If we are given a list of initial parameters, we assume
             # the order of them is the same as the order of self.parameter_names.
-            ranges_dict = dict(zip(self.parameter_names, ranges))
+            ranges_dict.update(dict(zip(self.parameter_names, ranges)))
 
         elif ranges is None:
-            ranges_dict = self.DEFAULT_PARAMETER_RANGES
+            # Do nothing, since we already set the default ranges above.
+            pass
 
         else:
-            # Otherwise, something must be wrong with the initial parameters
+            # Otherwise, something must be wrong with the ranges
             # provided, so we raise an error.
             raise Exception(f'Invalid value provided for parameter ranges: {ranges}')
 
@@ -300,6 +345,10 @@ class Distribution(object):
         # Initialize your parameters here
         # ...
 
+        # For example, for a power law, assuming f is a function that
+        # guesses the exponent based on the data.
+        # params["alpha"] = f(data)
+
         return params
 
 
@@ -308,16 +357,22 @@ class Distribution(object):
         Fits the parameters of the distribution to the data. Uses options set
         at initialization.
 
+        Fitting is performed by minimizing either the loglikelihood or
+        KS distance (depending on the value of `Distribution.fit_method`).
+
+        Bounds defined in `self.parameter_ranges` are explicitly during
+        the minimization process.
+
         Parameters
         ----------
         data : array_like, optional
             The data to fit the distribution to, if different from the
             data used to initialize the class.
 
-            Most of the time this will not be used.
         """
-
-        if hasattr(self.data, '__iter__'):
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
             data = self.data
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
@@ -329,7 +384,8 @@ class Distribution(object):
                 # Set the parameters
                 self.set_parameters(params)
                 # Compute log likelihood
-                return -np.sum(self.loglikelihoods(data))
+                cost = -np.sum(self.loglikelihoods(data))
+                return cost
 
         elif self.fit_method.lower() == 'ks':
 
@@ -337,23 +393,77 @@ class Distribution(object):
                 # Set the parameters
                 self.set_parameters(params)
                 # Compute Kolmogorov-Smirnov 
-                return self.KS(data)
+                cost = self.KS(data)
+                return cost
 
         # Format the bounds as required for scipy's minimize
         bounds = [b for b in self.parameter_ranges.values()]
 
-        #parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
-        result = scipy.optimize.minimize(lambda params: fit_function(params),
-                                         x0=list(self.parameters.values()),
-                                         bounds=bounds)
+        # TODO: Add constraints here
+        # In choosing the minimization method, unfortunately there isn't
+        # one choice that works for all cases. Powell and Nelder-Mead 
+        # together cover most options though is what I've found.
+        # In particular, Powell can traverse the inflection point at
+        # alpha = 1 only going down (ie works for any alpha <= 1) whereas
+        # Nelder-Mead can only traverse it going up (ie. works for any
+        # alpha > 1).
+
+        # The only options I've found that have success both ways is
+        # COBYLA and COBYQA. Unfortunately both of these struggle around
+        # values of 1.
+
+        # Maybe it sounds dumb, but an alternative is to switch between
+        # two algorithms a few times, since, for example, both Nelder-Mead and Powell
+        # will work in each domain (so long as they don't need to traverse
+        #alpha = 1).
+        # This combination works well for values close to 1 from below
+        # (eg. 0.98) but not for values from above (eg. 1.02). Maybe
+        # there is some way to fix this; I think the issue stems from
+        # inaccuracy in the pdf normalization. For now, this can be
+        # sort of addressed by using `discrete=True` since this just
+        # calculates the normalization numerically.
+        switches = 2
+        # The order doesn't matter here.
+        methods = ['Powell', 'Nelder-Mead']
+        #methods = ["COBYQA"]
+
+        initial_parameters = list(self.parameters.values())
+        #print(initial_parameters)
+
+#        for i in range(switches):
+#            for m in methods:
+#                result = scipy.optimize.minimize(fit_function,
+#                                                 x0=initial_parameters,
+#                                                 bounds=bounds,
+#                                                 method=m,
+#                                                 tol=1e-4)
+#                parameters = result.x
+
+        #print(parameters)
+
+        self.initialize_parameters()
+        initial_parameters = list(self.parameters.values())
+        #print(initial_parameters)
+
+        # DEBUG
+        parameters, negative_loglikelihood, iter, funcalls, warnflag, = \
+                scipy.optimize.fmin(
+                                lambda params: fit_function(params),
+                                initial_parameters,
+                                full_output=1,
+                                disp=False)
+
+        #print(parameters)
 
         # Save the optimized parameters
-        self.set_parameters(result.x)
+        #self.set_parameters(result.x)
+        # DEBUG
+        self.set_parameters(parameters)
 
         # Flag as noisy (not fit) if the parameters aren't in range
-        self.noise_flag = (not self.in_range()) or (not result.success)
-   
-        if self.noise_flag:
+        self.noise_flag = (not self.in_range())# or (not result.success)
+  
+        if self.noise_flag and self.verbose:
             warnings.warn("No valid fits found.")
 
         # Recompute goodness of fit metrics
@@ -367,7 +477,6 @@ class Distribution(object):
         # The small value to check if we are close to the boundary.
         # Shouldn't actually be that small.
         eps = 1e-2
-
         nearBoundary = False
 
         for p in self.parameter_names:
@@ -375,7 +484,10 @@ class Distribution(object):
             nearBoundary += getattr(self, p) + eps > self.parameter_ranges[p][1]
 
         if nearBoundary:
-            warnings.warn('Fitted parameters are very close to the edge of parameter ranges; consider changing these ranges.')
+            self.noise_flag = True
+
+            if self.verbose:
+                warnings.warn('Fitted parameters are very close to the edge of parameter ranges; consider changing these ranges.')
 
 
     def KS(self, data=None):
@@ -391,11 +503,13 @@ class Distribution(object):
             If not provided, attempts to use the data from the Fit object in
             which the Distribution object is contained.
         """
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        if len(data)<2:
+        if len(data) < 2:
             print("Not enough data. Returning nan", file=sys.stderr)
             self.D = nan
             self.D_plus = nan
@@ -483,6 +597,7 @@ class Distribution(object):
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
+        # TODO: Clean this up
         if data is None and self.parent_Fit:
             data = self.parent_Fit.data
 
@@ -490,16 +605,14 @@ class Distribution(object):
         n = len(data)
         from sys import float_info
         if not self.in_range():
-            from numpy import tile
-            return tile(10**float_info.min_10_exp, n)
+            return np.tile(10**float_info.min_10_exp, n)
 
-        if self._cdf_xmin==1:
-#If cdf_xmin is 1, it means we don't have the numerical accuracy to
-            #calculate this tail. So we make everything 1, indicating
-            #we're at the end of the tail. Such an xmin should be thrown
-            #out by the KS test.
-            from numpy import ones
-            CDF = ones(n)
+        if self._cdf_xmin == 1:
+            # If cdf_xmin is 1, it means we don't have the numerical accuracy to
+            # calculate this tail. So we make everything 1, indicating
+            # we're at the end of the tail. Such an xmin should be thrown
+            # out by the KS test.
+            CDF = np.ones(n)
             return CDF
 
         CDF = self._cdf_base_function(data) - self._cdf_xmin
@@ -513,16 +626,14 @@ class Distribution(object):
         if survival:
             CDF = 1 - CDF
 
-        possible_numerical_error = False
-        from numpy import isnan, min
-        if isnan(min(CDF)):
-            print("'nan' in fit cumulative distribution values.", file=sys.stderr)
-            possible_numerical_error = True
-        #if 0 in CDF or 1 in CDF:
-        #    print("0 or 1 in fit cumulative distribution values.", file=sys.stderr)
-        #    possible_numerical_error = True
-        if possible_numerical_error:
-            print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
+        # If we have any nan values in the cdf, it is indicative of a
+        # numerical error, so we should warn.
+        # np.min will always give nan if there are any nans
+        possible_numerical_error = np.isnan(np.min(CDF))
+
+        if possible_numerical_error and self.verbose:
+            warnings.warn("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.")
+
         return CDF
 
 
@@ -547,60 +658,84 @@ class Distribution(object):
         -------
         probabilities : array
         """
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        n = len(data)
-        from sys import float_info
-        if not self.in_range():
-            from numpy import tile
-            return tile(10**float_info.min_10_exp, n)
 
+        n = len(data)
+
+        from sys import float_info
+        # I guess this is an attempt to return very small values that aren't
+        # zeros since that would mess with the log scale
+        if not self.in_range():
+            return np.tile(10**float_info.min_10_exp, n)
+
+        # If we have a continuous distribution, we can easily apply
+        # our base function and the normalization factor to get the
+        # pdf evaluated at each data point.
         if not self.discrete:
             f = self._pdf_base_function(data)
             C = self._pdf_continuous_normalizer
             likelihoods = f*C
+
         else:
+            # For discrete cases, it's a little more tricky since we will
+            # have to approximate the normalization factor.
             if self._pdf_discrete_normalizer:
+                # If we have an explicit expression for the discrete
+                # normalization, we should of course use that.
                 f = self._pdf_base_function(data)
                 C = self._pdf_discrete_normalizer
                 likelihoods = f*C
+
             elif self.discrete_approximation=='round':
-                lower_data = data-.5
-                upper_data = data+.5
-#Temporarily expand xmin and xmax to be able to grab the extra bit of
-#probability mass beyond the (integer) values of xmin and xmax
-#Note this is a design decision. One could also say this extra
-#probability "off the edge" of the distribution shouldn't be included,
-#and that implementation is retained below, commented out. Note, however,
-#that such a cliff means values right at xmin and xmax have half the width to
-#grab probability from, and thus are lower probability than they would otherwise
-#be. This is particularly concerning for values at xmin, which are typically
-#the most likely and greatly influence the distribution's fit.
-                self.xmin -= .5
+                # If we want to approximate by rounding values, we essentially
+                # take a discretized derivative of the cumulative distribution
+                # function.
+                lower_data = data - 0.5
+                upper_data = data + 0.5
+
+                # Temporarily expand xmin and xmax to be able to grab the extra bit of
+                # probability mass beyond the (integer) values of xmin and xmax
+                # Note this is a design decision. One could also say this extra
+                # probability "off the edge" of the distribution shouldn't be included,
+                # and that implementation is retained below, commented out. Note, however,
+                # that such a cliff means values right at xmin and xmax have half the width to
+                # grab probability from, and thus are lower probability than they would otherwise
+                # be. This is particularly concerning for values at xmin, which are typically
+                # the most likely and greatly influence the distribution's fit.
+                self.xmin -= 0.5
                 if self.xmax:
-                    self.xmax += .5
-                #Clean data for invalid values before handing to cdf, which will purge them
+                    self.xmax += 0.5
+
+                # Clean data for invalid values before handing to cdf, which will purge them
                 #lower_data[lower_data<self.xmin] +=.5
                 #if self.xmax:
                 #    upper_data[upper_data>self.xmax] -=.5
-                likelihoods = self.cdf(upper_data)-self.cdf(lower_data)
-                self.xmin +=.5
+                likelihoods = self.cdf(upper_data) - self.cdf(lower_data)
+
+                self.xmin += 0.5
                 if self.xmax:
-                    self.xmax -= .5
+                    self.xmax -= 0.5
             else:
+                # Otherwise, we just normalize numerically by summing the
+                # PDF
                 if self.discrete_approximation=='xmax':
                     upper_limit = self.xmax
                 else:
                     upper_limit = self.discrete_approximation
-#            from mpmath import exp
-                from numpy import arange
-                X = arange(self.xmin, upper_limit+1)
+
+                X = np.arange(self.xmin, upper_limit+1)
                 PDF = self._pdf_base_function(X)
-                PDF = (PDF/sum(PDF)).astype(float)
-                likelihoods = PDF[(data-self.xmin).astype(int)]
-        likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+                PDF = (PDF / np.sum(PDF)).astype(float)
+                likelihoods = PDF[(data - self.xmin).astype(int)]
+
+        # Set any zeros to just very small values
+        likelihoods[likelihoods == 0] = 10**float_info.min_10_exp
+
         return likelihoods
 
 
@@ -630,39 +765,8 @@ class Distribution(object):
             result *= getattr(self, p) > self.parameter_ranges[p][0]
             result *= getattr(self, p) < self.parameter_ranges[p][1]
 
-        # TODO add custom boundary functions
-
         return bool(result)
 
-#        try:
-#            r = self._range_dict
-#            result = True
-#            for k in r.keys():
-#                # For any attributes we've specificed, make sure we're above the lower bound
-#                # and below the lower bound (if they exist). This must be true of all of them.
-#                lower_bound, upper_bound = r[k]
-#                if upper_bound is not None:
-#                    result *= getattr(self, k) < upper_bound
-#                if lower_bound is not None:
-#                    result *= getattr(self, k) > lower_bound
-#            return result
-#        except AttributeError:
-#            try:
-#                in_range = self._in_given_parameter_range(self)
-#            except AttributeError:
-#                in_range = self._in_standard_parameter_range()
-#        return bool(in_range)
-
-#    def initial_parameters(self, data):
-#        """
-#        Return previously user-provided initial parameters or, if never
-#        provided,  calculate new ones. Default initial parameter estimates are
-#        unique to each theoretical distribution.
-#        """
-#        try:
-#            return self._given_initial_parameters
-#        except AttributeError:
-#            return self.generate_initial_parameters(data)
 
     def likelihoods(self, data):
         """
@@ -671,13 +775,14 @@ class Distribution(object):
         """
         return self.pdf(data)
 
+
     def loglikelihoods(self, data):
         """
         The logarithm of the likelihoods of the observed data from the
         theoretical distribution.
         """
-        from numpy import log
-        return log(self.likelihoods(data))
+        return np.log(self.likelihoods(data))
+
 
     def plot_ccdf(self, data=None, ax=None, survival=True, **kwargs):
         """
@@ -701,6 +806,7 @@ class Distribution(object):
             The axis to which the plot was made.
         """
         return self.plot_cdf(data, ax=ax, survival=survival, **kwargs)
+
 
     def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
         """
@@ -773,6 +879,7 @@ class Distribution(object):
         ax.set_xscale("log")
         ax.set_yscale("log")
         return ax
+
 
     def generate_random(self,n=1, estimate_discrete=None):
         """
@@ -847,39 +954,82 @@ class Power_Law(Distribution):
 
         Distribution.__init__(self, **kwargs)
 
+        # We will now have a fitted distribution, and we might want to
+        # warn the user if we fit an exponent close to 1 from above.
+        # For more information on this, see the discussion in
+        # Distribution.fit().
+        if self.alpha > 1.0 and self.alpha < 1.2 and not self.discrete and self.verbose:
+            warnings.warn('Fit detected an alpha value slightly above one. Fitting algorithms in this regime are often error-prone; it might help to set `discrete=True` to numerically calculate the normalization.')
+
 
     def generate_initial_parameters(self, data=None):
         r"""
         Generate initial guesses for the distribution parameters based
         on the data.
 
-        For alpha, we use:
+        For continuous distributions, we use the following value to estimate
+        alpha (see Clauset et al. (2009) [1], Eq. 3.1). In the limit as N goes to infinity,
+        this becomes exact, and generally is a very good estimation even
+        at modest values (~1000) of N.
 
-            $$ \alpha \approx 1 + N / ( \sum \log (x / x_{min})) $$
+            $$ \alpha_0 = 1 + N / ( \sum \log (x / x_{min})) $$
+
+        For the discrete case, there is no form that is exact in the large
+        N limit, but the following value is a good approximation (see ref
+        [1], Eq. 3.7).
+
+            $$ \alpha_0 = 1 + N / ( \sum \log (x / (x_{min} - 1/2))) $$
+
+
+        References
+        ----------
+        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+        Power-law distributions in empirical data. SIAM Review, 51(4),
+        661–703. https://doi.org/10.1137/070710111
+
         """
-
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
         if not hasattr(data, '__iter__'):
             data = self.data
+
+        # Make sure that we trim our data to the defined range for
+        # this distribution.
+        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
+        # If we still don't have data, we just need to choose some static
+        # value. This might be called if we are creating a distribution
+        # without data just with a set exponent (for example for computing
+        # KS distance to a specific exponent tail); in this case, this
+        # value will be overwritten in 
+        if not hasattr(data, '__iter__'):
+            raise Exception('Trying to generate parameters without data!')
+            return {"alpha": 2.0}
+
+        n = len(data)
 
         params = {}
 
         # This is generally a very good approximation of the power law
-        # exponent.
+        # exponent for alpha > 1. For values of alpha < 1, it will only
+        # approach 1, as expected from the 1 + ...
 
         # If we have a discrete distribution (ie only takes on integer
         # values) we have to shift slightly.
         if self.discrete and self.estimate_discrete and not self.xmax:
-            params["alpha"] = 1 + self.n / np.sum(np.log(data / (self.xmin - 0.5)))
+            params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin - 0.5)))
 
         else:
             # For continuous, we just have the usual expression.
-            params["alpha"] = 1 + self.n / np.sum(np.log(data / (self.xmin)))
+            params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin)))
 
         return params
+
 
     @property
     def name(self):
         return "power_law"
+
 
     @property
     def sigma(self):
@@ -887,64 +1037,40 @@ class Power_Law(Distribution):
         # established
         return (self.alpha - 1) / np.sqrt(self.n)
 
-    def fit2(self, data=None):
-        """
-        We need this wrapper to deal with discrete power law distributions.
-        """
-
-        print('fitting power law')
-        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-        self.n = len(data)
-
-        # TODO This is actually just about setting the intial values, so
-        # should be moved to generate_initial_parameters
-        if not self.discrete and not self.xmax:
-            self.alpha = 1 + (self.n / np.sum(np.log(data/self.xmin)))
-            if not self.in_range():
-                Distribution.fit(self, data)
-            self.KS(data)
-
-        elif self.discrete and self.estimate_discrete and not self.xmax:
-            self.alpha = 1 + (self.n / np.sum(np.log(data / (self.xmin - .5))))
-            if not self.in_range():
-                Distribution.fit(self, data)
-            self.KS(data)
-
-        else:
-            Distribution.fit(self, data)
-
-        if not self.in_range():
-            self.noise_flag=True
-        else:
-            self.noise_flag=False
-
-        #if self.parameter1_name is None or self.parameter1 is None:
-        #    self.initialize_parameters([self.alpha])
-
 
     def _cdf_base_function(self, x):
         if self.discrete:
             from scipy.special import zeta
             CDF = 1 - zeta(self.alpha, x)
         else:
-#Can this be reformulated to not reference xmin? Removal of the probability
-#before xmin and after xmax is handled in Distribution.cdf(), so we don't
-#strictly need this element. It doesn't hurt, for the moment.
-            CDF = 1-(x/self.xmin)**(-self.alpha+1)
+            #Can this be reformulated to not reference xmin? Removal of the probability
+            #before xmin and after xmax is handled in Distribution.cdf(), so we don't
+            #strictly need this element. It doesn't hurt, for the moment.
+            CDF = 1 - (x / self.xmin)**(-self.alpha + 1)
         return CDF
 
 
     def _pdf_base_function(self, x):
-        return x**-self.alpha
+        return x**(-self.alpha)
 
 
     @property
     def _pdf_continuous_normalizer(self):
-        # The pdf has a different form when we consider xmax as the upper limit of the distribution
-        if self.pdf_ends_at_xmax:
-            return (1-self.alpha)/(self.xmax**(1-self.alpha) - self.xmin**(1-self.alpha))
+        # The pdf has a different form when we consider xmax as
+        # the upper limit of the distribution. When alpha < 1, we have to
+        # assume the distribution ends at xmax otherwise it is not
+        # normalizable.
+        if self.alpha <= 1 and not self.xmax:
+            if self.verbose:
+                warnings.warn('Distribution with alpha <= 1 has no xmax; setting xmax to be max(data) otherwise cannot continue. Consider setting an explicit value for xmax')
+            xmax = np.max(self.data)
         else:
-            return (self.alpha-1) * self.xmin**(self.alpha-1)
+            xmax = self.xmax
+
+        if self.pdf_ends_at_xmax or self.alpha <= 1:
+            return (1 - self.alpha)/(xmax**(1 - self.alpha) - self.xmin**(1 - self.alpha))
+        else:
+            return (self.alpha - 1) * self.xmin**(self.alpha - 1)
 
 
     @property
