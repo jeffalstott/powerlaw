@@ -170,6 +170,14 @@ class FirstTestCase(unittest.TestCase):
     def test_exponential(self):
         print("Testing exponential fits")
 
+        # DEBUG
+        for k in references.keys():
+            fit = results[k]['fit']
+            print(fit.xmin)
+            Randp = fit.loglikelihood_ratio('power_law', 'exponential',
+                                            normalized_ratio=True)
+            print(f'{k}: {Randp}')
+
         rtol = .1
         atol = 0.01
 

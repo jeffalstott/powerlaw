@@ -102,8 +102,18 @@ class Fit(object):
     pdf_ends_at_xmax: bool, optional
         Whether to use the pdf that has an upper cutoff at xmax to fit the 
         powerlaw distribution. 
-    """
 
+    xmin_distance : {'D', 'V', 'Asquare'}, optional
+        The distance metric used to determine which value of xmin
+        gives the best fit.
+
+        'D' is Kolmogorov-Smirnov, 'V' is Kuiper, 'Asquare' is Anderson-
+        Darling. For more information on these, see the documentation
+        for `Distribution.compute_distance_metrics()`.
+
+    
+    """
+    # TODO: Update the arguments for this function
     def __init__(self, data,
                  discrete=False,
                  xmin=None, xmax=None,
@@ -246,8 +256,8 @@ class Fit(object):
             dist = self.supported_distributions[name]
 
             # Create the distribution and set it
-            # TODO: This recomputes for every access, not sure if that is
-            # ideal.
+            # Note: This recomputes for every access, so you should always
+            # save the property externally if you want to reference back.
             setattr(self,
                     name,
                     dist(data=self.data,
@@ -305,6 +315,18 @@ class Fit(object):
         possible_xmin = possible_xmin[:-1]
         possible_ind = possible_ind[:-1]
 
+        # Originally, we just used every single datapoint as a possible
+        # xmin value, but this probably *way* oversamples the values we
+        # actually need to test. An alternative, which is much faster, is
+        # to just generate evenly spaced values.
+
+        # 10% of the number of datapoints sounds good. And note that we
+        # only generate bins up into the 3rd to last point so we always
+        # have enough points to calculate distance metrics.
+        # DEBUG
+        #max_bin_value = np.sort(possible_xmin)[-3]
+        #possible_xmin = np.logspace(np.log10(np.min(self.data)), np.log10(max_bin_value), len(self.data) // 10)[:-5]
+
         # If not provided here, take the value from the constructor
         if xmin_distance is None:
             xmin_distance = self.xmin_distance
@@ -350,17 +372,18 @@ class Fit(object):
 
         num_xmin = len(possible_xmin)
 
-        # This used to be a map function but I think it's better to have
-        # it explicitly written out, especially since I think it would be
-        # nice to have the option for this to be parallelized.
-
-        # I also don't see why we need to store the alphas and sigmas to
-        # the class; I think they will not be used again, so it's more
-        # clear for users if they aren't saved.
+        # The original documentation states that it is desired to hold onto
+        # the xmin fitting data (below) because the user may want to
+        # explore if there are multiple possible fits for a single dataset.
+        # That being said, I think it is a little confusing to have these
+        # variables directly available as properties of this class. I
+        # propose a better alternative is to have them contained in a
+        # dictionary called xmin_fitting_results.
         distances = np.zeros(num_xmin)
         alphas = np.zeros(num_xmin)
         sigmas = np.zeros(num_xmin)
-        in_ranges = np.zeros(num_xmin, dtype=bool)
+        # Used to be called in_ranges
+        valid_fits = np.zeros(num_xmin, dtype=bool)
 
         # Disable all warnings so we don't get messages since we'll be
         # fitting a lot of times. Otherwise, you'll almost always get an
@@ -391,17 +414,17 @@ class Fit(object):
                     # use an unordered map
                     result_mapping = pool.imap_unordered(fit_function, possible_xmin)
                     for result in tqdm(result_mapping, desc="Fitting xmin") if self.verbose else result_mapping:
-                        distances[i], alphas[i], sigmas[i], in_ranges[i] = result
+                        distances[i], alphas[i], sigmas[i], valid_fits[i] = result
 
             else:
                 # For non-parallel case, we just use a simple for loop
                 for i in tqdm(range(num_xmin), desc='Fitting xmin') if self.verbose else range(num_xmin):
-                    distances[i], alphas[i], sigmas[i], in_ranges[i] = fit_function(possible_xmin[i])
+                    distances[i], alphas[i], sigmas[i], valid_fits[i] = fit_function(possible_xmin[i])
       
 
         # The possible xmin values should of course have all parameters
         # within the proper range.
-        good_indices = in_ranges
+        good_indices = valid_fits
 
         # If we have a threshold, we throw out any values that are below
         # that
@@ -432,12 +455,13 @@ class Fit(object):
         self.alpha = alphas[min_index]
         self.sigma = sigmas[min_index]
 
-        # DEBUG
-        self.distances = distances
-        self.alphas = alphas
-        self.xmins = possible_xmin
-        self.valid_fits = good_indices
-        self.normalizers = sigmas
+        # Save the fitting information to a dictionary
+        xmin_fitting_results = {"distances": distances,
+                                "alphas": alphas,
+                                "sigmas": sigmas,
+                                "xmins": possible_xmin,
+                                "valid_fits": valid_fits}
+        self.xmin_fitting_results = xmin_fitting_results
 
         # Update the fitting CDF given the new xmin, in case other objects, like
         # Distributions, want to use it for fitting (like if they do KS fitting)

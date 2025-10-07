@@ -57,6 +57,19 @@ class Distribution(object):
     parent_Fit : Fit object, optional
         A Fit object from which to use data, if it exists.
 
+    avoid_pdf_overflow : bool, optional
+        Whether to represent the base pdf function and it's normalization
+        constant as logarithms until they are combined into a proper
+        function.
+
+        This helps to avoid overflow errors if your normalization constant
+        is very large (> 1e1000) and your typical pdf values are very small
+        (< 1e-1000). In principle, when you combine these values you should
+        get a reasonable number, but storing the separate values can be
+        difficult. The alternative to explicitly including an option like
+        this is to use the `mpmath` package, but I find that this slows
+        down calculations quite extensively.
+
     verbose : {0, 1, 2}, bool
         Whether to print debug and status information. `0` or `False` means
         print no information (including no warnings), `1` means print
@@ -73,6 +86,7 @@ class Distribution(object):
                  parameter_ranges=None,
                  discrete_approximation='round',
                  parent_Fit=None,
+                 avoid_pdf_overflow=False,
                  verbose=1,
                  **kwargs):
 
@@ -81,6 +95,7 @@ class Distribution(object):
         self.xmin = xmin
         self.xmax = xmax
         self.discrete = discrete
+        self.avoid_pdf_overflow = avoid_pdf_overflow
         self.fit_method = fit_method
         self.discrete_approximation = discrete_approximation
 
@@ -413,8 +428,8 @@ class Distribution(object):
         # alpha > 1).
 
         # The only options I've found that have success both ways is
-        # COBYLA and COBYQA. Unfortunately both of these struggle around
-        # values of 1.
+        # COBYLA and COBYQA. COBYQA struggles around alpha = 1, but
+        # COBYLA seems relatively fine.
 
         # Maybe it sounds dumb, but an alternative is to switch between
         # two algorithms a few times, since, for example, both Nelder-Mead and Powell
@@ -426,10 +441,13 @@ class Distribution(object):
         # inaccuracy in the pdf normalization. For now, this can be
         # sort of addressed by using `discrete=True` since this just
         # calculates the normalization numerically.
-        switches = 2
+
+        # After testing, I think going with COBYLA is the fastest and most
+        # accurate option, but this should definitely be reviewed later on.
+        switches = 1
         # The order doesn't really matter here.
-        methods = ['Powell', 'Nelder-Mead']
-        #methods = ["COBYQA"]
+        #methods = ['Powell', 'Nelder-Mead']
+        methods = ["COBYLA"]
 
         # Take the initial parameters
         parameters = list(self.parameters.values())
@@ -446,7 +464,8 @@ class Distribution(object):
         # In case you'd like to compare, this uses the exact same optimization
         # as in powerlaw v1.5 and before. The results end up pretty much
         # the same as with the new method above. This method is slightly
-        # faster than the one above.
+        # faster than the one above when using two methods above and 2
+        # switches. COBYLA is comparable in speed.
         #self.initialize_parameters()
         #initial_parameters = list(self.parameters.values())
 
@@ -480,10 +499,18 @@ class Distribution(object):
         # the value is close to the edge.
         eps = 1e-2
         nearBoundary = False
+        # TODO Should there be different behavior is a limit is 0? So that
+        # we don't trigger this warning just from having a (possibly totally
+        # reasonable) small value? Maybe make eps scale with the magnitude
+        # of the parameter value?
 
         for p in self.parameter_names:
-            nearBoundary += getattr(self, p) - eps < self.parameter_ranges[p][0]
-            nearBoundary += getattr(self, p) + eps > self.parameter_ranges[p][1]
+
+            if self.parameter_ranges[p][0] is not None:
+                nearBoundary += getattr(self, p) - eps < self.parameter_ranges[p][0]
+
+            if self.parameter_ranges[p][1] is not None:
+                nearBoundary += getattr(self, p) + eps > self.parameter_ranges[p][1]
 
         if nearBoundary:
             self.noise_flag = True
@@ -649,14 +676,18 @@ class Distribution(object):
         data : list or array, optional
             If not provided, attempts to use the data from the Fit object in
             which the Distribution object is contained.
+
         survival : bool, optional
-            Whether to calculate a CDF (False) or CCDF (True).
-            False by default.
+            Whether to calculate a CDF (False) or CCDF (True). False by
+            default.
+
+            See wrapper method `Distribution.ccdf()`.
 
         Returns
         -------
         X : array
             The sorted, unique values in the data.
+
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
@@ -742,7 +773,16 @@ class Distribution(object):
         if not self.discrete:
             f = self._pdf_base_function(data)
             C = self._pdf_continuous_normalizer
+
             likelihoods = f*C
+
+            # In some cases, the normalization and typical pdf values will
+            # be very extreme on their own, but will combine to be normal
+            # values. In this case, we represent the separate values as
+            # the log of the real value, and then take the exp here only
+            # after they've been combined.
+            if self.avoid_pdf_overflow:
+                likelihoods = np.exp(likelihoods)
 
         else:
             # For discrete cases, it's a little more tricky since we will
@@ -752,7 +792,13 @@ class Distribution(object):
                 # normalization, we should of course use that.
                 f = self._pdf_base_function(data)
                 C = self._pdf_discrete_normalizer
+
                 likelihoods = f*C
+
+                # Also have to check if we represent the pdf as itself or as
+                # its logarithm.
+                if self.avoid_pdf_overflow:
+                    likelihoods = np.exp(likelihoods)
 
             elif self.discrete_approximation=='round':
                 # If we want to approximate by rounding values, we essentially
@@ -793,6 +839,10 @@ class Distribution(object):
 
                 X = np.arange(self.xmin, upper_limit+1)
                 PDF = self._pdf_base_function(X)
+
+                if self.avoid_pdf_overflow:
+                    PDF = np.exp(PDF)
+
                 PDF = (PDF / np.sum(PDF)).astype(float)
                 likelihoods = PDF[(data - self.xmin).astype(int)]
 
@@ -804,22 +854,48 @@ class Distribution(object):
 
     @property
     def _pdf_continuous_normalizer(self):
+        """
+        This is the (inverse of the) normalization constant for the pdf
+        assuming a continuous distribution. So you can get the normalized
+        pdf evaluated for a particular x as:
+
+            _pdf_continuous_normalizer * _pdf_base_function(x)
+
+        The implementation below simply uses the cumulative distribution
+        function to compute this, though if an explicit expression can
+        be found by integrating the pdf, this function should be overwritten
+        in child classes.
+        """
+        # Essentially equivalent to numerically integrating the pdf over
+        # the whole domain.
         C = 1 - self._cdf_xmin
+
+        # If the upper limit of the normalization is xmax instead of
+        # infinity, account for that.
         if self.xmax:
-            C -= 1 - self._cdf_base_function(self.xmax+1)
-        C = 1.0/C
-        return C
+            C -= 1 - self._cdf_base_function(self.xmax + 1)
+
+        # Take the inverse so we can just multiply
+        return 1. / C
 
 
     @property
     def _pdf_discrete_normalizer(self):
+        """
+        This is the (inverse of the) normalization constant for the pdf
+        assuming a discrete distribution.
+
+        It is not currently implemented since the value will depend on your
+        specific distribution, so it should be implemented in child classes.
+        """
         return False
 
 
     def in_range(self):
         """
-        Whether the current parameters of the distribution are within the range
-        of valid parameters.
+        Whether the current parameters (`self.parameters`) of the
+        distribution are within the range of valid parameters (defined by
+        `self.parameter_ranges`).
 
         Returns
         -------
@@ -831,29 +907,62 @@ class Distribution(object):
         result = True
 
         for p in self.parameter_names:
-            result *= getattr(self, p) > self.parameter_ranges[p][0]
-            result *= getattr(self, p) < self.parameter_ranges[p][1]
+            if self.parameter_ranges[p][0] is not None:
+                result *= getattr(self, p) > self.parameter_ranges[p][0]
+            if self.parameter_ranges[p][1] is not None:
+                result *= getattr(self, p) < self.parameter_ranges[p][1]
 
         return bool(result)
 
 
-    def likelihoods(self, data):
+    def likelihoods(self, data=None):
         """
         The likelihoods of the observed data from the theoretical distribution.
         Another name for the probabilities or probability density function.
+
+        Parameters
+        ----------
+        data : array_like, optional
+            The data to compute the likelihood of.
+
+            If not provided, data used to create the Distribution object
+            will be used (if available).
+
+        Returns
+        -------
+        likelihoods : array_like
+            Likelihood of each observed data.
+
         """
+        # No need to trim to range or check if data is None because pdf()
+        # does that.
         return self.pdf(data)
 
 
-    def loglikelihoods(self, data):
+    def loglikelihoods(self, data=None):
         """
         The logarithm of the likelihoods of the observed data from the
         theoretical distribution.
+
+        Parameters
+        ----------
+        data : array_like, optional
+            The data to compute the likelihood of.
+
+            If not provided, data used to create the Distribution object
+            will be used (if available).
+
+        Returns
+        -------
+        likelihoods : array_like
+            Logarithm (base e) of likelihood of each observed data.
         """
+        # No need to trim to range or check if data is None because pdf()
+        # does that, which is called by self.likelihoods().
         return np.log(self.likelihoods(data))
 
 
-    def plot_ccdf(self, data=None, ax=None, survival=True, **kwargs):
+    def plot_ccdf(self, data=None, ax=None, **kwargs):
         """
         Plots the complementary cumulative distribution function (CDF) of the
         theoretical distribution for the values given in data within xmin and
@@ -864,17 +973,19 @@ class Distribution(object):
         data : list or array, optional
             If not provided, attempts to use the data from the Fit object in
             which the Distribution object is contained.
+
         ax : matplotlib axis, optional
-            The axis to which to plot. If None, a new figure is created.
-        survival : bool, optional
-            Whether to plot a CDF (False) or CCDF (True). True by default.
+            The axis on which to plot. If None, a new figure is created.
 
         Returns
         -------
         ax : matplotlib axis
             The axis to which the plot was made.
         """
-        return self.plot_cdf(data, ax=ax, survival=survival, **kwargs)
+        # This function used to have `survival` as a keyword, but that is
+        # redundant because there are already two separate functions for
+        # cdf and ccdf.
+        return self.plot_cdf(data, ax=ax, survival=True, **kwargs)
 
 
     def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
@@ -888,8 +999,10 @@ class Distribution(object):
         data : list or array, optional
             If not provided, attempts to use the data from the Fit object in
             which the Distribution object is contained.
+
         ax : matplotlib axis, optional
-            The axis to which to plot. If None, a new figure is created.
+            The axis on which to plot. If None, a new figure is created.
+
         survival : bool, optional
             Whether to plot a CDF (False) or CCDF (True). False by default.
 
@@ -898,19 +1011,24 @@ class Distribution(object):
         ax : matplotlib axis
             The axis to which the plot was made.
         """
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
 
-        from numpy import unique
-        bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+        bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
         CDF = self.cdf(bins, survival=survival)
+
         if not ax:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+
         ax.plot(bins, CDF, **kwargs)
         ax.set_xscale("log")
         ax.set_yscale("log")
+
         return ax
+
 
     def plot_pdf(self, data=None, ax=None, **kwargs):
         """
@@ -931,22 +1049,28 @@ class Distribution(object):
         ax : matplotlib axis
             The axis to which the plot was made.
         """
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
 
-        from numpy import unique
-        bins = unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+        bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
         PDF = self.pdf(bins)
-        from numpy import nan
-        PDF[PDF==0] = nan
+
+        # Set to nan so it doesn't show up on the plot
+        PDF[PDF == 0] = nan
+
         if not ax:
             import matplotlib.pyplot as plt
             plt.plot(bins, PDF, **kwargs)
             ax = plt.gca()
+
         else:
             ax.plot(bins, PDF, **kwargs)
+
         ax.set_xscale("log")
         ax.set_yscale("log")
+
         return ax
 
 
@@ -1022,7 +1146,7 @@ class Power_Law(Distribution):
         The exponent alpha should be positive. For a normalizable distribution
         on an infinite domain (no xmax), we should have alpha greater than 1.
 
-        Accepts all kwargs from `Distribution` super class
+        Accepts all kwargs from `Distribution` super class.
 
         Parameters
         ----------
@@ -1180,109 +1304,248 @@ class Power_Law(Distribution):
 
 class Exponential(Distribution):
 
-    def initialize_parameters(self, params):
-        self.Lambda = params[0]
-        self.parameter1 = self.Lambda
-        self.parameter1_name = 'lambda'
+    def __init__(self, **kwargs):
+        r"""
+        An exponential distribution, with pdf:
+
+            $$ p(x) ~ exp(- \lambda x) $$
+
+        For expressions for normalization for discrete and continuous
+        distributions, see Clauset et al. (2009) [1], Table 2.1.
+
+        References
+        ----------
+        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+        Power-law distributions in empirical data. SIAM Review, 51(4),
+        661–703. https://doi.org/10.1137/070710111
+        """
+        # Note that Lambda has a capital L; I guess this is because
+        # the authors didn't want to cause confusion with Python's lambda
+        # expressions.
+        self.parameter_names = ['Lambda']
+        self.DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None]}
+
+        # Note that we use the option avoid_pdf_overflow which means
+        # that our _pdf_base_function is actually the logarithm of
+        # the base function, and same for the normalizer.
+        Distribution.__init__(self, avoid_pdf_overflow=False, **kwargs)
+
 
     @property
     def name(self):
         return "exponential"
 
-    def generate_initial_parameters(self, data):
-        return 1/np.mean(data)
 
-    def _in_standard_parameter_range(self):
-        return self.Lambda > 0
+    def generate_initial_parameters(self, data=None):
+        r"""
+        For an exponential distribution, we estimate the exponent factor
+        as:
+            $$ \lambda_0 = 1 / mean(x) $$
+        """
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
+
+        # Make sure that we trim our data to the defined range for
+        # this distribution.
+        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
+        # If we still don't have data, we should raise an error since
+        # a distribution with a prescribed exponent should never reach here.
+        if not hasattr(data, '__iter__'):
+            raise Exception('Trying to generate parameters without data!')
+
+        params = {}
+
+        params["Lambda"] = 1 / np.mean(data)
+
+        return params
+
 
     def _cdf_base_function(self, x):
+        r"""
+        The cumulative distribution function for an exponential distribution
+        is:
+            $$ c(x) ~ 1 - exp(-\lambda x) $$
+        """
         return 1 - np.exp(-self.Lambda*x)
 
+
     def _pdf_base_function(self, x):
+        r"""
+        The probability distribution function for an exponential distribution
+        is:
+            $$ p(x) ~ exp(-\lambda x) $$
+
+        Note that we use the option `self.avoid_pdf_overflow=True` which
+        means that this should return actually the logarithm of the pdf.
+        """
         return np.exp(-self.Lambda * x)
+        #return -self.Lambda * x
+
 
     @property
     def _pdf_continuous_normalizer(self):
-        from numpy import exp
-        return self.Lambda * exp(self.Lambda * self.xmin)
+        """
+        Note that we use the option `self.avoid_pdf_overflow=True` which
+        means that this should return actually the logarithm of the pdf.
+        """
+        # We could put an expression including xmax here but it probably
+        # wouldn't make much of a difference.
+        
+        # There's a reasonable chance this line can lead to overflow errors
+        # since it is a positive exponential with what could be a large
+        # number. The end calculation would theoretically be fine since
+        # the x values will always be > xmin, and therefore we will also
+        # have a tiny _pdf_base_function value
+        return self.Lambda * np.exp(self.Lambda * self.xmin)
+        #return np.log(self.Lambda) + self.Lambda * self.xmin
+
 
     @property
     def _pdf_discrete_normalizer(self):
-        from numpy import exp
-        C = (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmin)
+        """
+        Note that we use the option `self.avoid_pdf_overflow=True` which
+        means that this should return actually the logarithm of the pdf.
+        """
+        C = (1 - np.exp(-self.Lambda)) * np.exp(self.Lambda * self.xmin)
+        #C = np.log(1 - np.exp(-self.Lambda)) + self.Lambda * self.xmin
+
         if self.xmax:
-            Cxmax = (1 - exp(-self.Lambda)) * exp(self.Lambda * self.xmax)
+            Cxmax = (1 - np.exp(-self.Lambda)) * np.exp(self.Lambda * self.xmax)
             C = 1.0/C - 1.0/Cxmax
             C = 1.0/C
+
+            #Cxmax = np.log(1 - np.exp(-self.Lambda)) + self.Lambda * self.xmax
+
         return C
 
-    def pdf(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
 
-        if not self.discrete and self.in_range() and not self.xmax:
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import exp
+    # This function used to overload the pdf() defined in the super class
+    # but it doesn't seem to do anything different...?
+    # If the if condition evaluates true, then it just calculated the
+    # likelihood as _pdf_base_function(x) * _pdf_continuous_normalizer,
+    # which is exactly what the parent pdf() does.
+#    def pdf(self, data=None):
+#        if data is None and self.parent_Fit:
+#            data = self.parent_Fit.data
+#
+#        if not self.discrete and self.in_range() and not self.xmax:
+#            print('special pdf2')
+#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+#            from numpy import exp
 #        likelihoods = exp(-Lambda*data)*\
 #                Lambda*exp(Lambda*xmin)
-            likelihoods = self.Lambda*exp(self.Lambda*(self.xmin-data))
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
-        else:
-            likelihoods = Distribution.pdf(self, data)
-        return likelihoods
-
-    def loglikelihoods(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
-
-        if not self.discrete and self.in_range() and not self.xmax:
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import log
+#
+#            # This is _pdf_base_function(x) * _pdf_continuous_normalizer(xmin)
+#            likelihoods = self.Lambda*exp(self.Lambda*(self.xmin-data))
+#
+#            #Simplified so as not to throw a nan from infs being divided by each other
+#            from sys import float_info
+#            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+#
+#        else:
+#            likelihoods = Distribution.pdf(self, data)
+#
+#        return likelihoods
+#
+#    def loglikelihoods(self, data=None):
+#        if data is None and self.parent_Fit:
+#            data = self.parent_Fit.data
+#
+#        if not self.discrete and self.in_range() and not self.xmax:
+#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+#            from numpy import log
 #        likelihoods = exp(-Lambda*data)*\
 #                Lambda*exp(Lambda*xmin)
-            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
-        else:
-            loglikelihoods = Distribution.loglikelihoods(self, data)
-        return loglikelihoods
+#            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
+#            #Simplified so as not to throw a nan from infs being divided by each other
+#            from sys import float_info
+#            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
+#        else:
+#            loglikelihoods = Distribution.loglikelihoods(self, data)
+#        return loglikelihoods
 
 
     def _generate_random_continuous(self, r):
-        from numpy import log
-        return self.xmin - (1/self.Lambda) * log(1-r)
+        return self.xmin - (1/self.Lambda) * np.log(1-r)
 
 
 class Stretched_Exponential(Distribution):
 
-    def parameters(self, params):
-        self.Lambda = params[0]
-        self.parameter1 = self.Lambda
-        self.parameter1_name = 'lambda'
-        self.beta = params[1]
-        self.parameter2 = self.beta
-        self.parameter2_name = 'beta'
+    def __init__(self, **kwargs):
+        r"""
+        A stretched exponential distribution, with pdf:
+
+            $$ p(x) ~ (x \lambda)^{\beta - 1} exp(- (\lambda x)^\beta) $$
+
+        For expressions for normalization for discrete and continuous
+        distributions, see Clauset et al. (2009) [1], Table 2.1.
+
+        References
+        ----------
+        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+        Power-law distributions in empirical data. SIAM Review, 51(4),
+        661–703. https://doi.org/10.1137/070710111
+        """
+        # Note that Lambda has a capital L; I guess this is because
+        # the authors didn't want to cause confusion with Python's lambda
+        # expressions.
+        # That being said, the old code had:
+        # self.parameter1 = self.Lambda
+        # self.parameter1_name = 'lambda'
+        # Which is inconsistent; I've chosen the capital lambda so far,
+        # but should look into making this more consistent later. TODO
+
+        self.parameter_names = ['Lambda', 'beta']
+        self.DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None],
+                                         'beta': [0, None]}
+
+        Distribution.__init__(self, **kwargs)
+
 
     @property
     def name(self):
         return "stretched_exponential"
 
-    def generate_initial_parameters(self, data):
-        from numpy import mean
-        return (1/mean(data), 1)
 
-    def _in_standard_parameter_range(self):
-        return self.Lambda>0 and self.beta>0
+    def generate_initial_parameters(self, data=None):
+        r"""
+        For an exponential distribution, we estimate the exponent factor
+        as:
+            $$ \lambda_0 = 1 / mean(x) $$
+        """
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
+
+        # Make sure that we trim our data to the defined range for
+        # this distribution.
+        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
+        # If we still don't have data, we should raise an error since
+        # a distribution with a prescribed exponent should never reach here.
+        if not hasattr(data, '__iter__'):
+            raise Exception('Trying to generate parameters without data!')
+
+        params = {}
+
+        params["Lambda"] = 1 / np.mean(data)
+        params["beta"] = 1
+
+        return params
+
 
     def _cdf_base_function(self, x):
         from numpy import exp
-        CDF = 1 - exp(-(self.Lambda*x)**self.beta)
+        CDF = 1 - np.exp(-(self.Lambda*x)**self.beta)
         return CDF
 
     def _pdf_base_function(self, x):
+        # TODO: This is different from the base function defined in Clauset
+        # et al. 2009. It has extra factors of lambda and exp(lambda^beta)
         from numpy import exp
         return (((x*self.Lambda)**(self.beta-1)) *
                 exp(-((self.Lambda*x)**self.beta)))
@@ -1297,43 +1560,45 @@ class Stretched_Exponential(Distribution):
     def _pdf_discrete_normalizer(self):
         return False
 
-    def pdf(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
-
-        if not self.discrete and self.in_range() and not self.xmax:
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import exp
-            likelihoods = ((data*self.Lambda)**(self.beta-1) *
-                           self.beta * self.Lambda *
-                           exp((self.Lambda*self.xmin)**self.beta -
-                               (self.Lambda*data)**self.beta))
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
-        else:
-            likelihoods = Distribution.pdf(self, data)
-        return likelihoods
-
-    def loglikelihoods(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
-
-        if not self.discrete and self.in_range() and not self.xmax:
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import log
-            loglikelihoods = (
-                    log((data*self.Lambda)**(self.beta-1) *
-                        self.beta * self. Lambda) +
-                    (self.Lambda*self.xmin)**self.beta -
-                        (self.Lambda*data)**self.beta)
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            from numpy import inf
-            loglikelihoods[loglikelihoods==-inf] = log(10**float_info.min_10_exp)
-        else:
-            loglikelihoods = Distribution.loglikelihoods(self, data)
-        return loglikelihoods
+    # These are deprecated and do nothing different than the super
+    # implementation in Distribution
+#    def pdf(self, data=None):
+#        if data is None and self.parent_Fit:
+#            data = self.parent_Fit.data
+#
+#        if not self.discrete and self.in_range() and not self.xmax:
+#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+#            from numpy import exp
+#            likelihoods = ((data*self.Lambda)**(self.beta-1) *
+#                           self.beta * self.Lambda *
+#                           exp((self.Lambda*self.xmin)**self.beta -
+#                               (self.Lambda*data)**self.beta))
+#            #Simplified so as not to throw a nan from infs being divided by each other
+#            from sys import float_info
+#            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+#        else:
+#            likelihoods = Distribution.pdf(self, data)
+#        return likelihoods
+#
+#    def loglikelihoods(self, data=None):
+#        if data is None and self.parent_Fit:
+#            data = self.parent_Fit.data
+#
+#        if not self.discrete and self.in_range() and not self.xmax:
+#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+#            from numpy import log
+#            loglikelihoods = (
+#                    log((data*self.Lambda)**(self.beta-1) *
+#                        self.beta * self. Lambda) +
+#                    (self.Lambda*self.xmin)**self.beta -
+#                        (self.Lambda*data)**self.beta)
+#            #Simplified so as not to throw a nan from infs being divided by each other
+#            from sys import float_info
+#            from numpy import inf
+#            loglikelihoods[loglikelihoods==-inf] = log(10**float_info.min_10_exp)
+#        else:
+#            loglikelihoods = Distribution.loglikelihoods(self, data)
+#        return loglikelihoods
 
     def _generate_random_continuous(self, r):
         from numpy import log
