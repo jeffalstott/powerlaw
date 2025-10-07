@@ -21,7 +21,8 @@ class Distribution(object):
     ----------
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
-        None an optimal one will be calculated.
+        `None` an optimal one will be calculated by performing many fits
+        and choosing the value that leads to the best fit.
 
     xmax : int or float, optional
         The maximum value of the fitted distributions.
@@ -29,36 +30,49 @@ class Distribution(object):
     discrete : boolean, optional
         Whether the distribution is discrete (integers).
 
+        Various approximations can be employed when there isn't an exact
+        (or even approximate) expression for the PDF or CDF in the 
+        discrete case. See `discrete_approximation` for more information.
+
     data : list or array, optional
         The data to which to fit the distribution. If provided, the fit will
         be created at initialization.
 
     fit_method : {"likelihood", "ks"}, optional
         Method for fitting the distribution. "likelihood" is maximum Likelihood
-        estimation. "ks" is minimial distance estimation using The
+        estimation. "ks" is minimial distance estimation using the
         Kolmogorov-Smirnov test.
 
     parameters : tuple or list, optional
         The parameters of the distribution. If data is given, these will
-        be used as the initial parameters for fitting.
+        be used as the initial parameters for fitting; otherwise, they
+        will be taken as the final parameters for the distribution.
 
     parameter_ranges : dict, optional
         Dictionary of valid parameter ranges for fitting. Formatted as a
-        dictionary of parameter names ('alpha' and/or 'sigma') and tuples
-        of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+        dictionary of parameter names (eg. 'alpha') and tuples/lists/etc.
+        of their lower and upper limits (eg. (1.5, 2.5), (None, .1)).
+
+        The use of `None` is preferred over `np.inf` to indicate an
+        unbounded limit.
 
     discrete_approximation : "round", "xmax" or int, optional
-        If the discrete form of the theoeretical distribution is not known,
-        it can be estimated. One estimation method is "round", which sums
-        the probability mass from x-.5 to x+.5 for each data point. The other
-        option is to calculate the probability for each x from 1 to N and
-        normalize by their sum. N can be "xmax" or an integer.
+        Approximation method to apply for a discrete distribution in the
+        case that there is no analytical expression available.
+
+        "round" sums the probability mass from `x-0.5` to `x+0.5` for each
+        data point.
+
+        The other option is to numerically normalize the probability
+        distribution by summing over each x from 1 to N. If `'xmax'`, then
+        N is set to be `xmax`; otherwise, the value of N should be passed
+        in this kwarg.
 
     parent_Fit : Fit object, optional
         A Fit object from which to use data, if it exists.
 
     avoid_pdf_overflow : bool, optional
-        Whether to represent the base pdf function and it's normalization
+        Whether to represent the base PDF and it's normalization
         constant as logarithms until they are combined into a proper
         function.
 
@@ -68,7 +82,10 @@ class Distribution(object):
         get a reasonable number, but storing the separate values can be
         difficult. The alternative to explicitly including an option like
         this is to use the `mpmath` package, but I find that this slows
-        down calculations quite extensively.
+        down calculations quite a bit.
+
+        This case arises when you have a relatively large value for `xmin`,
+        and are working with, for example, an exponential distribution.
 
     verbose : {0, 1, 2}, bool
         Whether to print debug and status information. `0` or `False` means
@@ -203,7 +220,19 @@ class Distribution(object):
         elif initial_parameters is None:
             # If we aren't given any initial parameters, try to generate
             # them from the data.
-            initial_parameters_dict = self.generate_initial_parameters(self.data)
+
+            data = self.data
+
+            # Make sure that we trim our data to the defined range for
+            # this distribution.
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
+            # If we still don't have data, we should raise an error since
+            # a distribution with a prescribed exponent should never reach here.
+            if not hasattr(data, '__iter__'):
+                raise Exception('Trying to generate parameters without data!')
+
+            initial_parameters_dict = self.generate_initial_parameters(data)
 
         else:
             # Otherwise, something must be wrong with the initial parameters
@@ -1097,6 +1126,7 @@ class Distribution(object):
         r : array
             Random numbers drawn from the distribution
         """
+        # TODO: Clean this up
         from numpy.random import rand
         from numpy import array
         r = rand(n)
@@ -1173,7 +1203,7 @@ class Power_Law(Distribution):
                           error-prone; it might help to set `discrete=True` to numerically calculate the normalization.')
 
 
-    def generate_initial_parameters(self, data=None):
+    def generate_initial_parameters(self, data):
         r"""
         Generate initial guesses for the distribution parameters based
         on the data.
@@ -1192,6 +1222,19 @@ class Power_Law(Distribution):
             $$ \alpha_0 = 1 + N / ( \sum \log (x / (x_{min} - 1/2))) $$
 
 
+        Parameters
+        ----------
+        data : array_like
+            The data to use to generate the initial values of parameters.
+
+            Should already be trimmed to the data range defined by
+            `xmin` and `xmax` (if included).
+
+        Returns
+        -------
+        params : dict
+            A dictionary of the parameters and their values.
+
         References
         ----------
         [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
@@ -1199,27 +1242,13 @@ class Power_Law(Distribution):
         661–703. https://doi.org/10.1137/070710111
 
         """
-        # The passed data takes precedence, but otherwise we use the data
-        # stored in the class instance.
-        if not hasattr(data, '__iter__'):
-            data = self.data
-
-        # Make sure that we trim our data to the defined range for
-        # this distribution.
-        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-
-        # If we still don't have data, we should raise an error since
-        # a distribution with a prescribed exponent should never reach here.
-        if not hasattr(data, '__iter__'):
-            raise Exception('Trying to generate parameters without data!')
-
-        n = len(data)
-
         params = {}
 
         # This is generally a very good approximation of the power law
         # exponent for alpha > 1. For values of alpha < 1, it will only
         # approach 1, as expected from the 1 + ...
+
+        n = len(data)
 
         # If we have a discrete distribution (ie only takes on integer
         # values) we have to shift slightly.
@@ -1336,26 +1365,26 @@ class Exponential(Distribution):
         return "exponential"
 
 
-    def generate_initial_parameters(self, data=None):
+    def generate_initial_parameters(self, data):
         r"""
         For an exponential distribution, we estimate the exponent factor
         as:
             $$ \lambda_0 = 1 / mean(x) $$
+
+
+        Parameters
+        ----------
+        data : array_like
+            The data to use to generate the initial values of parameters.
+
+            Should already be trimmed to the data range defined by
+            `xmin` and `xmax` (if included).
+
+        Returns
+        -------
+        params : dict
+            A dictionary of the parameters and their values.
         """
-        # The passed data takes precedence, but otherwise we use the data
-        # stored in the class instance.
-        if not hasattr(data, '__iter__'):
-            data = self.data
-
-        # Make sure that we trim our data to the defined range for
-        # this distribution.
-        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-
-        # If we still don't have data, we should raise an error since
-        # a distribution with a prescribed exponent should never reach here.
-        if not hasattr(data, '__iter__'):
-            raise Exception('Trying to generate parameters without data!')
-
         params = {}
 
         params["Lambda"] = 1 / np.mean(data)
@@ -1510,26 +1539,27 @@ class Stretched_Exponential(Distribution):
         return "stretched_exponential"
 
 
-    def generate_initial_parameters(self, data=None):
+    def generate_initial_parameters(self, data):
         r"""
         For an exponential distribution, we estimate the exponent factor
         as:
             $$ \lambda_0 = 1 / mean(x) $$
+
+        The stretch exponent $\beta$ just starts with a value $1$.
+
+        Parameters
+        ----------
+        data : array_like
+            The data to use to generate the initial values of parameters.
+
+            Should already be trimmed to the data range defined by
+            `xmin` and `xmax` (if included).
+
+        Returns
+        -------
+        params : dict
+            A dictionary of the parameters and their values.
         """
-        # The passed data takes precedence, but otherwise we use the data
-        # stored in the class instance.
-        if not hasattr(data, '__iter__'):
-            data = self.data
-
-        # Make sure that we trim our data to the defined range for
-        # this distribution.
-        data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-
-        # If we still don't have data, we should raise an error since
-        # a distribution with a prescribed exponent should never reach here.
-        if not hasattr(data, '__iter__'):
-            raise Exception('Trying to generate parameters without data!')
-
         params = {}
 
         params["Lambda"] = 1 / np.mean(data)
@@ -1543,6 +1573,7 @@ class Stretched_Exponential(Distribution):
         CDF = 1 - np.exp(-(self.Lambda*x)**self.beta)
         return CDF
 
+
     def _pdf_base_function(self, x):
         # TODO: This is different from the base function defined in Clauset
         # et al. 2009. It has extra factors of lambda and exp(lambda^beta)
@@ -1550,15 +1581,18 @@ class Stretched_Exponential(Distribution):
         return (((x*self.Lambda)**(self.beta-1)) *
                 exp(-((self.Lambda*x)**self.beta)))
 
+
     @property
     def _pdf_continuous_normalizer(self):
         from numpy import exp
         C = self.beta*self.Lambda*exp((self.Lambda*self.xmin)**self.beta)
         return C
 
+
     @property
     def _pdf_discrete_normalizer(self):
         return False
+
 
     # These are deprecated and do nothing different than the super
     # implementation in Distribution
@@ -1610,26 +1644,99 @@ class Stretched_Exponential(Distribution):
 
 class Truncated_Power_Law(Distribution):
 
-    def parameters(self, params):
-        self.alpha = params[0]
-        self.parameter1 = self.alpha
-        self.parameter1_name = 'alpha'
-        self.Lambda = params[1]
-        self.parameter2 = self.Lambda
-        self.parameter2_name = 'lambda'
+    def __init__(self, **kwargs):
+        r"""
+        A power law distribution truncated by an exponential with form:
+
+            $$ p(x) ~ x^{-alpha} exp(-\lambda x)$$
+
+        The exponent alpha should be positive. 
+
+        Parameters
+        ----------
+        estimate_discrete : bool
+
+        pdf_ends_at_xmax : bool
+
+        """
+
+        self.parameter_names = ['alpha', 'Lambda']
+        self.DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3],
+                                         'Lambda': [0, None]}
+
+        Distribution.__init__(self, **kwargs)
+
 
     @property
     def name(self):
         return "truncated_power_law"
 
-    def generate_initial_parameters(self, data):
-        from numpy import log, sum, mean
-        alpha = 1 + len(data)/sum( log( data / (self.xmin) ))
-        Lambda = 1/mean(data)
-        return (alpha, Lambda)
 
-    def _in_standard_parameter_range(self):
-        return self.Lambda>0 and self.alpha>1
+    def generate_initial_parameters(self, data):
+        r"""
+        Generate initial guesses for the distribution parameters based
+        on the data.
+
+        For continuous distributions, we use the following value to estimate
+        alpha (see Clauset et al. (2009) [1], Eq. 3.1). In the limit as N goes to infinity,
+        this becomes exact, and generally is a very good estimation even
+        at modest values (~1000) of N.
+
+            $$ \alpha_0 = 1 + N / ( \sum \log (x / x_{min})) $$
+
+        For the discrete case, there is no form that is exact in the large
+        N limit, but the following value is a good approximation (see ref
+        [1], Eq. 3.7).
+
+            $$ \alpha_0 = 1 + N / ( \sum \log (x / (x_{min} - 1/2))) $$
+
+        As with the exponential distribution, lambda is taken as the inverse
+        of the mean of the data:
+
+            $$ \lambda_0 = 1 / mean(x) $$
+
+
+        Parameters
+        ----------
+        data : array_like
+            The data to use to generate the initial values of parameters.
+
+            Should already be trimmed to the data range defined by
+            `xmin` and `xmax` (if included).
+
+        Returns
+        -------
+        params : dict
+            A dictionary of the parameters and their values.
+
+        References
+        ----------
+        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+        Power-law distributions in empirical data. SIAM Review, 51(4),
+        661–703. https://doi.org/10.1137/070710111
+
+        """
+        params = {}
+
+        # This is generally a very good approximation of the power law
+        # exponent for alpha > 1. For values of alpha < 1, it will only
+        # approach 1, as expected from the 1 + ...
+
+        n = len(data)
+
+        # If we have a discrete distribution (ie only takes on integer
+        # values) we have to shift slightly.
+        if self.discrete and self.estimate_discrete and not self.xmax:
+            params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin - 0.5)))
+
+        else:
+            # For continuous, we just have the usual expression.
+            params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin)))
+
+        params["Lambda"] = 1 / np.mean(data)
+
+        return params
+
 
     def _cdf_base_function(self, x):
         from mpmath import gammainc
@@ -1642,9 +1749,11 @@ class Truncated_Power_Law(Distribution):
         CDF = 1 -CDF
         return CDF
 
+
     def _pdf_base_function(self, x):
         from numpy import exp
         return x**(-self.alpha) * exp(-self.Lambda * x)
+
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -1652,6 +1761,7 @@ class Truncated_Power_Law(Distribution):
         C = ( self.Lambda**(1-self.alpha) /
                 float(gammainc(1-self.alpha,self.Lambda*self.xmin)))
         return C
+
 
     @property
     def _pdf_discrete_normalizer(self):
@@ -1668,29 +1778,32 @@ class Truncated_Power_Law(Distribution):
             C = 1.0/C
         return C
 
-    def pdf(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
 
-        if not self.discrete and self.in_range() and False:
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import exp
-            from mpmath import gammainc
+    # Deprecated
+#    def pdf(self, data=None):
+#        if data is None and self.parent_Fit:
+#            data = self.parent_Fit.data
+#
+#        if not self.discrete and self.in_range() and False:
+#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+#            from numpy import exp
+#            from mpmath import gammainc
 #        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
 #                (Lambda**(1-alpha))/\
 #                float(gammainc(1-alpha,Lambda*xmin))
-            likelihoods = ( self.Lambda**(1-self.alpha) /
-                    (data**self.alpha *
-                            exp(self.Lambda*data) *
-                            gammainc(1-self.alpha,self.Lambda*self.xmin)
-                            ).astype(float)
-                    )
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
-        else:
-            likelihoods = Distribution.pdf(self, data)
-        return likelihoods
+#            likelihoods = ( self.Lambda**(1-self.alpha) /
+#                    (data**self.alpha *
+#                            exp(self.Lambda*data) *
+#                            gammainc(1-self.alpha,self.Lambda*self.xmin)
+#                            ).astype(float)
+#                    )
+#            #Simplified so as not to throw a nan from infs being divided by each other
+#            from sys import float_info
+#            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+#        else:
+#            likelihoods = Distribution.pdf(self, data)
+#        return likelihoods
+
 
     def _generate_random_continuous(self, r):
         def helper(r):
