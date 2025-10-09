@@ -1,3 +1,6 @@
+"""
+Utilities used for managing data.
+"""
 import numpy as np
 
 def checkunique(data):

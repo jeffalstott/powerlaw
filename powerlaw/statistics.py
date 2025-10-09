@@ -1,3 +1,6 @@
+"""
+Methods to compute statistical quantities of distributions.
+"""
 import numpy as np
 from numpy import nan
 
@@ -38,6 +41,7 @@ def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
     """
     return loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
             nested=True, **kwargs)
+
 
 def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
         nested=False, normalized_ratio=False):
@@ -113,136 +117,139 @@ def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
 
     return R, p
 
-def cdf(data, survival=False, **kwargs):
+
+# Both cdf and ccdf used to have the keyword 'survival' which controlled
+# whether you get the cdf or ccdf, but since we already have two functions
+# having that is redundant and confusing.
+def cdf(data, xmin=None, xmax=None):
     """
-    The cumulative distribution function (CDF) of the data.
+    Compute the cumulative distribution function (CDF) of the data.
 
     Parameters
     ----------
-    data : list or array, optional
-    survival : bool, optional
-        Whether to calculate a CDF (False) or CCDF (True). False by default.
+    data : list or array
+        The data to compute the CDF for.
 
-    Returns
-    -------
-    X : array
-        The sorted, unique values in the data.
-    probabilities : array
-        The portion of the data that is less than or equal to X.
-    """
-    return cumulative_distribution_function(data, survival=survival, **kwargs)
-
-def ccdf(data, survival=True, **kwargs):
-    """
-    The complementary cumulative distribution function (CCDF) of the data.
-
-    Parameters
-    ----------
-    data : list or array, optional
-    survival : bool, optional
-        Whether to calculate a CDF (False) or CCDF (True). True by default.
-
-    Returns
-    -------
-    X : array
-        The sorted, unique values in the data.
-    probabilities : array
-        The portion of the data that is less than or equal to X.
-    """
-    return cumulative_distribution_function(data, survival=survival, **kwargs)
-
-def cumulative_distribution_function(data,
-    xmin=None, xmax=None,
-    survival=False, **kwargs):
-    """
-    The cumulative distribution function (CDF) of the data.
-
-    Parameters
-    ----------
-    data : list or array, optional
-    survival : bool, optional
-        Whether to calculate a CDF (False) or CCDF (True). False by default.
     xmin : int or float, optional
         The minimum data size to include. Values less than xmin are excluded.
+
     xmax : int or float, optional
-        The maximum data size to include. Values greater than xmin are
+        The maximum data size to include. Values greater than xmax are
         excluded.
 
     Returns
     -------
     X : array
         The sorted, unique values in the data.
+
     probabilities : array
         The portion of the data that is less than or equal to X.
     """
+    data = np.array(data)
 
-    from numpy import array
-    data = array(data)
+    # If we don't have any data, just return nan
     if not data.any():
-        from numpy import nan
-        return array([nan]), array([nan])
+        return np.array([nan]), np.array([nan])
 
     data = trim_to_range(data, xmin=xmin, xmax=xmax)
 
+    # For computing the cdf (ccdf) we need our data to be sort in
+    # ascending order
     n = float(len(data))
-    from numpy import sort
-    data = sort(data)
-    all_unique = not( any( data[:-1]==data[1:] ) )
+    data = np.sort(data)
 
+    # If there are no repeated values, then we just add probability 1/n
+    # after each point, which means the cumulative distribution will just
+    # be 1/n, 2/n, 3/n, ... n/n.
+    all_unique = not any(data[:-1]==data[1:])
     if all_unique:
-        from numpy import arange
-        CDF = arange(n)/n
+        # Note the +1; see EliasL's Issue #111
+        #CDF = np.arange(1, n+1) / n
+        CDF = np.arange(0, n) / n
+
+        unique_data = data
+
     else:
-#This clever bit is a way of using searchsorted to rapidly calculate the
-#CDF of data with repeated values comes from Adam Ginsburg's plfit code,
-#specifically https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
-        from numpy import searchsorted, unique
-        CDF = searchsorted(data, data,side='left')/n
-        unique_data, unique_indices = unique(data, return_index=True)
-        data=unique_data
+        # If we have unique values, so points will add l/n probability,
+        # where l is greater than 1, so we need to note where there are
+        # duplicates.
+
+        # This clever bit is a way of using searchsorted to rapidly
+        # calculate the CDF of data with repeated values comes from Adam
+        # Ginsburg's plfit code, specifically:
+        # https://github.com/keflavich/plfit/commit/453edc36e4eb35f35a34b6c792a6d8c7e848d3b5#plfit/plfit.py
+        #CDF = np.searchsorted(data, data, side='right') / n
+        CDF = np.searchsorted(data, data, side='left') / n
+
+        # Now we remove the duplicate points
+        unique_data, unique_indices = np.unique(data, return_index=True)
         CDF = CDF[unique_indices]
 
-    if survival:
-        CDF = 1-CDF
-    return data, CDF
+    return unique_data, CDF
 
-def is_discrete(data):
-    """Checks if every element of the array is an integer."""
-    from numpy import floor
-    return (floor(data)==data.astype(float)).all()
 
-def trim_to_range(data, xmin=None, xmax=None, **kwargs):
+def ccdf(data, xmin=None, xmax=None):
     """
-    Removes elements of the data that are above xmin or below xmax (if present)
-    """
-    from numpy import asarray
-    data = asarray(data)
-    if xmin:
-        data = data[data>=xmin]
-    if xmax:
-        data = data[data<=xmax]
-    return data
+    Compute the complementary cumulative distribution function (CCDF) of the data.
 
-def pdf(data, xmin=None, xmax=None, linear_bins=False, bins=None, **kwargs):
+    Parameters
+    ----------
+    data : list or array
+        The data to compute the CCDF for.
+
+    xmin : int or float, optional
+        The minimum data size to include. Values less than xmin are excluded.
+
+    xmax : int or float, optional
+        The maximum data size to include. Values greater than xmax are
+        excluded.
+
+    Returns
+    -------
+    X : array
+        The sorted, unique values in the data.
+
+    probabilities : array
+        The portion of the data that is greater than X.
     """
-    Returns the probability density function (normalized histogram) of the
+    # Calculate the cdf and take 1 - cdf
+    unique_data, CDF = cdf(data, xmin=xmin, xmax=xmax)
+
+    return unique_data, 1 - CDF
+
+
+def pdf(data, xmin=None, xmax=None, linear_bins=False, bins=None):
+    """
+    Compute the probability density function (PDF, normalized histogram) of the
     data.
 
     Parameters
     ----------
     data : list or array
+        The data to compute the PDF for.
+
     xmin : float, optional
         Minimum value of the PDF. If None, uses the smallest value in the data.
+
     xmax : float, optional
         Maximum value of the PDF. If None, uses the largest value in the data.
-    linear_bins : float, optional
+
+    linear_bins : bool, optional
         Whether to use linearly spaced bins, as opposed to logarithmically
         spaced bins (recommended for log-log plots).
+
+    bins : array_like, optional
+        The bins within which to compute the PDF.
+
+        If not provided, will be generated based on the range of the data.
+        By default, the bins will be logarithmically spaced, but can be
+        linear if `linear_bins=True`.
 
     Returns
     -------
     bin_edges : array
         The edges of the bins of the probability density function.
+
     probabilities : array
         The portion of the data that is within the bin. Length 1 less than
         bin_edges, as it corresponds to the spaces between them.
@@ -283,3 +290,42 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, bins=None, **kwargs):
         hist, edges = histogram(data, bins, density=True)
 
     return edges, hist
+
+
+def is_discrete(data):
+    """Checks if every element of the array is an integer."""
+    from numpy import floor
+    return (floor(data)==data.astype(float)).all()
+
+
+def trim_to_range(data, xmin=None, xmax=None):
+    """
+    Removes elements of the data that are above xmax or below xmin (if present)
+
+    Parameters
+    ----------
+    data : list or array
+        The data to trim.
+
+    xmin : int or float, optional
+        The minimum data size to include. Values less than xmin are excluded.
+
+    xmax : int or float, optional
+        The maximum data size to include. Values greater than xmax are
+        excluded.
+
+    Returns
+    -------
+    trimmed_data : array
+        Trimmed data.
+    """
+    data = np.asarray(data)
+
+    if xmin:
+        data = data[data >= xmin]
+
+    if xmax:
+        data = data[data <= xmax]
+
+    return data
+

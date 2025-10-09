@@ -26,10 +26,6 @@ from .plotting import *
 from .statistics import *
 from .distributions import *
 
-# TODO List
-# Change name of error from sigma since sigma is already the name of a
-# paremeter in lognormal distributions.
-
 # This needs to be a list of the keys in the supported_distributions
 # attribute of the Fit class.  The __getattr__ method needs the list.
 # If it uses supported_distributions.keys(), then it gets into an
@@ -61,8 +57,9 @@ PARALLEL_UNUSED_CORES = 2
 
 class Fit(object):
     """
-    A fit of a data set to various probability distributions, namely power
-    laws. For fits to power laws, the methods of Clauset et al. 2007 are used.
+    A class to manage data and fits to various distributions.
+
+    For fits to power laws, the methods of Clauset et al. 2007 are used.
     These methods identify the portion of the tail of the distribution that
     follows a power law, beyond a value xmin. If no xmin is
     provided, the optimal one is calculated and assigned at initialization.
@@ -70,6 +67,7 @@ class Fit(object):
     Parameters
     ----------
     data : list or array
+        The data to fit.
 
     discrete : boolean, optional
         Whether the data is discrete (integers).
@@ -80,10 +78,6 @@ class Fit(object):
 
     xmax : int or float, optional
         The maximum value of the fitted distributions.
-
-    verbose: bool, optional
-        Whether to print updates about where we are in the fitting process.
-        Default False.
 
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
@@ -111,13 +105,17 @@ class Fit(object):
         Darling. For more information on these, see the documentation
         for `Distribution.compute_distance_metrics()`.
 
+    verbose: {0, 1, 2} or bool, optional
+        Whether to print updates about where we are in the fitting process.
+        
+        `0` means print nothing, `1` or `True` means only print warnings
+        (default), `2` means print status messages and warnings.
     
     """
     # TODO: Update the arguments for this function
     def __init__(self, data,
                  discrete=False,
                  xmin=None, xmax=None,
-                 verbose=False,
                  fit_method='likelihood',
                  estimate_discrete=True,
                  discrete_approximation='round',
@@ -127,6 +125,7 @@ class Fit(object):
                  xmin_distance='D',
                  xmin_distribution='power_law',
                  pdf_ends_at_xmax=False,
+                 verbose=1,
                  **kwargs):
 
         self.verbose = verbose
@@ -391,6 +390,7 @@ class Fit(object):
         # of xmin.
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=OptimizeWarning)
+            warnings.filterwarnings('ignore', category=UserWarning)
 
             # TODO parallelize
             # This is slightly harder than I thought it would be since I can't
@@ -538,30 +538,29 @@ class Fit(object):
             nested=nested,
             **kwargs)
 
+
     def loglikelihood_ratio(self, dist1, dist2, nested=None, **kwargs):
         """
         Another name for distribution_compare.
         """
         return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
-    def cdf(self, original_data=False, survival=False, **kwargs):
+
+    def cdf(self, original_data=False):
         """
         Returns the cumulative distribution function of the data.
 
         Parameters
         ----------
         original_data : bool, optional
-            Whether to use all of the data initially passed to the Fit object.
-            If False, uses only the data used for the fit (within xmin and
-            xmax.)
-        survival : bool, optional
-            Whether to return the complementary cumulative distribution
-            function, 1-CDF, also known as the survival function.
+            Whether to use all of the data initially passed to the Fit object
+            (True) or only the data within the fitting range (False).
 
         Returns
         -------
         X : array
             The sorted, unique values in the data.
+
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
@@ -569,32 +568,30 @@ class Fit(object):
             data = self.data_original
             xmin = None
             xmax = None
+
         else:
             data = self.data
             xmin = self.xmin
             xmax = self.xmax
-        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs)
 
-    def ccdf(self, original_data=False, survival=True, **kwargs):
+        return cdf(data, xmin=xmin, xmax=xmax)
+
+
+    def ccdf(self, original_data=False):
         """
         Returns the complementary cumulative distribution function of the data.
 
         Parameters
         ----------
         original_data : bool, optional
-            Whether to use all of the data initially passed to the Fit object.
-            If False, uses only the data used for the fit (within xmin and
-            xmax.)
-        survival : bool, optional
-            Whether to return the complementary cumulative distribution
-            function, also known as the survival function, or the cumulative
-            distribution function, 1-CCDF.
+            Whether to use all of the data initially passed to the Fit object
+            (True) or only the data within the fitting range (False).
 
         Returns
         -------
         X : array
             The sorted, unique values in the data.
+
         probabilities : array
             The portion of the data that is greater than or equal to X.
         """
@@ -602,14 +599,16 @@ class Fit(object):
             data = self.data_original
             xmin = None
             xmax = None
+
         else:
             data = self.data
             xmin = self.xmin
             xmax = self.xmax
-        return cdf(data, xmin=xmin, xmax=xmax, survival=survival,
-                   **kwargs)
 
-    def pdf(self, original_data=False, **kwargs):
+        return ccdf(data, xmin=xmin, xmax=xmax)
+
+
+    def pdf(self, original_data=False, linear_bins=False, bins=None):
         """
         Returns the probability density function (normalized histogram) of the
         data.
@@ -617,14 +616,25 @@ class Fit(object):
         Parameters
         ----------
         original_data : bool, optional
-            Whether to use all of the data initially passed to the Fit object.
-            If False, uses only the data used for the fit (within xmin and
-            xmax.)
+            Whether to use all of the data initially passed to the Fit object
+            (True) or only the data within the fitting range (False).
+
+        linear_bins : bool, optional
+            Whether to use linearly spaced bins, as opposed to logarithmically
+            spaced bins (default, recommended for log-log plots).
+
+        bins : array_like, optional
+            The bins within which to compute the PDF.
+
+            If not provided, will be generated based on the range of the data.
+            By default, the bins will be logarithmically spaced, but can be
+            linear if `linear_bins=True`.
 
         Returns
         -------
         bin_edges : array
             The edges of the bins of the probability density function.
+
         probabilities : array
             The portion of the data that is within the bin. Length 1 less than
             bin_edges, as it corresponds to the spaces between them.
@@ -633,27 +643,32 @@ class Fit(object):
             data = self.data_original
             xmin = None
             xmax = None
+
         else:
             data = self.data
             xmin = self.xmin
             xmax = self.xmax
-        edges, hist = pdf(data, xmin=xmin, xmax=xmax, **kwargs)
+
+        edges, hist = pdf(data, xmin=xmin, xmax=xmax, linear_bins=linear_bins, bins=bins)
+
         return edges, hist
 
-    def plot_cdf(self, ax=None, original_data=False, survival=False, **kwargs):
+
+    def plot_cdf(self, original_data=False, ax=None, **kwargs):
         """
         Plots the CDF to a new figure or to axis ax if provided.
 
         Parameters
         ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object
+            (True) or only the data within the fitting range (False).
+
         ax : matplotlib axis, optional
             The axis to which to plot. If None, a new figure is created.
-        original_data : bool, optional
-            Whether to use all of the data initially passed to the Fit object.
-            If False, uses only the data used for the fit (within xmin and
-            xmax.)
-        survival : bool, optional
-            Whether to plot a CDF (False) or CCDF (True). False by default.
+
+        kwargs
+            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
 
         Returns
         -------
@@ -662,24 +677,32 @@ class Fit(object):
         """
         if original_data:
             data = self.data_original
+            xmin = None
+            xmax = None
+
         else:
             data = self.data
-        return plot_cdf(data, ax=ax, survival=survival, **kwargs)
+            xmin = self.xmin
+            xmax = self.xmax
 
-    def plot_ccdf(self, ax=None, original_data=False, survival=True, **kwargs):
+        return plot_cdf(data, xmin=xmin, xmax=xmax, ax=ax, **kwargs)
+
+
+    def plot_ccdf(self, original_data=False, ax=None, **kwargs):
         """
         Plots the CCDF to a new figure or to axis ax if provided.
 
         Parameters
         ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object
+            (True) or only the data within the fitting range (False).
+
         ax : matplotlib axis, optional
             The axis to which to plot. If None, a new figure is created.
-        original_data : bool, optional
-            Whether to use all of the data initially passed to the Fit object.
-            If False, uses only the data used for the fit (within xmin and
-            xmax.)
-        survival : bool, optional
-            Whether to plot a CDF (False) or CCDF (True). True by default.
+
+        kwargs
+            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
 
         Returns
         -------
@@ -688,27 +711,44 @@ class Fit(object):
         """
         if original_data:
             data = self.data_original
+            xmin = None
+            xmax = None
+
         else:
             data = self.data
-        return plot_cdf(data, ax=ax, survival=survival, **kwargs)
+            xmin = self.xmin
+            xmax = self.xmax
 
-    def plot_pdf(self, ax=None, original_data=False,
-                 linear_bins=False, **kwargs):
+        return plot_ccdf(data, xmin=xmin, xmax=xmax, ax=ax, **kwargs)
+
+
+    def plot_pdf(self, original_data=False, linear_bins=False, bins=None, ax=None, **kwargs):
         """
         Plots the probability density function (PDF) or the data to a new figure
         or to axis ax if provided.
 
         Parameters
         ----------
+        original_data : bool, optional
+            Whether to use all of the data initially passed to the Fit object
+            (True) or only the data within the fitting range (False).
+
+        linear_bins : bool, optional
+            Whether to use linearly spaced bins, as opposed to logarithmically
+            spaced bins (recommended for log-log plots).
+
+        bins : array_like, optional
+            The bins within which to compute the PDF.
+
+            If not provided, will be generated based on the range of the data.
+            By default, the bins will be logarithmically spaced, but can be
+            linear if `linear_bins=True`.
+
         ax : matplotlib axis, optional
             The axis to which to plot. If None, a new figure is created.
-        original_data : bool, optional
-            Whether to use all of the data initially passed to the Fit object.
-            If False, uses only the data used for the fit (within xmin and
-            xmax.)
-        linear_bins : bool, optional
-            Whether to use linearly spaced bins (True) or logarithmically
-            spaced bins (False). False by default.
+
+        kwargs
+            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
 
         Returns
         -------
@@ -717,8 +757,14 @@ class Fit(object):
         """
         if original_data:
             data = self.data_original
+            xmin = None
+            xmax = None
+
         else:
             data = self.data
-        return plot_pdf(data, ax=ax, linear_bins=linear_bins, **kwargs)
+            xmin = self.xmin
+            xmax = self.xmax
+
+        return plot_pdf(data, xmin=xmin, xmax=xmax, linear_bins=linear_bins, bins=bins, ax=ax, **kwargs)
 
 

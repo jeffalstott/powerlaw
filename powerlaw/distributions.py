@@ -13,9 +13,13 @@ from .utils import *
 
 class Distribution(object):
     """
-    An abstract class for theoretical probability distributions. Can be created
-    with particular parameter values, or fitted to a dataset. Fitting is
-    by maximum likelihood estimation by default.
+    An abstract class for theoretical probability distributions.
+
+    Can be created with particular parameter values, or fitted to a dataset.
+
+    Fitting is by maximum likelihood estimation by default, though can also
+    be done by minimizing distance metrics (eg. Kolmogorov-Smirnov) between
+    the theoretical and actual distribution.
 
     Parameters
     ----------
@@ -56,6 +60,36 @@ class Distribution(object):
         The use of `None` is preferred over `np.inf` to indicate an
         unbounded limit.
 
+    parameter_constraints : function, list of functions, dict, optional
+        Constraints amongst parameters during fitting. Constraint function(s)
+        should take a single variable as an argument, which will be a tuple
+        with all of the parameter values. The return value of the function
+        should be 0 when the constraint is satisfied.
+
+        For example, if I want to enforce that `param1` is greater than
+        `param2`, I would define my function:
+
+            def constraint(params):
+                param1, param2 = params
+                return param1 > param2
+
+        For a single constraint, the function can be directly passed,
+        or for multiple constraints, a list of functions can be passed.
+        Since this is sent to `scipy.optimize.minimize(constraints=...)`,
+        you can also provide as a dictionary as described in their
+        documentation:
+
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+
+        Note that unless constraints are passed as a dictionary, all functions
+        are assumed to be 'equality' constraints. If you need inequality
+        constraints, pass the argument as a dictionary according to the
+        above documentation and specify the type of constraint explicitly. 
+
+        Constraints are intended to be used only for relations between
+        parameters; for simple bounds on parameter values, use of
+        `parameter_ranges` is preferred.
+
     discrete_approximation : "round", "xmax" or int, optional
         Approximation method to apply for a discrete distribution in the
         case that there is no analytical expression available.
@@ -71,22 +105,6 @@ class Distribution(object):
     parent_Fit : Fit object, optional
         A Fit object from which to use data, if it exists.
 
-    avoid_pdf_overflow : bool, optional
-        Whether to represent the base PDF and it's normalization
-        constant as logarithms until they are combined into a proper
-        function.
-
-        This helps to avoid overflow errors if your normalization constant
-        is very large (> 1e1000) and your typical pdf values are very small
-        (< 1e-1000). In principle, when you combine these values you should
-        get a reasonable number, but storing the separate values can be
-        difficult. The alternative to explicitly including an option like
-        this is to use the `mpmath` package, but I find that this slows
-        down calculations quite a bit.
-
-        This case arises when you have a relatively large value for `xmin`,
-        and are working with, for example, an exponential distribution.
-
     verbose : {0, 1, 2}, bool
         Whether to print debug and status information. `0` or `False` means
         print no information (including no warnings), `1` means print
@@ -101,9 +119,9 @@ class Distribution(object):
                  data=None,
                  parameters=None,
                  parameter_ranges=None,
+                 parameter_constraints=None,
                  discrete_approximation='round',
                  parent_Fit=None,
-                 avoid_pdf_overflow=False,
                  verbose=1,
                  **kwargs):
 
@@ -112,7 +130,6 @@ class Distribution(object):
         self.xmin = xmin
         self.xmax = xmax
         self.discrete = discrete
-        self.avoid_pdf_overflow = avoid_pdf_overflow
         self.fit_method = fit_method
         self.discrete_approximation = discrete_approximation
 
@@ -141,6 +158,9 @@ class Distribution(object):
         # Setup the parameter ranges
         # This sets the variable `self.parameter_ranges`
         self.initialize_parameter_ranges(parameter_ranges)
+
+        # Setup parameter contraints
+        self.initialize_parameter_constraints(parameter_constraints)
 
         # Fit if we have data
         if hasattr(self.data, '__iter__'):
@@ -399,6 +419,89 @@ class Distribution(object):
         return params
 
 
+    def initialize_parameter_constraints(self, parameter_constraints):
+        """
+        Parse and save constraint functions for parameters to be used
+        during the fitting process.
+
+        Parameters
+        ----------
+        parameter_constraints : function, list of functions, or dict
+            Constraints amongst parameters during fitting. Constraint function(s)
+            should take a single variable as an argument, which will be a tuple
+            with all of the parameter values. The return value of the function
+            should be 0 when the constraint is satisfied.
+
+            For example, if I want to enforce that `param1` is greater than
+            `param2`, I would define my function:
+
+                def constraint(params):
+                    param1, param2 = params
+                    return param1 > param2
+
+            For a single constraint, the function can be directly passed,
+            or for multiple constraints, a list of functions can be passed.
+            Since this is sent to `scipy.optimize.minimize(constraints=...)`,
+            you can also provide a dictionary or list of dictionaries as described
+            in their documentation:
+
+            https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+
+            Note that unless constraints are passed as a dictionary, all functions
+            are assumed to be 'equality' constraints. If you need inequality
+            constraints, pass the argument as a dictionary according to the
+            above documentation and specify the type of constraint explicitly. 
+        """
+        # TODO: Maybe can wrap these functions so they have full access
+        # to the properties of the distribution class, since as of now
+        # they can only make use of parameters that are actively being fit.
+
+        # The final constraint object we want is a list of dictionaries that can
+        # be passed to scipy.optimize.minimize. 
+
+        # If we are already a list
+        if hasattr(parameter_constraints, '__iter__') and len(parameter_constraints) > 0:
+
+            # If we already have a list of dicts, then we assume it is
+            # formatted correctly and are done.
+            if all([type(con) is dict for con in parameter_constraints]):
+                constraint_dict_list = parameter_constraints
+
+            # If we have just functions, we need to create a dict for each
+            # one.
+            elif all([hasattr(con, '__call__') for con in parameter_constraints]):
+                constraint_dict_list = []
+
+                for i in range(len(parameter_constraints)):
+                    con_dict = {'type': 'eq', 'fun': parameter_constraints[i]}
+                    constraint_dict_list.append(con_dict)
+
+            # Otherwise raise an error
+            else:
+                raise Exception('Invalid value passed for `parameter_constraints`; for multiple constraints, all should be either dict or functions (no mixing).')
+
+        # If we have just a single dictionary, we put it into a list and
+        # are done.
+        elif type(parameter_constraints) is dict:
+            constraint_dict_list = [parameter_constraints]
+
+        # If we have a function, we make a dict and put it into a list.
+        elif hasattr(parameter_constraints, '__call__'):
+            con_dict = {'type': 'eq', 'fun': parameter_constraints}
+            constraint_dict_list = [con_dict]
+
+        # If we have none, we use None
+        elif parameter_constraints is None:
+            constraint_dict_list = None
+
+        # Otherwise raise an error
+        else:
+            raise Exception('Invalid value passed for `parameter_constraints`; should be function, list, or dict.')
+
+        # Save the constraints
+        self.parameter_constraints = constraint_dict_list
+
+
     def fit(self, data=None):
         """
         Fits the parameters of the distribution to the data. Uses options set
@@ -447,9 +550,11 @@ class Distribution(object):
         # Format the bounds as required for scipy's minimize
         bounds = [b for b in self.parameter_ranges.values()]
 
-        # TODO: Add constraints here
         # In choosing the minimization method, unfortunately there isn't
-        # one choice that works for all cases. Powell and Nelder-Mead 
+        # one choice that works for all cases. The old method (see below)
+        # uses Nelder-Mead.
+
+        # Powell and Nelder-Mead 
         # together cover most options though is what I've found.
         # In particular, Powell can traverse the inflection point at
         # alpha = 1 only going down (ie works for any alpha <= 1) whereas
@@ -458,7 +563,10 @@ class Distribution(object):
 
         # The only options I've found that have success both ways is
         # COBYLA and COBYQA. COBYQA struggles around alpha = 1, but
-        # COBYLA seems relatively fine.
+        # COBYLA seems relatively fine, but struggles with lognormal fitting.
+        # I also find that it actually does a better job of fitting
+        # exponentials, but this means that the tests fail because it
+        # does better than it used to...
 
         # Maybe it sounds dumb, but an alternative is to switch between
         # two algorithms a few times, since, for example, both Nelder-Mead and Powell
@@ -471,12 +579,19 @@ class Distribution(object):
         # sort of addressed by using `discrete=True` since this just
         # calculates the normalization numerically.
 
-        # After testing, I think going with COBYLA is the fastest and most
-        # accurate option, but this should definitely be reviewed later on.
-        switches = 1
-        # The order doesn't really matter here.
-        #methods = ['Powell', 'Nelder-Mead']
-        methods = ["COBYLA"]
+        # After testing, I think sticking with Nelder-Mead for now is fine,
+        # unless we have a constraint, then we use COBYLA (since Nelder-Mead
+        # can't handle constraints). But this should definitely be reviewed
+        # later on.
+        #methods = ["Powell", "Nelder-Mead"]
+
+        if self.parameter_constraints:
+            methods = ["COBYLA"]
+        else:
+            methods = ['Nelder-Mead']
+
+        # Only switch back and forth if we have more than one method.
+        switches = 2 if len(methods) > 1 else 1
 
         # Take the initial parameters
         parameters = list(self.parameters.values())
@@ -487,11 +602,12 @@ class Distribution(object):
                                                  x0=parameters,
                                                  bounds=bounds,
                                                  method=m,
+                                                 constraints=self.parameter_constraints,
                                                  tol=1e-4)
                 parameters = result.x
 
         # In case you'd like to compare, this uses the exact same optimization
-        # as in powerlaw v1.5 and before. The results end up pretty much
+        # as in powerlaw v1.5 and before (Nelder-Mead). The results end up pretty much
         # the same as with the new method above. This method is slightly
         # faster than the one above when using two methods above and 2
         # switches. COBYLA is comparable in speed.
@@ -510,6 +626,8 @@ class Distribution(object):
         self.set_parameters(parameters)
 
         # Flag as noisy (not fit) if the parameters aren't in range
+        # If you switch to the old optimization method, make sure to
+        # comment out the second term in this expression.
         self.noise_flag = (not self.in_range())# or (not result.success)
   
         if self.noise_flag and self.verbose:
@@ -669,32 +787,27 @@ class Distribution(object):
         # We don't return anything, just compute the values
 
 
-    def ccdf(self,data=None, survival=True):
+    def ccdf(self, data=None):
         """
         The complementary cumulative distribution function (CCDF) of the
         theoretical distribution. Calculated for the values given in data
-        within xmin and xmax, if present.
+        between xmin and xmax, if present.
 
         Parameters
         ----------
         data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
-        survival : bool, optional
-            Whether to calculate a CDF (False) or CCDF (True).
-            True by default.
+            The data for which to compute the CCDF. If not provided, the data
+            passed on creation (if available) will be used.
 
         Returns
         -------
-        X : array
-            The sorted, unique values in the data.
         probabilities : array
-            The portion of the data that is less than or equal to X.
+            The portion of the data that is greater than X.
         """
-        return self.cdf(data=data, survival=survival)
+        return 1 - self.cdf(data=data)
 
 
-    def cdf(self,data=None, survival=False):
+    def cdf(self, data=None):
         """
         The cumulative distribution function (CDF) of the theoretical
         distribution. Calculated for the values given in data within xmin and
@@ -702,33 +815,27 @@ class Distribution(object):
 
         Parameters
         ----------
-        data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
-
-        survival : bool, optional
-            Whether to calculate a CDF (False) or CCDF (True). False by
-            default.
-
-            See wrapper method `Distribution.ccdf()`.
+        data : array_like, optional
+            The data for which to compute the CDF. If not provided, the data
+            passed on creation (if available) will be used.
 
         Returns
         -------
-        X : array
-            The sorted, unique values in the data.
-
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
-        # TODO: Clean this up
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
         n = len(data)
-        from sys import float_info
+
+        # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
-            return np.tile(10**float_info.min_10_exp, n)
+            return np.tile(10**sys.float_info.min_10_exp, n)
 
         if self._cdf_xmin == 1:
             # If cdf_xmin is 1, it means we don't have the numerical accuracy to
@@ -741,13 +848,11 @@ class Distribution(object):
         CDF = self._cdf_base_function(data) - self._cdf_xmin
 
         norm = 1 - self._cdf_xmin
+        # If we have an xmax, our normalization is slightly different
         if self.xmax:
             norm = norm - (1 - self._cdf_base_function(self.xmax))
 
         CDF = CDF/norm
-
-        if survival:
-            CDF = 1 - CDF
 
         # If we have any nan values in the cdf, it is indicative of a
         # numerical error, so we should warn.
@@ -755,7 +860,8 @@ class Distribution(object):
         possible_numerical_error = np.isnan(np.min(CDF))
 
         if possible_numerical_error and self.verbose:
-            warnings.warn("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.")
+            warnings.warn("Likely underflow or overflow error: the optimal fit for this distribution gives values that \
+                          are so extreme that we lack the numerical precision to calculate them.")
 
         return CDF
 
@@ -773,13 +879,14 @@ class Distribution(object):
 
         Parameters
         ----------
-        data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
+        data : array_like, optional
+            The data for which to compute the PDF. If not provided, the data
+            passed on creation (if available) will be used.
 
         Returns
         -------
         probabilities : array
+            The portion of the data that is contained at each bin (data point).
         """
         # The passed data takes precedence, but otherwise we use the data
         # stored in the class instance.
@@ -790,11 +897,9 @@ class Distribution(object):
 
         n = len(data)
 
-        from sys import float_info
-        # I guess this is an attempt to return very small values that aren't
-        # zeros since that would mess with the log scale
+        # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
-            return np.tile(10**float_info.min_10_exp, n)
+            return np.tile(10**sys.float_info.min_10_exp, n)
 
         # If we have a continuous distribution, we can easily apply
         # our base function and the normalization factor to get the
@@ -804,14 +909,6 @@ class Distribution(object):
             C = self._pdf_continuous_normalizer
 
             likelihoods = f*C
-
-            # In some cases, the normalization and typical pdf values will
-            # be very extreme on their own, but will combine to be normal
-            # values. In this case, we represent the separate values as
-            # the log of the real value, and then take the exp here only
-            # after they've been combined.
-            if self.avoid_pdf_overflow:
-                likelihoods = np.exp(likelihoods)
 
         else:
             # For discrete cases, it's a little more tricky since we will
@@ -823,11 +920,6 @@ class Distribution(object):
                 C = self._pdf_discrete_normalizer
 
                 likelihoods = f*C
-
-                # Also have to check if we represent the pdf as itself or as
-                # its logarithm.
-                if self.avoid_pdf_overflow:
-                    likelihoods = np.exp(likelihoods)
 
             elif self.discrete_approximation=='round':
                 # If we want to approximate by rounding values, we essentially
@@ -869,14 +961,11 @@ class Distribution(object):
                 X = np.arange(self.xmin, upper_limit+1)
                 PDF = self._pdf_base_function(X)
 
-                if self.avoid_pdf_overflow:
-                    PDF = np.exp(PDF)
-
                 PDF = (PDF / np.sum(PDF)).astype(float)
                 likelihoods = PDF[(data - self.xmin).astype(int)]
 
         # Set any zeros to just very small values
-        likelihoods[likelihoods == 0] = 10**float_info.min_10_exp
+        likelihoods[likelihoods == 0] = 10**sys.float_info.min_10_exp
 
         return likelihoods
 
@@ -995,50 +1084,26 @@ class Distribution(object):
         """
         Plots the complementary cumulative distribution function (CDF) of the
         theoretical distribution for the values given in data within xmin and
-        xmax, if present. Plots to a new figure or to axis ax if provided.
+        xmax, if present.
+
+        Plots to a new figure or to axis `ax` if provided.
 
         Parameters
         ----------
-        data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
+        data : array_like, optional
+            The data for which to compute the PDF. If not provided, the data
+            passed on creation (if available) will be used.
 
         ax : matplotlib axis, optional
             The axis on which to plot. If None, a new figure is created.
 
-        Returns
-        -------
-        ax : matplotlib axis
-            The axis to which the plot was made.
-        """
-        # This function used to have `survival` as a keyword, but that is
-        # redundant because there are already two separate functions for
-        # cdf and ccdf.
-        return self.plot_cdf(data, ax=ax, survival=True, **kwargs)
-
-
-    def plot_cdf(self, data=None, ax=None, survival=False, **kwargs):
-        """
-        Plots the cumulative distribution function (CDF) of the
-        theoretical distribution for the values given in data within xmin and
-        xmax, if present. Plots to a new figure or to axis ax if provided.
-
-        Parameters
-        ----------
-        data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
-
-        ax : matplotlib axis, optional
-            The axis on which to plot. If None, a new figure is created.
-
-        survival : bool, optional
-            Whether to plot a CDF (False) or CCDF (True). False by default.
+        kwargs
+            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
 
         Returns
         -------
         ax : matplotlib axis
-            The axis to which the plot was made.
+            The axis on which the plot was made.
         """
         # The passed data takes precedence, but otherwise we use the data
         # stored in the class instance.
@@ -1046,13 +1111,63 @@ class Distribution(object):
             data = self.data
 
         bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
-        CDF = self.cdf(bins, survival=survival)
+        CCDF = self.ccdf(bins)
 
         if not ax:
             import matplotlib.pyplot as plt
-            fig, ax = plt.subplots()
+            plt.plot(bins, CDF, **kwargs)
+            ax = plt.gca()
 
-        ax.plot(bins, CDF, **kwargs)
+        else:
+            ax.plot(bins, CDF, **kwargs)
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        return ax
+
+
+    def plot_cdf(self, data=None, ax=None, **kwargs):
+        """
+        Plots the cumulative distribution function (CDF) of the
+        theoretical distribution for the values given in data within xmin and
+        xmax, if present.
+
+        Plots to a new figure or to axis `ax` if provided.
+
+        Parameters
+        ----------
+        data : array_like, optional
+            The data for which to compute the PDF. If not provided, the data
+            passed on creation (if available) will be used.
+
+        ax : matplotlib axis, optional
+            The axis on which to plot. If None, a new figure is created.
+
+        kwargs
+            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
+
+        Returns
+        -------
+        ax : matplotlib axis
+            The axis on which the plot was made.
+        """
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
+
+        bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+        CDF = self.cdf(bins)
+
+        if not ax:
+            import matplotlib.pyplot as plt
+            plt.plot(bins, CDF, **kwargs)
+            ax = plt.gca()
+
+        else:
+            ax.plot(bins, CDF, **kwargs)
+
         ax.set_xscale("log")
         ax.set_yscale("log")
 
@@ -1067,11 +1182,15 @@ class Distribution(object):
 
         Parameters
         ----------
-        data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
+        data : array_like, optional
+            The data for which to compute the PDF. If not provided, the data
+            passed on creation (if available) will be used.
+
         ax : matplotlib axis, optional
-            The axis to which to plot. If None, a new figure is created.
+            The axis on which to plot. If None, a new figure is created.
+
+        kwargs
+            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
 
         Returns
         -------
@@ -1259,6 +1378,13 @@ class Power_Law(Distribution):
             # For continuous, we just have the usual expression.
             params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin)))
 
+        # If we have some non-clean distributions (eg. a flat distribution that
+        # then becomes power law at some xmin), the estimate above
+        # could be less than 1 or even negative. It's better to just
+        # start the fitting at 1 instead in those cases.
+        if params["alpha"] < 1:
+            params["alpha"] = 1
+
         return params
 
 
@@ -1293,6 +1419,10 @@ class Power_Law(Distribution):
         return x**(-self.alpha)
 
 
+    # TODO: This function sometimes gives its warning during the fitting
+    # process, and then the final fit ends up being > 1, so it looks like
+    # it raised the warning incorrectly. Maybe there is some way to clean
+    # up when this is shown or not.
     @property
     def _pdf_continuous_normalizer(self):
         # The pdf has a different form when we consider xmax as
@@ -1354,10 +1484,7 @@ class Exponential(Distribution):
         self.parameter_names = ['Lambda']
         self.DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None]}
 
-        # Note that we use the option avoid_pdf_overflow which means
-        # that our _pdf_base_function is actually the logarithm of
-        # the base function, and same for the normalizer.
-        Distribution.__init__(self, avoid_pdf_overflow=False, **kwargs)
+        Distribution.__init__(self, **kwargs)
 
 
     @property
@@ -1407,19 +1534,12 @@ class Exponential(Distribution):
         is:
             $$ p(x) ~ exp(-\lambda x) $$
 
-        Note that we use the option `self.avoid_pdf_overflow=True` which
-        means that this should return actually the logarithm of the pdf.
         """
         return np.exp(-self.Lambda * x)
-        #return -self.Lambda * x
 
 
     @property
     def _pdf_continuous_normalizer(self):
-        """
-        Note that we use the option `self.avoid_pdf_overflow=True` which
-        means that this should return actually the logarithm of the pdf.
-        """
         # We could put an expression including xmax here but it probably
         # wouldn't make much of a difference.
         
@@ -1427,26 +1547,26 @@ class Exponential(Distribution):
         # since it is a positive exponential with what could be a large
         # number. The end calculation would theoretically be fine since
         # the x values will always be > xmin, and therefore we will also
-        # have a tiny _pdf_base_function value
-        return self.Lambda * np.exp(self.Lambda * self.xmin)
-        #return np.log(self.Lambda) + self.Lambda * self.xmin
+        # have a tiny _pdf_base_function value.
+
+        # But in order to store this value in the meantime, we have to
+        # use a float128 type. The ideal solution might be to use a proper
+        # infinite precision module like mpmath or decimal, but I think
+        # this should work for all cases.
+        return self.Lambda * np.exp(np.float128(self.Lambda * self.xmin))
 
 
     @property
     def _pdf_discrete_normalizer(self):
-        """
-        Note that we use the option `self.avoid_pdf_overflow=True` which
-        means that this should return actually the logarithm of the pdf.
-        """
-        C = (1 - np.exp(-self.Lambda)) * np.exp(self.Lambda * self.xmin)
-        #C = np.log(1 - np.exp(-self.Lambda)) + self.Lambda * self.xmin
+        # Note that we use float128 (long double) here since otherwise
+        # we might get an overflow error. See _pdf_continuous_normalizer
+        # for full discussion.
+        C = (1 - np.exp(-self.Lambda)) * np.exp(np.float128(self.Lambda * self.xmin))
 
         if self.xmax:
-            Cxmax = (1 - np.exp(-self.Lambda)) * np.exp(self.Lambda * self.xmax)
+            Cxmax = (1 - np.exp(-self.Lambda)) * np.exp(np.float128(self.Lambda * self.xmax))
             C = 1.0/C - 1.0/Cxmax
             C = 1.0/C
-
-            #Cxmax = np.log(1 - np.exp(-self.Lambda)) + self.Lambda * self.xmax
 
         return C
 
@@ -1505,7 +1625,7 @@ class Stretched_Exponential(Distribution):
 
     def __init__(self, **kwargs):
         r"""
-        A stretched exponential distribution, with pdf:
+        A stretched exponential distribution, with PDF:
 
             $$ p(x) ~ (x \lambda)^{\beta - 1} exp(- (\lambda x)^\beta) $$
 
@@ -1569,8 +1689,7 @@ class Stretched_Exponential(Distribution):
 
 
     def _cdf_base_function(self, x):
-        from numpy import exp
-        CDF = 1 - np.exp(-(self.Lambda*x)**self.beta)
+        CDF = 1 - np.exp(-(self.Lambda * x)**self.beta)
         return CDF
 
 
@@ -1584,8 +1703,9 @@ class Stretched_Exponential(Distribution):
 
     @property
     def _pdf_continuous_normalizer(self):
-        from numpy import exp
-        C = self.beta*self.Lambda*exp((self.Lambda*self.xmin)**self.beta)
+        # Same issue here as with Exponential; we could get an overflow
+        # error since this value might be very large, so we use float128.
+        C = self.beta * self.Lambda * np.exp(np.float128(self.Lambda * self.xmin)**self.beta)
         return C
 
 
@@ -1821,18 +1941,62 @@ class Truncated_Power_Law(Distribution):
 
 class Lognormal(Distribution):
 
-    def parameters(self, params):
-        self.mu = params[0]
-        self.parameter1 = self.mu
-        self.parameter1_name = 'mu'
+    def __init__(self, **kwargs):
+        r"""
+        A lognormal distribution:
 
-        self.sigma = params[1]
-        self.parameter2 = self.sigma
-        self.parameter2_name = 'sigma'
+            $$ p(x) ~ 1/x exp( -(log(x) - mu)^2 / 2 width^2 )$$
+
+        """
+
+        # I have renamed this to be width from 'sigma' since there is
+        # already a sigma defined as the standard error in this package.
+        self.parameter_names = ['mu', 'width']
+        self.DEFAULT_PARAMETER_RANGES = {'mu': [None, None],
+                                         'width': [0, None]}
+
+        Distribution.__init__(self, **kwargs)
+
 
     @property
     def name(self):
         return "lognormal"
+
+
+    def generate_initial_parameters(self, data):
+        r"""
+        Generate initial guesses for the distribution parameters based
+        on the data.
+
+        Parameters
+        ----------
+        data : array_like
+            The data to use to generate the initial values of parameters.
+
+            Should already be trimmed to the data range defined by
+            `xmin` and `xmax` (if included).
+
+        Returns
+        -------
+        params : dict
+            A dictionary of the parameters and their values.
+
+        References
+        ----------
+        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+        Power-law distributions in empirical data. SIAM Review, 51(4),
+        661–703. https://doi.org/10.1137/070710111
+
+        """
+        params = {}
+
+        logdata = np.log(data)
+
+        params["mu"] = np.mean(logdata)
+        params["width"] = np.std(logdata)
+
+        return params
+
 
     def pdf(self, data=None):
         """
@@ -1888,6 +2052,7 @@ class Lognormal(Distribution):
         likelihoods[likelihoods==0] = 10**float_info.min_10_exp
         return likelihoods
 
+
     def _round_discrete_approx(self, data):
         """
         This function reformulates the calculation to avoid underflow errors
@@ -1915,11 +2080,11 @@ class Lognormal(Distribution):
 
 
         # revised calculation written to avoid underflow errors
-        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.sigma)
-        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.sigma)
+        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.width)
+        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.width)
         likelihoods = 0.5*(ss.erfc(arg1) - ss.erfc(arg2))
         if not self.xmax:
-            norm = 0.5*ss.erfc((np.log(self.xmin)-self.mu) / (np.sqrt(2)*self.sigma))
+            norm = 0.5*ss.erfc((np.log(self.xmin)-self.mu) / (np.sqrt(2)*self.width))
         else:
             # may still need to be fixed
             norm = - self._cdf_xmin + self._cdf_base_function(self.xmax)
@@ -1964,8 +2129,8 @@ class Lognormal(Distribution):
             from numpy import tile
             return tile(10**float_info.min_10_exp, n)
 
-        val_data = (log(data)-self.mu) / (sqrt(2)*self.sigma)
-        val_xmin = (log(self.xmin)-self.mu) / (sqrt(2)*self.sigma)
+        val_data = (log(data)-self.mu) / (sqrt(2)*self.width)
+        val_xmin = (log(self.xmin)-self.mu) / (sqrt(2)*self.width)
         CDF = 0.5 * (ss.erfc(val_xmin) - ss.erfc(val_data))
 
         norm = 0.5 * ss.erfc(val_xmin)
@@ -1990,25 +2155,18 @@ class Lognormal(Distribution):
             print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
         return CDF
 
-    def generate_initial_parameters(self, data):
-        from numpy import mean, std, log
-        logdata = log(data)
-        return (mean(logdata), std(logdata))
-
-    def _in_standard_parameter_range(self):
-#The standard deviation can't be negative
-        return self.sigma>0
-
     def _cdf_base_function(self, x):
         from numpy import sqrt, log
         from scipy.special import erf
         return  0.5 + ( 0.5 *
-                erf((log(x)-self.mu) / (sqrt(2)*self.sigma)))
+                erf((log(x)-self.mu) / (sqrt(2)*self.width)))
+
 
     def _pdf_base_function(self, x):
         from numpy import exp, log
         return ((1.0/x) *
-                exp(-( (log(x) - self.mu)**2 )/(2*self.sigma**2)))
+                exp(-( (log(x) - self.mu)**2 )/(2*self.width**2)))
+
 
     @property
     def _pdf_continuous_normalizer(self):
@@ -2016,13 +2174,15 @@ class Lognormal(Distribution):
 #        from scipy.special import erfc
         from scipy.constants import pi
         from numpy import sqrt, log
-        C = (erfc((log(self.xmin) - self.mu) / (sqrt(2) * self.sigma)) /
-             sqrt(2/(pi*self.sigma**2)))
+        C = (erfc((log(self.xmin) - self.mu) / (sqrt(2) * self.width)) /
+             sqrt(2/(pi*self.width**2)))
         return float(C)
+
 
     @property
     def _pdf_discrete_normalizer(self):
         return False
+
 
     def _generate_random_continuous(self, r):
         from numpy import exp, sqrt, log, frompyfunc
@@ -2033,10 +2193,10 @@ class Lognormal(Distribution):
         #Wolfram Alpha for producing the appropriate inverse of the CCDF
         #for me, which is what we need to calculate these things.
         erfinv = frompyfunc(erfinv,1,1)
-        Q = erf( ( log(self.xmin) - self.mu ) / (sqrt(2)*self.sigma))
+        Q = erf( ( log(self.xmin) - self.mu ) / (sqrt(2)*self.width))
         Q = Q*r - r + 1.0
         Q = erfinv(Q).astype('float')
-        return exp(self.mu + sqrt(2)*self.sigma*Q)
+        return exp(self.mu + sqrt(2)*self.width*Q)
 
 #    def _generate_random_continuous(self, r1, r2=None):
 #        from numpy import log, sqrt, exp, sin, cos
@@ -2048,7 +2208,7 @@ class Lognormal(Distribution):
 #        else:
 #            r2_provided = True
 #
-#        rho = sqrt(-2.0 * self.sigma**2.0 * log(1-r1))
+#        rho = sqrt(-2.0 * self.width**2.0 * log(1-r1))
 #        theta = 2.0 * pi * r2
 #        x1 = exp(rho * sin(theta))
 #        x2 = exp(rho * cos(theta))
@@ -2061,10 +2221,23 @@ class Lognormal(Distribution):
 
 class Lognormal_Positive(Lognormal):
 
+    def __init__(self, **kwargs):
+        r"""
+        A lognormal distribution with only positive center:
+
+            $$ p(x) ~ 1/x exp( -(log(x) - mu)^2 / 2 width^2 )$$
+
+        """
+
+        # I have renamed this to be width from 'sigma' since there is
+        # already a sigma defined as the standard error in this package.
+        self.parameter_names = ['mu', 'width']
+        self.DEFAULT_PARAMETER_RANGES = {'mu': [0, None],
+                                         'width': [0, None]}
+
+        Distribution.__init__(self, **kwargs)
+
+
     @property
     def name(self):
         return "lognormal_positive"
-
-    def _in_standard_parameter_range(self):
-#The standard deviation and mean can't be negative
-        return (self.sigma>0 and self.mu>0)

@@ -15,6 +15,8 @@ except LookupError:
 setuptools.setup(
     name='powerlaw',
     packages=setuptools.find_packages(),
+    package_data={'powerlaw': ['reference_data/*.txt']},
+    include_package_data=True,
     version= '1.6.0',
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
