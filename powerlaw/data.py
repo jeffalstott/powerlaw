@@ -1,5 +1,11 @@
 """
 Methods for loading test datasets.
+
+For information on test datasets, including sources (where available)
+see the documentation.
+
+One dataset, ``weblinks.hist`` is given as a histogram, not sampled data
+so we can't analyze it with this library.
 """
 
 import numpy as np
@@ -26,7 +32,6 @@ TEST_DATASETS = {
                 'quakes': '',
                 'surnames': '',
                 'terrorism': '',
-                'weblinks': '',
                 'words': 'Frequency of word usage in Herman Melville’s novel "Moby Dick"',
                 }
 """
@@ -80,7 +85,7 @@ def plot_test_datasets():
     import matplotlib.pyplot as plt
 
     dataset_names = list(TEST_DATASETS.keys())
-    fig = plt.figure(figsize=(len(dataset_names)*3, 4))
+    fig = plt.figure(figsize=(len(dataset_names)*3, 3.5))
 
     for i in range(len(dataset_names)):
         ax = fig.add_subplot(1, len(dataset_names), i+1)

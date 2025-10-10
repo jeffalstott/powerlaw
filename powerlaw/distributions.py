@@ -504,8 +504,7 @@ class Distribution(object):
 
     def fit(self, data=None):
         """
-        Fits the parameters of the distribution to the data. Uses options set
-        at initialization.
+        Fits the parameters of the distribution to the data.
 
         Fitting is performed by minimizing either the loglikelihood or
         KS distance (depending on the value of `Distribution.fit_method`).
@@ -520,6 +519,7 @@ class Distribution(object):
             data used to initialize the class.
 
         """
+        print('numerical fitting')
         # The passed data takes precedence, but otherwise we use the data
         # stored in the class instance.
         if not hasattr(data, '__iter__'):
@@ -921,7 +921,7 @@ class Distribution(object):
 
                 likelihoods = f*C
 
-            elif self.discrete_approximation=='round':
+            elif self.discrete_approximation == 'round':
                 # If we want to approximate by rounding values, we essentially
                 # take a discretized derivative of the cumulative distribution
                 # function.
@@ -953,7 +953,7 @@ class Distribution(object):
             else:
                 # Otherwise, we just normalize numerically by summing the
                 # PDF
-                if self.discrete_approximation=='xmax':
+                if self.discrete_approximation == 'xmax':
                     upper_limit = self.xmax
                 else:
                     upper_limit = self.discrete_approximation
@@ -964,7 +964,7 @@ class Distribution(object):
                 PDF = (PDF / np.sum(PDF)).astype(float)
                 likelihoods = PDF[(data - self.xmin).astype(int)]
 
-        # Set any zeros to just very small values
+        # Set any zeros to very small values
         likelihoods[likelihoods == 0] = 10**sys.float_info.min_10_exp
 
         return likelihoods
@@ -1285,31 +1285,82 @@ class Distribution(object):
 
 
 class Power_Law(Distribution):
+    r"""
+    A power law distribution, :math:`p(x) \sim x^{-\alpha}`.
 
-    def __init__(self, estimate_discrete=True, pdf_ends_at_xmax=False, **kwargs):
+    The exponent :math:`\alpha` should be positive, and is typically in the
+    range :math:`(1, 3]`. For a normalizable distribution on an infinite or
+    semi-infinite domain (ie. no :math:`x_{max}`), we should have alpha greater
+    than 1.
+
+    For continuous power laws with :math:`\alpha \in (1, 3]`, there is an
+    exact expression for the maximum likelihood estimation (MLE) to a set of data [1].
+    As such, numerical fitting is only performed when this expression isn't
+    available, ie. when:
+
+    1. The :math:`\alpha` value from this expression is less than 1 or
+    greater than 3, indicating that the true :math:`\alpha` may be outside
+    this range, or,
+    2. There is a finite value for :math:`x_{max}`.
+
+    For discrete power laws, there is an approximate expression for the
+    :math:`\alpha` value from the MLE that is used under the following
+    conditions:
+
+    1. There is no value for :math:`x_{max}`, and
+    2. :math:`x_{min}` is greater than or equal to 6, and
+    3. The value from this expression falls in the range :math:`(1, 3]`.
+
+    You can disable the use of this approximate expression with
+    ``estimate_discrete=False``.
+
+    If you would like to perform numerical fitting after initializing
+    the values with these above expressions --- in case you are worried
+    they aren't good approximations for some particular case --- you can
+    force this with ``force_numerical_fit=True``.
+
+    Accepts all kwargs from ``Distribution`` super class.
+    """
+
+    def __init__(self, estimate_discrete=None, force_numerical_fit=False, pdf_ends_at_xmax=False, **kwargs):
         """
-        A power law distribution with form:
-
-            $$ p(x) ~ x^{-alpha} $$
-
-        The exponent alpha should be positive. For a normalizable distribution
-        on an infinite domain (no xmax), we should have alpha greater than 1.
-
-        Accepts all kwargs from `Distribution` super class.
-
         Parameters
         ----------
-        estimate_discrete : bool
+        estimate_discrete : bool, optional
+            Whether to estimate alpha for discrete distributions using the
+            approximate method described in [1].
+
+            By default, this will be enabled when the error is of order 1%
+            or less: according to the original paper, this is when there is
+            no ``xmax`` and ``xmin <= 6``. Otherwise it will be disabled.
+
+            Set this value to True or False to force the approximation to
+            be used or not.
+
+        force_numerical_fit : bool, optional
+            Whether to force the fitting process to include numerical fitting
+            even if an analytic expression is available. In this case, the
+            result of the analytic expression will be used as the initial
+            guess for the numerical fitting.
+
+            See the documentation on this class for more information on
+            when analytical or numerical fitting is used.
 
         pdf_ends_at_xmax : bool
 
         """
-
         self.parameter_names = ['alpha']
         self.DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3]}
 
-        self.estimate_discrete = estimate_discrete
+        # If estimate_discrete is None, we decied whether to use it based
+        # xmin and xmax values.
+        if estimate_discrete is None:
+            self.estimate_discrete = (self.xmin >= 6) and (self.xmax is None)
+        else:
+            self.estimate_discrete = estimate_discrete
+
         self.pdf_ends_at_xmax = pdf_ends_at_xmax
+        self.force_numerical_fit = force_numerical_fit
 
         Distribution.__init__(self, **kwargs)
 
@@ -1328,15 +1379,16 @@ class Power_Law(Distribution):
         on the data.
 
         For continuous distributions, we use the following value to estimate
-        alpha (see Clauset et al. (2009) [1], Eq. 3.1). In the limit as N goes to infinity,
-        this becomes exact, and generally is a very good estimation even
-        at modest values (~1000) of N.
+        :math:`\alpha` (see Clauset et al. (2009) [1], Eq. 3.1). In the limit as N
+        goes to infinity, this becomes the exact solution to the maximum
+        likelihood estimation problem. Generally this is a very good
+        estimation even at modest values (~1000) of N as well.
 
             $$ \alpha_0 = 1 + N / ( \sum \log (x / x_{min})) $$
 
         For the discrete case, there is no form that is exact in the large
-        N limit, but the following value is a good approximation (see ref
-        [1], Eq. 3.7).
+        N limit, but the following value is a good approximation when
+        there is no ``xmax`` and ``xmin >= 6`` (see ref [1], Eq. 3.7).
 
             $$ \alpha_0 = 1 + N / ( \sum \log (x / (x_{min} - 1/2))) $$
 
@@ -1386,6 +1438,46 @@ class Power_Law(Distribution):
             params["alpha"] = 1
 
         return params
+
+
+    def fit(self, data=None):
+        r"""
+        Fits the parameters of the distribution to the data.
+
+        Overloaded from ``Distribution`` version since we may want to
+        use the analytic expression for the maximum likihood estimation
+        of :math:`\alpha` instead of numerically fitting.
+        """
+        # The generate_initial_parameters() function has already been
+        # called by the time this is called, so the value of self.alpha
+        # will already be set using the appropriate analytical expression.
+
+        # Wherever we don't call Distribution.fit(), we need to call
+        # compute_distance_metrics(), since this is normally done
+        # at the end of the super class fit().
+
+        # If the user has specifically requested that a numerical fit is
+        # performed (using the analytical expressions as initial guesses)
+        # then we just call the super method. The analytical methods are
+        # already used in ``generate_initial_parameters()``, so this will
+        # use those as an initial guess.
+        if self.force_numerical_fit:
+            return Distribution.fit(self, data)
+            
+        # If we want to use the discrete estimation and the initial
+        # guess is within (1, 3], we skip numerical fitting.
+        if self.discrete and self.estimate_discrete and (self.alpha > 1) and (self.alpha <= 3):
+            self.compute_distance_metrics()
+            return
+
+        # If we want to use the continuous estimation and the initial
+        # guess is within  (1, 3], we skip numerical fitting.
+        if not self.discrete and (self.alpha > 1) and (self.alpha <= 3):
+            self.compute_distance_metrics()
+            return
+
+        # Otherwise we run the numerical fitting
+        return Distribution.fit(self, data)
 
 
     @property
@@ -1774,9 +1866,6 @@ class Truncated_Power_Law(Distribution):
 
         Parameters
         ----------
-        estimate_discrete : bool
-
-        pdf_ends_at_xmax : bool
 
         """
 

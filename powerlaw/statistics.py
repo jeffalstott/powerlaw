@@ -254,40 +254,49 @@ def pdf(data, xmin=None, xmax=None, linear_bins=False, bins=None):
         The portion of the data that is within the bin. Length 1 less than
         bin_edges, as it corresponds to the spaces between them.
     """
-    from numpy import logspace, histogram, floor, unique,asarray
-    from math import ceil, log10
-    data = asarray(data)
-    if not xmax:
-        xmax = max(data)
-    if not xmin:
-        xmin = min(data)
+    data = np.asarray(data)
 
-    if xmin<1:  #To compute the pdf also from the data below x=1, the data, xmax and xmin are rescaled dividing them by xmin.
-        xmax2=xmax/xmin
-        xmin2=1
+    # Remove zero values from the data
+    data = data[data > 0]
+    
+    if not xmax:
+        xmax = np.max(data)
+    if not xmin:
+        xmin = np.min(data)
+
+    # To compute the pdf also from the data below x=1, the data, xmax and
+    # xmin are rescaled dividing them by xmin.
+    if xmin < 1:  
+        xmax2 = xmax / xmin
+        xmin2 = 1
+
     else:
-        xmax2=xmax
-        xmin2=xmin
+        xmax2 = xmax
+        xmin2 = xmin
 
     if bins is not None:
         bins = bins
-    elif linear_bins:
-        bins = range(int(xmin2), ceil(xmax2)+1)
-    else:
-        log_min_size = log10(xmin2)
-        log_max_size = log10(xmax2)
-        number_of_bins = ceil((log_max_size-log_min_size)*10)
-        bins = logspace(log_min_size, log_max_size, num=number_of_bins)
-        bins[:-1] = floor(bins[:-1])
-        bins[-1] = ceil(bins[-1])
-        bins = unique(bins)
 
-    if xmin<1: #Needed to include also data x<1 in pdf.
-        hist, edges = histogram(data/xmin, bins, density=True)
-        edges=edges*xmin # transform result back to original
-        hist=hist/xmin # rescale hist, so that np.sum(hist*edges)==1
+    elif linear_bins:
+        bins = range(int(xmin2), int(np.ceil(xmax2))+1)
+
     else:
-        hist, edges = histogram(data, bins, density=True)
+        log_min_size = np.log10(xmin2)
+        log_max_size = np.log10(xmax2)
+        number_of_bins = int(np.ceil((log_max_size - log_min_size)*10))
+
+        bins = np.logspace(log_min_size, log_max_size, num=number_of_bins)
+        bins[:-1] = np.floor(bins[:-1])
+        bins[-1] = np.ceil(bins[-1])
+        bins = np.unique(bins)
+
+    if xmin < 1: #Needed to include also data x<1 in pdf.
+        hist, edges = np.histogram(data/xmin, bins, density=True)
+        edges = edges*xmin # transform result back to original
+        hist = hist/xmin # rescale hist, so that np.sum(hist*edges)==1
+
+    else:
+        hist, edges = np.histogram(data, bins, density=True)
 
     return edges, hist
 

@@ -84,6 +84,10 @@ class Fit(object):
         analytical methods, instead of calculating the fit exactly with
         slow numerical methods. Very accurate with xmin>6
 
+    discrete_approximation : {'round', 'xmax', ...} or int, optional
+        The type of approximation to use in computing parameter values
+        and/or normalization
+
     sigma_threshold : float, optional
         Upper limit on the standard error of the power law fit. Used after
         fitting, when identifying valid xmin values.

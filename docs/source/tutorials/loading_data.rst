@@ -71,11 +71,6 @@ The following datasets are available:
       - Continuous
       - 
 
-    * - weblinks
-      -
-      - Continuous
-      - 
-
     * - terrorism
       -
       - Discrete
@@ -95,5 +90,3 @@ References
 ----------
 
 [1] Newman MEJ (2005) Power laws, Pareto distributions and Zipfs law 46
-
-[2]

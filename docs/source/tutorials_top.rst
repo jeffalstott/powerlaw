@@ -3,7 +3,9 @@ Tutorials
 
 
 .. toctree::
-    :maxdepth: 2
+    :maxdepth: 1
     
-    tutorials/visualization
     tutorials/loading_data
+    tutorials/visualization
+    tutorials/scaling_range
+    tutorials/discrete_continuous
