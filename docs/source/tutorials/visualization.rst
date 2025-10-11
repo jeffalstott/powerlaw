@@ -69,14 +69,17 @@ Let's try it with the ``blackouts`` dataset:
     plt.legend()
     plt.show()
 
-.. subfigure:: AB
+.. subfigure:: ABC
 
     .. image:: ../images/blackouts_pdf.png
 
     .. image:: ../images/blackouts_pdf_linear.png
 
-    PDF for the ``blackouts`` dataset with logarithmic (left) and linear (right)
-    binning.
+    .. image:: ../images/blackouts_pdf_linear_log.png
+
+    PDF for the ``blackouts`` dataset with logarithmic binning on a logarithmic
+    scale (left), linear binning on a linear scale (middle), and linear binning
+    on a logarithmic scale (right).
 
 The ``blackouts`` data shows a particularly severe example of why linear
 binning can hurt visualization. The sparsity of the data leads individual
@@ -107,8 +110,7 @@ all three distributions. The theoretical PDF, CDF, and CCDFs of the constituent
     # No need to pass the data since the Fit already has it
     fit.plot_pdf(label='PDF')
 
-    # Plot some fits
-    fit.power_law.plot_pdf(linestyle='--', label='Power law fit')
+    # Plot some fits fit.power_law.plot_pdf(linestyle='--', label='Power law fit')
     fit.exponential.plot_pdf(linestyle='--', label='Exponential fit')
 
     ...

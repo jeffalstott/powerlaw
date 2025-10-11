@@ -97,4 +97,5 @@ def plot_test_datasets():
         ax.set_title(f'{dataset_names[i]}\n$N = {len(data)}$')
 
     fig.tight_layout()
-    plt.show()
+
+    return fig

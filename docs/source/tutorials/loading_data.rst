@@ -30,7 +30,8 @@ have your own data, you can load any of the test datasets using the
     data = powerlaw.load_test_dataset('blackouts')
 
 
-The following datasets are available:
+The datasets listed below are available; this information can be obtained
+using :meth:`powerlaw.print_test_datasets`:
 
 .. list-table:: Available test datasets
     :widths: 10 40 8 5
@@ -85,6 +86,10 @@ The following datasets are available:
 
     Most of these test files were copied from ``plfit`` which were in turn
     copied from ``agpy``, so I'm not sure of the original source.
+
+.. figure:: ../images/test_datasets.png
+
+    PDF for all of the test datasets, generated with :meth:`powerlaw.plot_test_datasets`.
 
 References
 ----------

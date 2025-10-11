@@ -36,7 +36,10 @@ class Distribution(object):
 
         Various approximations can be employed when there isn't an exact
         (or even approximate) expression for the PDF or CDF in the 
-        discrete case. See `discrete_approximation` for more information.
+        discrete case. See ``discrete_normalization`` for more information.
+
+        Some distributions have approximation expressions for the parameters
+        and/or RNG in discrete cases as well; see ``estimate_discrete``.
 
     data : list or array, optional
         The data to which to fit the distribution. If provided, the fit will
@@ -90,12 +93,15 @@ class Distribution(object):
         parameters; for simple bounds on parameter values, use of
         `parameter_ranges` is preferred.
 
-    discrete_approximation : "round", "xmax" or int, optional
-        Approximation method to apply for a discrete distribution in the
-        case that there is no analytical expression available.
+    discrete_normalization : {"round", "sum"}, optional
+        Approximation method to use in calculating the PDF (especially the
+        PDF normalization constant) for a discrete distribution in the case
+        that there is no analytical expression available.
 
-        "round" sums the probability mass from `x-0.5` to `x+0.5` for each
+        ``"round"`` uses the probability mass from `x-0.5` to `x+0.5` for each
         data point.
+
+        ``"sum"`` simply sums the 
 
         The other option is to numerically normalize the probability
         distribution by summing over each x from 1 to N. If `'xmax'`, then
@@ -120,7 +126,7 @@ class Distribution(object):
                  parameters=None,
                  parameter_ranges=None,
                  parameter_constraints=None,
-                 discrete_approximation='round',
+                 discrete_normalization='round',
                  parent_Fit=None,
                  verbose=1,
                  **kwargs):
@@ -131,7 +137,7 @@ class Distribution(object):
         self.xmax = xmax
         self.discrete = discrete
         self.fit_method = fit_method
-        self.discrete_approximation = discrete_approximation
+        self.discrete_normalization = discrete_normalization
 
         self.data = data
 
@@ -490,9 +496,9 @@ class Distribution(object):
             con_dict = {'type': 'eq', 'fun': parameter_constraints}
             constraint_dict_list = [con_dict]
 
-        # If we have none, we use None
+        # If we have none, we use an empty list
         elif parameter_constraints is None:
-            constraint_dict_list = None
+            constraint_dict_list = []
 
         # Otherwise raise an error
         else:
@@ -519,7 +525,6 @@ class Distribution(object):
             data used to initialize the class.
 
         """
-        print('numerical fitting')
         # The passed data takes precedence, but otherwise we use the data
         # stored in the class instance.
         if not hasattr(data, '__iter__'):
@@ -833,6 +838,9 @@ class Distribution(object):
 
         n = len(data)
 
+        if n == 0:
+            raise Exception('No data points in defined range of the distribution.')
+
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
             return np.tile(10**sys.float_info.min_10_exp, n)
@@ -897,6 +905,9 @@ class Distribution(object):
 
         n = len(data)
 
+        if n == 0:
+            raise Exception('No data points in defined range of the distribution.')
+
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
             return np.tile(10**sys.float_info.min_10_exp, n)
@@ -910,18 +921,18 @@ class Distribution(object):
 
             likelihoods = f*C
 
+        # For discrete cases, it's a little more tricky since we will
+        # have to approximate the normalization factor.
         else:
-            # For discrete cases, it's a little more tricky since we will
-            # have to approximate the normalization factor.
+            # If we have an explicit expression for the discrete
+            # normalization, we should of course use that.
             if self._pdf_discrete_normalizer:
-                # If we have an explicit expression for the discrete
-                # normalization, we should of course use that.
                 f = self._pdf_base_function(data)
                 C = self._pdf_discrete_normalizer
 
                 likelihoods = f*C
 
-            elif self.discrete_approximation == 'round':
+            elif self.discrete_normalization == 'round':
                 # If we want to approximate by rounding values, we essentially
                 # take a discretized derivative of the cumulative distribution
                 # function.
@@ -941,26 +952,34 @@ class Distribution(object):
                 if self.xmax:
                     self.xmax += 0.5
 
-                # Clean data for invalid values before handing to cdf, which will purge them
-                #lower_data[lower_data<self.xmin] +=.5
-                #if self.xmax:
-                #    upper_data[upper_data>self.xmax] -=.5
                 likelihoods = self.cdf(upper_data) - self.cdf(lower_data)
 
                 self.xmin += 0.5
                 if self.xmax:
                     self.xmax -= 0.5
-            else:
+
+            elif self.discrete_normalization == 'sum':
                 # Otherwise, we just normalize numerically by summing the
                 # PDF
-                if self.discrete_approximation == 'xmax':
+
+                # There used to be the option to pass a specific upper_limit
+                # value in the discrete_normalization keyword, but I don't
+                # think that is actually useful. Passed values above xmax
+                # wouldn't be useful since we don't have any data there, 
+                # and values below xmax would be confusing since there is
+                # already a well-defined upper limit here: xmax.
+                if self.xmax:
                     upper_limit = self.xmax
                 else:
-                    upper_limit = self.discrete_approximation
+                    upper_limit = np.max(self.data)
 
+                # Compute the pdf for all possible values, ie. assuming
+                # we have perfected sampled our distribution.
                 X = np.arange(self.xmin, upper_limit+1)
                 PDF = self._pdf_base_function(X)
 
+                # Then normalize using the 'perfect' distribution, but
+                # only take PDF values where we actually have data.
                 PDF = (PDF / np.sum(PDF)).astype(float)
                 likelihoods = PDF[(data - self.xmin).astype(int)]
 
@@ -1011,24 +1030,36 @@ class Distribution(object):
 
     def in_range(self):
         """
-        Whether the current parameters (`self.parameters`) of the
+        Whether the current parameters (``self.parameters``) of the
         distribution are within the range of valid parameters (defined by
-        `self.parameter_ranges`).
+        ``self.parameter_ranges``) and satisfy any constraints provided
+        (defined by ``self.parameter_constraints``)
 
         Returns
         -------
         result : bool
-            True if all parameters (defined by `self.parameter_names`) are
-            within the ranges specified by `self.parameter_ranges`.
+            True if all parameters are within the specified ranges and all
+            constraints are satisfied.
         """
         # Final result of whether all of the parameters are in range
         result = True
 
+        # Check if parameters are in range
         for p in self.parameter_names:
             if self.parameter_ranges[p][0] is not None:
                 result *= getattr(self, p) > self.parameter_ranges[p][0]
             if self.parameter_ranges[p][1] is not None:
                 result *= getattr(self, p) < self.parameter_ranges[p][1]
+
+        # Check if constraints are satisfied.
+        for con in self.parameter_constraints:
+            # For equality constraints, we make sure the value is zero
+            if con["type"] == 'eq':
+                result *= con["fun"](list(self.parameters.values())) == 0
+
+            # For inequality, we make sure the value is non negative
+            else:
+                result *= con["fun"](list(self.parameters.values())) > 0
 
         return bool(result)
 
@@ -1222,66 +1253,150 @@ class Distribution(object):
         return ax
 
 
-    def generate_random(self,n=1, estimate_discrete=None):
+    def generate_random(self, size=1, estimate_discrete=None):
         """
         Generates random numbers from the theoretical probability distribution.
-        If xmax is present, it is currently ignored.
+
+        This will follow the theoretical distribution, including upper
+        and lower limits defined by ``xmin`` or ``xmax``. For example, if
+        this function is called from a distribution with a finite value of
+        ``xmax``, the generated values will be less than that value. If
+        no value is given for ``xmax``, random values will have no upper
+        limit.
 
         Parameters
         ----------
-        n : int or float
-            The number of random numbers to generate
-        estimate_discrete : boolean
+        size : tuple or int, optional
+            The number of random numbers to generate.
+
+            If a tuple, will be taken as the shape of the array to generate
+            where each value is randomly generated according to the theoretical
+            distribution.
+
+        estimate_discrete : bool, optional
             For discrete distributions, whether to use a faster approximation of
-            the random number generator. If None, attempts to inherit
-            the estimate_discrete behavior used for fitting from the Distribution
-            object or the parent Fit object, if present. Approximations only
-            exist for some distributions (namely the power law). If an
-            approximation does not exist an estimate_discrete setting of True
-            will not be inherited.
+            the random number generator.
+
+            If ``None``, attempts to inherit the estimate_discrete behavior used
+            for fitting from the ``Distribution`` object or the parent ``Fit``
+            object, if present. Approximations only exist for some
+            distributions (namely the power law). If an approximation does
+            not exist, an ``estimate_discrete=True`` setting will not be inherited.
 
         Returns
         -------
         r : array
-            Random numbers drawn from the distribution
+            Random numbers drawn from the distribution with shape equal
+            to ``size``.
         """
-        # TODO: Clean this up
-        from numpy.random import rand
-        from numpy import array
-        r = rand(n)
-        if not self.discrete:
-            x = self._generate_random_continuous(r)
+        # For generating uniform random numbers from 0 to ~1
+        # If we have an xmax, we shouldn't use 1 as the upper bound, but
+        # cdf(xmax). Note that this only works for when we use the continuous
+        # method (either continuous data or discrete data but we don't use
+        # the approximate discrete method). For the approximated discrete
+        # case, we have to calculate a different upper limit (see below).
+
+        if self.xmax:
+            upper_bound = self._cdf_base_function(self.xmax)
         else:
-            if (estimate_discrete and not hasattr(self, '_generate_random_discrete_estimate') ):
-                raise AttributeError("This distribution does not have an "
-                                     "estimation of the discrete form for generating simulated "
-                                     "data. Try the exact form with estimate_discrete=False.")
+            upper_bound = 1
+
+        # For continuous random numbers we usually don't need to do any
+        # approximations, and can just transform according to the specific
+        # distribution.
+        if not self.discrete:
+            uniform_r = np.random.uniform(0, upper_bound, size=size)
+            r = self._generate_random_continuous(uniform_r)
+
+        # For discrete distributions, we usually have to make some
+        # approximation.
+        else:
+            # Make sure that this distribution supports approximating the
+            # continuous distribution with some discrete scheme.
+            if estimate_discrete and not hasattr(self, '_generate_random_discrete_estimate'):
+                raise AttributeError("This distribution does not have an estimation of the discrete form for \
+                                     generating simulated data. Try the exact form with estimate_discrete=False.")
+
+            # If no value for estimate discrete is given, we should decide
+            # based on whether the distribution is first able to do this
+            # at all, then whether the class has already been passed a
+            # value on creation.
             if estimate_discrete is None:
+                
+                # We can't estimate discrete is there isn't a function
+                # for it.
                 if not hasattr(self, '_generate_random_discrete_estimate'):
                     estimate_discrete = False
+
+                # Check the value of self.estimate_discrete.
                 elif hasattr(self, 'estimate_discrete'):
                     estimate_discrete = self.estimate_discrete
+
+                # Check the value of estimate_discrete for the parent object.
                 elif self.parent_Fit:
                     estimate_discrete = self.parent_Fit.estimate_discrete
+
+                # If none of those worked, don't estimate.
                 else:
                     estimate_discrete = False
+
+
+            # Use the approximation method if it's available and
+            # desired.
             if estimate_discrete:
-                x = self._generate_random_discrete_estimate(r)
+                # Note that if we use the approximate discrete method, the
+                # upper bound is different, since we are using a different
+                # function than _cdf_base_function.
+                # So we first do a search to find the maximum value, ie.
+                # the r value such that _generate_random_discrete_estimate(r) = xmax
+                if self.xmax:
+                    upper_bound = bisect_map(mn=0, mx=1,
+                                             function=self._generate_random_discrete_estimate,
+                                             target=self.xmax - 1, # -1 to make sure we always generate values under xmax
+                                             tol=1e-8)
+
+                uniform_r = np.random.uniform(0, upper_bound, size=size)
+
+                r = np.array(self._generate_random_discrete_estimate(uniform_r), dtype=np.int64)
+
             else:
-                x = array([self._double_search_discrete(R) for R in r],
-                          dtype='float')
-        return x
+                # For each of the uniform values (r), we do the
+                # inverse search problem to find the specific value of x
+                # where the ccdf is equal to that value of r. The x value
+                # is then the random value we return.
+                uniform_r = np.random.uniform(0, upper_bound, size=size)
+                r = np.array([self._double_search_discrete(R) for R in uniform_r.flatten()], dtype=np.int64)
+
+                # Now reshape
+                r = r.reshape(size)
+
+        return r
+
 
     def _double_search_discrete(self, r):
-        #Find a range from x1 to x2 that our random probability fits between
+        """
+        Perform the inverse search problem of locating the x value
+        such that cdf(x) = 1 - r.
+        """
+        # Find a range [x1, x2] that contains our random probability r
         x2 = int(self.xmin)
         while self.ccdf(data=[x2]) >= (1 - r):
             x1 = x2
             x2 = 2*x1
-        #Use binary search within that range to find the exact answer, up to
-        #the limit of being between two integers.
-        x = bisect_map(x1, x2, self.ccdf, 1-r)
-        return x
+
+            # Make sure to clip the bound by xmax
+            if self.xmax and x2 >= self.xmax:
+                x2 = min(x2, self.xmax)
+                # And end, since we can't go higher anymore
+                break
+
+        # Use binary search within that range to find the integer that gives
+        # a ccdf value closest to the desired r (or rather, 1 - r).
+        # up to the limit of being between two integers.
+        func = lambda x: self.ccdf(data=[x])[0]
+        x = bisect_map(mn=x1, mx=x2, function=func, target=1-r, tol=1)
+
+        return int(np.around(x))
 
 
 class Power_Law(Distribution):
@@ -1463,16 +1578,23 @@ class Power_Law(Distribution):
         # use those as an initial guess.
         if self.force_numerical_fit:
             return Distribution.fit(self, data)
-            
+           
+        # The condition for the below two to be used is that the alpha
+        # value (the true one) is within (1, 3]. That being said, the
+        # estimations in generate_initial_parameters will give alpha
+        # values of [1, 1.15] for power laws that actually have an alpha
+        # < 1. So we should run the numerical fitting just in case even
+        # if the alpha is above one, up to about 1.2 or so.
+
         # If we want to use the discrete estimation and the initial
-        # guess is within (1, 3], we skip numerical fitting.
-        if self.discrete and self.estimate_discrete and (self.alpha > 1) and (self.alpha <= 3):
+        # guess is within (1.3, 3], we skip numerical fitting.
+        if self.discrete and self.estimate_discrete and (self.alpha > 1.3) and (self.alpha <= 3):
             self.compute_distance_metrics()
             return
 
         # If we want to use the continuous estimation and the initial
-        # guess is within  (1, 3], we skip numerical fitting.
-        if not self.discrete and (self.alpha > 1) and (self.alpha <= 3):
+        # guess is within  (1.3, 3], we skip numerical fitting.
+        if not self.discrete and (self.alpha > 1.3) and (self.alpha <= 3):
             self.compute_distance_metrics()
             return
 
@@ -1542,15 +1664,14 @@ class Power_Law(Distribution):
         C = 1.0/C
         return C
 
-
+    # TODO: this doesn't work for alpha <= 1
     def _generate_random_continuous(self, r):
-            return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
+        return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
 
 
     def _generate_random_discrete_estimate(self, r):
-            x = (self.xmin - 0.5) * (1 - r) ** (-1/(self.alpha - 1)) + 0.5
-            from numpy import around
-            return around(x)
+        x = (self.xmin - 0.5) * (1 - r) ** (-1/(self.alpha - 1)) + 0.5
+        return np.around(x)
 
 
 class Exponential(Distribution):
@@ -2103,6 +2224,7 @@ class Lognormal(Distribution):
         -------
         probabilities : array
         """
+        # TODO clean this up
         if data is None and self.parent_Fit:
             data = self.parent_Fit.data
 
@@ -2125,13 +2247,17 @@ class Lognormal(Distribution):
                 f = self._pdf_base_function(data)
                 C = self._pdf_discrete_normalizer
                 likelihoods = f*C
-            elif self.discrete_approximation=='round':
+
+            # This is the only part I've cleaned up so far since I changed
+            # the name of discrete_approximation to discrete_normalization.
+            elif self.discrete_normalization == 'round':
                 likelihoods = self._round_discrete_approx(data)
-            else:
-                if self.discrete_approximation=='xmax':
+            elif self.discrete_normalization == 'sum':
+                if self.xmax:
                     upper_limit = self.xmax
                 else:
-                    upper_limit = self.discrete_approximation
+                    upper_limit = np.max(self.data)
+
 #            from mpmath import exp
                 from numpy import arange
                 X = arange(self.xmin, upper_limit+1)
