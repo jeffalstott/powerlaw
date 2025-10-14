@@ -13,4 +13,6 @@ Tutorials
     tutorials/ranges_and_constraints
     tutorials/comparing_distributions
     tutorials/generating_data
-    tutorials/multiple_fits
+    tutorials/advanced_topics
+    tutorials/warnings
+    tutorials/new_distributions

@@ -23,13 +23,20 @@ class Distribution(object):
 
     Parameters
     ----------
-    xmin : int or float, optional
-        The data value beyond which distributions should be fitted. If
-        `None` an optimal one will be calculated by performing many fits
-        and choosing the value that leads to the best fit.
+    data : list or array, optional
+        The data to which to fit the distribution. If provided, the fit will
+        be created at initialization.
+
+    xmin : int or float
+        The data value beyond which the distribution is defined.
+
+        Required for any distribution.
 
     xmax : int or float, optional
-        The maximum value of the fitted distributions.
+        The upper bound of the distribution.
+
+        If not provided, the distribution will be assumed to be unbounded
+        on the upper side.
 
     discrete : boolean, optional
         Whether the distribution is discrete (integers).
@@ -41,26 +48,26 @@ class Distribution(object):
         Some distributions have approximation expressions for the parameters
         and/or RNG in discrete cases as well; see ``estimate_discrete``.
 
-    data : list or array, optional
-        The data to which to fit the distribution. If provided, the fit will
-        be created at initialization.
-
     fit_method : {"likelihood", "ks"}, optional
-        Method for fitting the distribution. "likelihood" is maximum Likelihood
-        estimation. "ks" is minimial distance estimation using the
+        Method for fitting the distribution. ``"likelihood"`` is maximum likelihood
+        estimation. ``"ks"`` is minimial distance estimation using the
         Kolmogorov-Smirnov test.
 
-    parameters : tuple or list, optional
+    parameters : array_like or dict, optional
         The parameters of the distribution. If data is given, these will
         be used as the initial parameters for fitting; otherwise, they
         will be taken as the final parameters for the distribution.
 
+        Parameters can also be passed as keywords. Valid keywords for each
+        distribution can be found in the ``parameter_names`` property of
+        each distribution.
+
     parameter_ranges : dict, optional
         Dictionary of valid parameter ranges for fitting. Formatted as a
-        dictionary of parameter names (eg. 'alpha') and tuples/lists/etc.
-        of their lower and upper limits (eg. (1.5, 2.5), (None, .1)).
+        dictionary of parameter names (eg. ``'alpha'``) and tuples/lists/etc.
+        of their lower and upper limits (eg. ``(1.5, 2.5)``, ``(None, .1)``).
 
-        The use of `None` is preferred over `np.inf` to indicate an
+        The use of ``None`` is preferred over ``np.inf`` to indicate an
         unbounded limit.
 
     parameter_constraints : function, list of functions, dict, optional
@@ -69,8 +76,10 @@ class Distribution(object):
         with all of the parameter values. The return value of the function
         should be 0 when the constraint is satisfied.
 
-        For example, if I want to enforce that `param1` is greater than
-        `param2`, I would define my function:
+        For example, if I want to enforce that ``param1`` is greater than
+        ``param2``, I would define my function:
+
+        .. code-block::
 
             def constraint(params):
                 param1, param2 = params
@@ -78,7 +87,7 @@ class Distribution(object):
 
         For a single constraint, the function can be directly passed,
         or for multiple constraints, a list of functions can be passed.
-        Since this is sent to `scipy.optimize.minimize(constraints=...)`,
+        Since this is sent to ``scipy.optimize.minimize(constraints=...)``,
         you can also provide as a dictionary as described in their
         documentation:
 
@@ -91,38 +100,38 @@ class Distribution(object):
 
         Constraints are intended to be used only for relations between
         parameters; for simple bounds on parameter values, use of
-        `parameter_ranges` is preferred.
+        ``parameter_ranges`` is preferred.
 
     discrete_normalization : {"round", "sum"}, optional
         Approximation method to use in calculating the PDF (especially the
         PDF normalization constant) for a discrete distribution in the case
         that there is no analytical expression available.
 
-        ``"round"`` uses the probability mass from `x-0.5` to `x+0.5` for each
-        data point.
+        ``"round"`` uses the probability mass in the region ``[x - 0.5, x + 0.5]`` for each
+        data point ``x``.
 
-        ``"sum"`` simply sums the 
-
-        The other option is to numerically normalize the probability
-        distribution by summing over each x from 1 to N. If `'xmax'`, then
-        N is set to be `xmax`; otherwise, the value of N should be passed
-        in this kwarg.
+        ``"sum"`` simply sums the PDF over the defined range to compute the
+        normalization.
 
     parent_Fit : Fit object, optional
         A Fit object from which to use data, if it exists.
 
-    verbose : {0, 1, 2}, bool
-        Whether to print debug and status information. `0` or `False` means
-        print no information (including no warnings), `1` means print
-        only warnings, and `2` means print warnings and status messages.
+    verbose : {0, 1, 2}, bool, optional
+        Whether to print debug and status information. ``0`` or ``False`` means
+        print no information (including no warnings), ``1`` or ``True`` means print
+        only warnings, and ``2`` means print warnings and status messages.
+
+    kwargs :
+        Parameter values for specific distributions can be passed as
+        keyword arguments.
     """
 
     def __init__(self,
+                 data=None,
                  xmin=None,
                  xmax=None,
                  discrete=False,
                  fit_method='likelihood',
-                 data=None,
                  parameters=None,
                  parameter_ranges=None,
                  parameter_constraints=None,
@@ -133,13 +142,33 @@ class Distribution(object):
 
         self.verbose = verbose
 
-        self.xmin = xmin
-        self.xmax = xmax
-        self.discrete = discrete
         self.fit_method = fit_method
+        self.discrete = discrete
         self.discrete_normalization = discrete_normalization
 
         self.data = data
+
+        # If our data is only integer values, but discrete is not true
+        # or vice versa, give a warning
+        if hasattr(self.data, '__iter__') and self.discrete and any(data != np.asarray(data, dtype=np.int64)):
+            warnings.warn('discrete=True but data does not exclusively contain integer values. Casting to integer...')
+
+        elif hasattr(self.data, '__iter__') and (not self.discrete) and all(data == np.asarray(data, dtype=np.int64)):
+            warnings.warn('discrete=False but data exclusively contains integer values. Consider using discrete=True.')
+
+        # We need an xmin, so we just set it to the minimum value of the
+        # data if we don't get a specific value
+        if not xmin:
+            if hasattr(self.data, '__iter__'):
+                self.xmin = np.min(data)
+
+            # If we don't have data, then we need to raise an error.
+            else:
+                raise ValueError('No xmin provided, and no data to infer value from. Provide an explicit value for xmin!')
+
+        else:
+            self.xmin = xmin
+        self.xmax = xmax
 
         # When defining a subclass of this one, you should define this
         # list in the constructor 
@@ -159,7 +188,9 @@ class Distribution(object):
             self.data = self.parent_Fit.data
 
         # Setup the initial parameters and things
-        self.initialize_parameters(parameters)
+        # We have to pass the kwargs here because parameters might be
+        # directly passed as keywords.
+        self.initialize_parameters(parameters, **kwargs)
 
         # Setup the parameter ranges
         # This sets the variable `self.parameter_ranges`
@@ -167,6 +198,9 @@ class Distribution(object):
 
         # Setup parameter contraints
         self.initialize_parameter_constraints(parameter_constraints)
+
+        # This will be set in fit() to True if the fitting failed.
+        self.noise_flag = False
 
         # Fit if we have data
         if hasattr(self.data, '__iter__'):
@@ -180,7 +214,7 @@ class Distribution(object):
     def debug_parameter_names(self):
         """
         This is solely a debug function that sets up variables in the
-        old format (from v1.5, eg. self.parameter1).
+        old format (from v1.5, eg. ``self.parameter1``).
 
         It should be removed in a future version along with an update to
         the test cases once it is convincing that the refactoring didn't
@@ -201,17 +235,18 @@ class Distribution(object):
             setattr(self, f'parameter{i+1}', getattr(self, self.parameter_names[i]))
 
 
-    def initialize_parameters(self, initial_parameters=None):
+    def initialize_parameters(self, initial_parameters=None, **kwargs):
         """
-        This function sets up the parameters for the distribution. If
-        parameters are passed, they will try to be parsed, otherwise
+        Set up the parameters for the distribution.
+
+        If parameters are passed, they will try to be parsed, otherwise
         initial guesses for parameters specific to each distribution will
         be used.
 
-        Note that there is also a function `set_parameters()` in this class.
+        Note that there is also a function ``set_parameters()`` in this class.
         The primary difference between the two is that this function allows
         the possibility of generating initial guesses of parameters
-        (using the `generate_initial_parameters()` function), whereas
+        (using the ``generate_initial_parameters()`` function), whereas
         the other method requires that parameter values are actually
         passed. Technically you could just use this one, but I figured
         it was more clear to have separate functions.
@@ -224,46 +259,71 @@ class Distribution(object):
             parameters.
 
             Can also be given as a list that is exactly the length of
-            `self.parameter_names`, and then the values in that list will
+            ``self.parameter_names``, and then the values in that list will
             be assumed as the initial values for the parameters in the
             same order as the former list.
 
             If not provided, the values will be initialized using
-            `self.generate_initial_parameters()` which will try its best
+            ``self.generate_initial_parameters()`` which will try its best
             to give a reasonable start based on the data.
+
+        kwargs : 
+            Parameters can be passed as direct keyword arguments as well.
         """
-        # If we were given a dictionary of initial parameters, we use
-        # those values as is.
-        if type(initial_parameters) == dict:
-            assert all([k in self.parameter_names for k in initial_parameters.keys()]), f'Invalid initial parameters given: {initial_parameters}'
-            initial_parameters_dict = initial_parameters
-
-        elif hasattr(initial_parameters, '__iter__') and len(initial_parameters) == len(self.parameter_names):
-            # If we are given a list of initial parameters, we assume
-            # the order of them is the same as the order of self.parameter_names.
-            initial_parameters_dict = dict(zip(self.parameter_names, initial_parameters))
-
-        elif initial_parameters is None:
+        # Since the user may only specify a few parameters (not required to
+        # set all of them, we should start with the default values).
+        # This is only possible when we have data though
+        data = self.data
+        if hasattr(data, '__iter__'):
             # If we aren't given any initial parameters, try to generate
             # them from the data.
-
-            data = self.data
 
             # Make sure that we trim our data to the defined range for
             # this distribution.
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
-            # If we still don't have data, we should raise an error since
-            # a distribution with a prescribed exponent should never reach here.
-            if not hasattr(data, '__iter__'):
-                raise Exception('Trying to generate parameters without data!')
-
             initial_parameters_dict = self.generate_initial_parameters(data)
+
+        else:
+            initial_parameters_dict = dict(zip(self.parameter_names, [None]*len(self.parameter_names)))
+
+        # If we were given a dictionary of initial parameters, we use
+        # those values as is.
+        if type(initial_parameters) == dict:
+            # Only choose the parameters that are actually for this class
+            # (since we may be given parameters from a fit object that
+            # contains information for other distributions).
+            for k,v in initial_parameters.items():
+                if k in self.parameter_names:
+                    initial_parameters_dict[k] = v
+
+        elif hasattr(initial_parameters, '__iter__') and len(initial_parameters) == len(self.parameter_names):
+            # If we are given a list of initial parameters, we assume
+            # the order of them is the same as the order of self.parameter_names.
+            initial_parameters_dict.update(dict(zip(self.parameter_names, initial_parameters)))
+
+        elif initial_parameters is None:
+            # If initial_parameters is None, it's possible that the user
+            # passed the parameter values through direct keywords.
+            for kw in kwargs.keys():
+                if kw in self.parameter_names:
+                    initial_parameters_dict[kw] = kwargs[kw]
+
+            # It's also possible they just want to use the generated values
+            # from generate_initial_parameters, in which case we do nothing
+            # here.
 
         else:
             # Otherwise, something must be wrong with the initial parameters
             # provided, so we raise an error.
             raise Exception(f'Invalid value provided for initial parameters: {initial_parameters}.')
+
+        # Let's make sure that we got some values, since it's possible we
+        # could get to this point by passing no parameters and having
+        # no data.
+        if any([value is None for value in initial_parameters_dict.values()]):
+            raise Exception('Not enough information provided to assign parameters! Make sure to specific parameter \
+                            values or pass data to generate them.')
 
         # Actually set the values
         for p in self.parameter_names:
@@ -276,11 +336,12 @@ class Distribution(object):
 
     def set_parameters(self, params):
         """
-        This function sets the parameters for the distribution.
+        Set the parameters for the distribution.
 
-        Intended to be called during fitting, as opposed to `initialize_parameters()`
-        which is designed to be called during construction. See documentation
-        for this other function for more information.
+        Intended to be called during fitting, as opposed to
+        ``initialize_parameters()`` which is designed to be called during
+        construction. See documentation for this other function for more
+        information.
 
         You could also manually set the parameters with something like:
 
@@ -298,7 +359,7 @@ class Distribution(object):
             parameters.
 
             Can also be given as a list that is exactly the length of
-            `self.parameter_names`, and then the values in that list will
+            ``self.parameter_names``, and then the values in that list will
             be assumed as the initial values for the parameters in the
             same order as the former list.
         """
@@ -325,26 +386,20 @@ class Distribution(object):
     @property
     def parameters(self):
         """
-        A dictionary of the parameters of the distribution and their
-        values.
-
-        Returns
-        ----------
-        params : dict
-            A dictionary in which each key corresponds to a parameter
-            name and the value corresponds to the initial value of that
-            parameters.
+        A dictionary in which each key corresponds to a parameter
+        name and the value corresponds to the initial value of that
+        parameters.
         """
         return dict(zip(self.parameter_names, [getattr(self, p) for p in self.parameter_names]))
 
 
     def initialize_parameter_ranges(self, ranges=None):
         """
-        This function sets up the ranges for parameters for the distribution.
+        Set up the ranges for parameters for the distribution.
 
         If not provided, the default range for each parameter will be
         used; these are specific to each individual distribution. For
-        more information, see the variable `DEFAULT_PARAMETER_RANGES` in
+        more information, see the variable ``DEFAULT_PARAMETER_RANGES`` in
         children of this class.
 
         Parameters
@@ -353,26 +408,33 @@ class Distribution(object):
             A dictionary in which each key corresponds to a parameter
             name and the value corresponds to the lower and upper bound
             for that parameter (in the format of a length 2 tuple/list/array).
+            Ranges can be provided for only some parameters.
 
             Can also be given as a list that is exactly the length of
-            `self.parameter_names`, and then the values in that list will
+            ``self.parameter_names``, and then the values in that list will
             be assumed as the lower and upper bound for the parameter
-            with that same index in `self.parameter_names`.
+            with that same index in ``self.parameter_names``. As such,
+            ranges must be given for all parameters if given as a list.
 
             If not provided, the values will be initialized using
-            `self.DEFAULT_PARAMETER_RANGES`.
+            ``self.DEFAULT_PARAMETER_RANGES``.
         """
         # We start with the default range, since it's possible that the
         # user has passed a range for only one or two parameters instead
         # of all of them. In that case, the parameters that haven't been
-        # specified should follow their default range.
-        ranges_dict = self.DEFAULT_PARAMETER_RANGES
+        # specified should follow their default range. Also we make a copy
+        # so we don't change the original
+        ranges_dict = dict(self.DEFAULT_PARAMETER_RANGES)
 
         # If we were given a dictionary of ranges, we use
         # those values as is.
         if type(ranges) == dict:
-            assert all([k in self.parameter_names for k in ranges.keys()]), f'Invalid parameter ranges given: {ranges}'
-            ranges_dict.update(ranges)
+            # Only choose the parameter ranges that are actually for this class
+            # (since we may be given parameters from a fit object that
+            # contains information for other distributions).
+            for k,v in ranges.items():
+                if k in self.parameter_names:
+                    ranges_dict[k] = v
 
         # Have to make sure that ranges is a 2d list, which involves checking
         # that it has __iter__, it has at least one entry, and it's entry
@@ -408,7 +470,7 @@ class Distribution(object):
         -------
         params : dict
             A dictionary where the keys are the parameter names and the values
-            are the initial values of that parameter.
+            are the initial values of each parameter.
         """
         # Of course remove this line when you reimplement this function.
         raise NotImplementedError('generate_initial_parameters() not implemented')
@@ -430,6 +492,12 @@ class Distribution(object):
         Parse and save constraint functions for parameters to be used
         during the fitting process.
 
+        The constraints are used in ``scipy.optimize.minimize()`` and so
+        the end result follows the requirements for dictionary-type
+        constraints described here:
+
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+
         Parameters
         ----------
         parameter_constraints : function, list of functions, or dict
@@ -438,8 +506,10 @@ class Distribution(object):
             with all of the parameter values. The return value of the function
             should be 0 when the constraint is satisfied.
 
-            For example, if I want to enforce that `param1` is greater than
-            `param2`, I would define my function:
+            For example, if I want to enforce that ``param1`` is greater than
+            ``param2``, I would define my function:
+
+            .. code-block::
 
                 def constraint(params):
                     param1, param2 = params
@@ -447,11 +517,9 @@ class Distribution(object):
 
             For a single constraint, the function can be directly passed,
             or for multiple constraints, a list of functions can be passed.
-            Since this is sent to `scipy.optimize.minimize(constraints=...)`,
+            Since this is sent to ``scipy.optimize.minimize(constraints=...)``,
             you can also provide a dictionary or list of dictionaries as described
-            in their documentation:
-
-            https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+            in their documentation linked above.
 
             Note that unless constraints are passed as a dictionary, all functions
             are assumed to be 'equality' constraints. If you need inequality
@@ -510,12 +578,12 @@ class Distribution(object):
 
     def fit(self, data=None):
         """
-        Fits the parameters of the distribution to the data.
+        Numerically fits the parameters of the distribution to the data.
 
         Fitting is performed by minimizing either the loglikelihood or
-        KS distance (depending on the value of `Distribution.fit_method`).
+        KS distance (depending on the value of ``Distribution.fit_method``).
 
-        Bounds defined in `self.parameter_ranges` are used explicitly during
+        Bounds defined in ``self.parameter_ranges`` are used explicitly during
         the minimization process.
 
         Parameters
@@ -529,6 +597,10 @@ class Distribution(object):
         # stored in the class instance.
         if not hasattr(data, '__iter__'):
             data = self.data
+
+        # If we still don't have data, raise an error
+        if not hasattr(data, '__iter__'):
+            raise ValueError(f'No data to fit distribution ({self.name}) to!')
 
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
@@ -590,7 +662,7 @@ class Distribution(object):
         # later on.
         #methods = ["Powell", "Nelder-Mead"]
 
-        if self.parameter_constraints:
+        if hasattr(self.parameter_constraints, '__iter__') and len(self.parameter_constraints) > 0:
             methods = ["COBYLA"]
         else:
             methods = ['Nelder-Mead']
@@ -633,10 +705,10 @@ class Distribution(object):
         # Flag as noisy (not fit) if the parameters aren't in range
         # If you switch to the old optimization method, make sure to
         # comment out the second term in this expression.
-        self.noise_flag = (not self.in_range())# or (not result.success)
+        self.noise_flag = (not self.in_range()) or (not result.success)
   
         if self.noise_flag and self.verbose:
-            warnings.warn("No valid fits found.")
+            warnings.warn(f"No valid fits found for distribution {self.name}.")
 
         # Recompute goodness of fit metrics
         self.loglikelihood = np.sum(self.loglikelihoods(data))
@@ -676,7 +748,7 @@ class Distribution(object):
         Return the Kolmogorov-Smirnov distance D.
 
         Included for backwards compatability; this method has been
-        renamed `compute_distance_metrics()` because it compute several
+        renamed ``compute_distance_metrics()`` because it computes several
         distance metrics (including KS).
         """
         compute_distance_metrics(data)
@@ -688,41 +760,53 @@ class Distribution(object):
         Compute various distance metrics between the fit distribution and
         the actual distribution of data.
 
-        The following distance metrics will be computed, with $C_d$ and $C_t$
-        as the cumulative distribution function for the data and for the
-        theoretical fit, respectively.
+        The following distance metrics will be computed, with :math:`C_d`
+        and :math:`C_t` as the cumulative distribution function for the
+        data and for the theoretical fit, respectively.
 
         Kolmogorov-Smirnov distance:
-        $$ D = max( max(C_d - C_t), -min(C_d - C_t) ) $$
+
+        .. math::
+            D = max( max(C_d - C_t), -min(C_d - C_t) )
          
         Kuiper distance:
-        $$ V = max(C_d - C_t) - min(C_d - C_t) $$
+
+        .. math::
+            V = max(C_d - C_t) - min(C_d - C_t)
 
         Anderson-Darling distance:
-        $$ A^2 = \sum( (C_d - C_t)^2 / (C_t (1 - C_t))) $$
+
+        .. math::
+            A^2 = \sum( (C_d - C_t)^2 / (C_t (1 - C_t)))
 
         Kappa:
-        $$ K = 1 + mean(C_d - C_t) $$
 
-        The names of these distance metrics will be stored as `D`, `V`, 
-        `Asquare`, and `Kappa` respectively.
+        .. math::
+            K = 1 + mean(C_d - C_t)
+
+        The names of these distance metrics will be stored as ``D``, ``V``, 
+        ``Asquare``, and ``Kappa`` respectively.
 
         Parameters
         ----------
         data : list or array, optional
-            If not provided, attempts to use the data from the Fit object in
-            which the Distribution object is contained.
+            If not provided, attempts to use the data passed on creation
+            of the Distribution object.
         """
         # The passed data takes precedence, but otherwise we use the data
         # stored in the class instance.
         if not hasattr(data, '__iter__'):
             data = self.data
 
+        # If we still don't have data, raise an error
+        if not hasattr(data, '__iter__'):
+            raise ValueError(f'No data to compute distance metrics for in distribution {self.name}!')
+
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
         # If we don't have enough data, return a bunch of nan values
         if len(data) < 2:
-            warnings.warn("Not enough data to compute KS, returning nan")
+            warnings.warn("Not enough data to compute distance metrics like Kolmogorov-Smirnov distance, returning nan.")
 
             self.D = nan
             self.D_plus = nan
@@ -806,8 +890,8 @@ class Distribution(object):
 
         Returns
         -------
-        probabilities : array
-            The portion of the data that is greater than X.
+        probabilities : numpy.ndarray
+            The portion of the data that is greater than or equal to X.
         """
         return 1 - self.cdf(data=data)
 
@@ -826,7 +910,7 @@ class Distribution(object):
 
         Returns
         -------
-        probabilities : array
+        probabilities : numpy.ndarray
             The portion of the data that is less than or equal to X.
         """
         # The passed data takes precedence, but otherwise we use the data
@@ -868,22 +952,25 @@ class Distribution(object):
         possible_numerical_error = np.isnan(np.min(CDF))
 
         if possible_numerical_error and self.verbose:
-            warnings.warn("Likely underflow or overflow error: the optimal fit for this distribution gives values that \
-                          are so extreme that we lack the numerical precision to calculate them.")
+            warnings.warn("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.")
 
         return CDF
 
 
     @property
     def _cdf_xmin(self):
+        """
+        The CDF evaluated at the point ``xmin``; also the minimum value
+        of the CDF.
+        """
         return self._cdf_base_function(self.xmin)
 
 
     def pdf(self, data=None):
         """
-        Returns the probability density function (normalized histogram) of the
-        theoretical distribution for the values in data within xmin and xmax,
-        if present.
+        The probability density function (normalized histogram) of the
+        theoretical distribution for the values in data within ``xmin`` and
+        ``xmax``, if present.
 
         Parameters
         ----------
@@ -893,7 +980,7 @@ class Distribution(object):
 
         Returns
         -------
-        probabilities : array
+        probabilities : numpy.ndarray
             The portion of the data that is contained at each bin (data point).
         """
         # The passed data takes precedence, but otherwise we use the data
@@ -992,16 +1079,16 @@ class Distribution(object):
     @property
     def _pdf_continuous_normalizer(self):
         """
-        This is the (inverse of the) normalization constant for the pdf
+        The (inverse of the) normalization constant for the PDF
         assuming a continuous distribution. So you can get the normalized
-        pdf evaluated for a particular x as:
+        PDF evaluated for a particular ``x`` as:
 
             _pdf_continuous_normalizer * _pdf_base_function(x)
 
         The implementation below simply uses the cumulative distribution
         function to compute this, though if an explicit expression can
-        be found by integrating the pdf, this function should be overwritten
-        in child classes.
+        be found by integrating the PDF, this function should be overwritten
+        in the child class.
         """
         # Essentially equivalent to numerically integrating the pdf over
         # the whole domain.
@@ -1019,7 +1106,7 @@ class Distribution(object):
     @property
     def _pdf_discrete_normalizer(self):
         """
-        This is the (inverse of the) normalization constant for the pdf
+        The (inverse of the) normalization constant for the PDF
         assuming a discrete distribution.
 
         It is not currently implemented since the value will depend on your
@@ -1072,14 +1159,12 @@ class Distribution(object):
         Parameters
         ----------
         data : array_like, optional
-            The data to compute the likelihood of.
-
-            If not provided, data used to create the Distribution object
-            will be used (if available).
+            The data for which to compute the PDF. If not provided, the data
+            passed on creation (if available) will be used.
 
         Returns
         -------
-        likelihoods : array_like
+        likelihoods : numpy.ndarray
             Likelihood of each observed data.
 
         """
@@ -1096,14 +1181,12 @@ class Distribution(object):
         Parameters
         ----------
         data : array_like, optional
-            The data to compute the likelihood of.
-
-            If not provided, data used to create the Distribution object
-            will be used (if available).
+            The data for which to compute the PDF. If not provided, the data
+            passed on creation (if available) will be used.
 
         Returns
         -------
-        likelihoods : array_like
+        likelihoods : numpy.ndarray
             Logarithm (base e) of likelihood of each observed data.
         """
         # No need to trim to range or check if data is None because pdf()
@@ -1113,11 +1196,11 @@ class Distribution(object):
 
     def plot_ccdf(self, data=None, ax=None, **kwargs):
         """
-        Plots the complementary cumulative distribution function (CDF) of the
-        theoretical distribution for the values given in data within xmin and
-        xmax, if present.
+        Plot the complementary cumulative distribution function (CCDF) of the
+        theoretical distribution for the values given in data within ``xmin``
+        and ``xmax``, if present.
 
-        Plots to a new figure or to axis `ax` if provided.
+        Plots to a new figure or to axis ``ax`` if provided.
 
         Parameters
         ----------
@@ -1129,7 +1212,7 @@ class Distribution(object):
             The axis on which to plot. If None, a new figure is created.
 
         kwargs
-            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
+            Other keyword arguments are passed to ``matplotlib.pyplot.plot()``.
 
         Returns
         -------
@@ -1141,16 +1224,32 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             data = self.data
 
-        bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+        # If we have data, we use that for the bins
+        if hasattr(data, '__iter__'):
+            bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+
+        # Otherwise, we just generate bins from xmin to xmax if xmax exists,
+        # or just xmin to xmin*1000. This 3 decades is arbitrary, but we
+        # need to make some choice.
+        else:
+            if self.xmax:
+                upper_bound = self.xmax
+
+            else:
+                upper_bound = self.xmin * 1e3
+
+            # 1000 bins is arbitrary.
+            bins = np.logspace(np.log10(self.xmin), np.log10(upper_bound), 1000)
+
         CCDF = self.ccdf(bins)
 
         if not ax:
             import matplotlib.pyplot as plt
-            plt.plot(bins, CDF, **kwargs)
+            plt.plot(bins, CCDF, **kwargs)
             ax = plt.gca()
 
         else:
-            ax.plot(bins, CDF, **kwargs)
+            ax.plot(bins, CCDF, **kwargs)
 
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -1160,11 +1259,11 @@ class Distribution(object):
 
     def plot_cdf(self, data=None, ax=None, **kwargs):
         """
-        Plots the cumulative distribution function (CDF) of the
-        theoretical distribution for the values given in data within xmin and
-        xmax, if present.
+        Plot the cumulative distribution function (CDF) of the
+        theoretical distribution for the values given in data within ``xmin``
+        and ``xmax``, if present.
 
-        Plots to a new figure or to axis `ax` if provided.
+        Plots to a new figure or to axis ``ax`` if provided.
 
         Parameters
         ----------
@@ -1176,7 +1275,7 @@ class Distribution(object):
             The axis on which to plot. If None, a new figure is created.
 
         kwargs
-            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
+            Other keyword arguments are passed to ``matplotlib.pyplot.plot()``.
 
         Returns
         -------
@@ -1188,7 +1287,23 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             data = self.data
 
-        bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+        # If we have data, we use that for the bins
+        if hasattr(data, '__iter__'):
+            bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+
+        # Otherwise, we just generate bins from xmin to xmax if xmax exists,
+        # or just xmin to xmin*1000. This 3 decades is arbitrary, but we
+        # need to make some choice.
+        else:
+            if self.xmax:
+                upper_bound = self.xmax
+
+            else:
+                upper_bound = self.xmin * 1e3
+
+            # 1000 bins is arbitrary.
+            bins = np.logspace(np.log10(self.xmin), np.log10(upper_bound), 1000)
+
         CDF = self.cdf(bins)
 
         if not ax:
@@ -1207,9 +1322,11 @@ class Distribution(object):
 
     def plot_pdf(self, data=None, ax=None, **kwargs):
         """
-        Plots the probability density function (PDF) of the
-        theoretical distribution for the values given in data within xmin and
-        xmax, if present. Plots to a new figure or to axis ax if provided.
+        Plot the probability density function (PDF) of the
+        theoretical distribution for the values given in data within ``xmin``
+        and ``xmax``, if present.
+
+        Plots to a new figure or to axis ``ax`` if provided.
 
         Parameters
         ----------
@@ -1233,7 +1350,23 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             data = self.data
 
-        bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+        # If we have data, we use that for the bins
+        if hasattr(data, '__iter__'):
+            bins = np.unique(trim_to_range(data, xmin=self.xmin, xmax=self.xmax))
+
+        # Otherwise, we just generate bins from xmin to xmax if xmax exists,
+        # or just xmin to xmin*1000. This 3 decades is arbitrary, but we
+        # need to make some choice.
+        else:
+            if self.xmax:
+                upper_bound = self.xmax
+
+            else:
+                upper_bound = self.xmin * 1e3
+
+            # 1000 bins is arbitrary.
+            bins = np.logspace(np.log10(self.xmin), np.log10(upper_bound), 1000)
+
         PDF = self.pdf(bins)
 
         # Set to nan so it doesn't show up on the plot
@@ -1255,7 +1388,7 @@ class Distribution(object):
 
     def generate_random(self, size=1, estimate_discrete=None):
         """
-        Generates random numbers from the theoretical probability distribution.
+        Generate random numbers from the theoretical probability distribution.
 
         This will follow the theoretical distribution, including upper
         and lower limits defined by ``xmin`` or ``xmax``. For example, if
@@ -1263,6 +1396,9 @@ class Distribution(object):
         ``xmax``, the generated values will be less than that value. If
         no value is given for ``xmax``, random values will have no upper
         limit.
+
+        For discrete distributions without an approximation method, we
+        use numerical inverse transform sampling.
 
         Parameters
         ----------
@@ -1289,7 +1425,9 @@ class Distribution(object):
             Random numbers drawn from the distribution with shape equal
             to ``size``.
         """
-        # For generating uniform random numbers from 0 to ~1
+        # For generating uniform random numbers from ~0 to ~1
+        # We shouldn't actually start from 0, but from _cdf_xmin, which should
+        # be very close to zero.
         # If we have an xmax, we shouldn't use 1 as the upper bound, but
         # cdf(xmax). Note that this only works for when we use the continuous
         # method (either continuous data or discrete data but we don't use
@@ -1305,7 +1443,7 @@ class Distribution(object):
         # approximations, and can just transform according to the specific
         # distribution.
         if not self.discrete:
-            uniform_r = np.random.uniform(0, upper_bound, size=size)
+            uniform_r = np.random.uniform(self._cdf_xmin, upper_bound, size=size)
             r = self._generate_random_continuous(uniform_r)
 
         # For discrete distributions, we usually have to make some
@@ -1364,6 +1502,7 @@ class Distribution(object):
                 # inverse search problem to find the specific value of x
                 # where the ccdf is equal to that value of r. The x value
                 # is then the random value we return.
+                print(upper_bound)
                 uniform_r = np.random.uniform(0, upper_bound, size=size)
                 r = np.array([self._double_search_discrete(R) for R in uniform_r.flatten()], dtype=np.int64)
 
@@ -1376,7 +1515,17 @@ class Distribution(object):
     def _double_search_discrete(self, r):
         """
         Perform the inverse search problem of locating the x value
-        such that cdf(x) = 1 - r.
+        such that ccdf(x) = 1 - r.
+
+        Parameters
+        ----------
+        r : float in [0, 1]
+            A uniform random variable.
+
+        Returns
+        -------
+        x : float
+            The sampled value from the theoretical distribution.
         """
         # Find a range [x1, x2] that contains our random probability r
         x2 = int(self.xmin)
@@ -1422,12 +1571,15 @@ class Power_Law(Distribution):
     :math:`\alpha` value from the MLE that is used under the following
     conditions:
 
-    1. There is no value for :math:`x_{max}`, and
-    2. :math:`x_{min}` is greater than or equal to 6, and
-    3. The value from this expression falls in the range :math:`(1, 3]`.
+    1. There is no value for :math:`x_{max}`,
+    2. :math:`x_{min}` is greater than or equal to 10,
+    3. The true alpha value of the distribution is in the range :math:`(1, 3]`, and
+    4. The value from this expression falls in the range :math:`(1, 3]`.
 
     You can disable the use of this approximate expression with
-    ``estimate_discrete=False``.
+    ``estimate_discrete=False``. These same considerations apply to the
+    approximation discrete random number generator, which is also controlled
+    using the same keyword.
 
     If you would like to perform numerical fitting after initializing
     the values with these above expressions --- in case you are worried
@@ -1436,8 +1588,14 @@ class Power_Law(Distribution):
 
     Accepts all kwargs from ``Distribution`` super class.
     """
+    name = 'power_law'
 
-    def __init__(self, estimate_discrete=None, force_numerical_fit=False, pdf_ends_at_xmax=False, **kwargs):
+    parameter_names = ['alpha']
+
+    DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3]}
+
+
+    def __init__(self, estimate_discrete=None, force_numerical_fit=False, **kwargs):
         """
         Parameters
         ----------
@@ -1447,7 +1605,7 @@ class Power_Law(Distribution):
 
             By default, this will be enabled when the error is of order 1%
             or less: according to the original paper, this is when there is
-            no ``xmax`` and ``xmin <= 6``. Otherwise it will be disabled.
+            no ``xmax`` and ``xmin <= 10``. Otherwise it will be disabled.
 
             Set this value to True or False to force the approximation to
             be used or not.
@@ -1461,31 +1619,20 @@ class Power_Law(Distribution):
             See the documentation on this class for more information on
             when analytical or numerical fitting is used.
 
-        pdf_ends_at_xmax : bool
-
         """
-        self.parameter_names = ['alpha']
-        self.DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3]}
+        # This value will be parsed (and auto assigned if None) in
+        # generate_initial_parameters.
+        self.estimate_discrete = estimate_discrete
 
-        # If estimate_discrete is None, we decied whether to use it based
-        # xmin and xmax values.
-        if estimate_discrete is None:
-            self.estimate_discrete = (self.xmin >= 6) and (self.xmax is None)
-        else:
-            self.estimate_discrete = estimate_discrete
-
-        self.pdf_ends_at_xmax = pdf_ends_at_xmax
         self.force_numerical_fit = force_numerical_fit
 
         Distribution.__init__(self, **kwargs)
 
-        # We will now have a fitted distribution, and we might want to
-        # warn the user if we fit an exponent close to 1 from above.
-        # For more information on this, see the discussion in
-        # Distribution.fit().
-        if self.alpha > 1.0 and self.alpha < 1.2 and not self.discrete and self.verbose:
-            warnings.warn('Fit detected an alpha value slightly above one. Fitting algorithms in this regime are \
-                          error-prone; it might help to set `discrete=True` to numerically calculate the normalization.')
+        # We also might want to warn if we have an unbounded power law (no
+        # xmax) with an exponent less than 1.1, since things start to
+        # get very messy around there.
+        if not self.xmax and self.alpha <= 1.1:
+            warnings.warn('Power law distributions with alpha close to 1 without an xmax can be very noisy; it is recommended to give some xmax.')
 
 
     def generate_initial_parameters(self, data):
@@ -1503,7 +1650,7 @@ class Power_Law(Distribution):
 
         For the discrete case, there is no form that is exact in the large
         N limit, but the following value is a good approximation when
-        there is no ``xmax`` and ``xmin >= 6`` (see ref [1], Eq. 3.7).
+        there is no ``xmax`` and ``xmin >= 10`` (see ref [1], Eq. 3.7).
 
             $$ \alpha_0 = 1 + N / ( \sum \log (x / (x_{min} - 1/2))) $$
 
@@ -1528,6 +1675,13 @@ class Power_Law(Distribution):
         661–703. https://doi.org/10.1137/070710111
 
         """
+        # If estimate_discrete is None, we decied whether to use it based
+        # xmin and xmax values.
+        # (we can't put this in __init__ because xmin and xmax aren't
+        # defined yet)
+        if self.estimate_discrete is None:
+            self.estimate_discrete = (self.xmin >= 10) and (self.xmax is None) and self.discrete
+
         params = {}
 
         # This is generally a very good approximation of the power law
@@ -1584,27 +1738,25 @@ class Power_Law(Distribution):
         # estimations in generate_initial_parameters will give alpha
         # values of [1, 1.15] for power laws that actually have an alpha
         # < 1. So we should run the numerical fitting just in case even
-        # if the alpha is above one, up to about 1.2 or so.
+        # if the alpha is above one, up to about 1.5 or so. By setting this
+        # cutoff higher, we only lose a bit of speed, but setting it too
+        # low can give inaccurate results without warning, so better to be
+        # conservative here.
 
         # If we want to use the discrete estimation and the initial
-        # guess is within (1.3, 3], we skip numerical fitting.
-        if self.discrete and self.estimate_discrete and (self.alpha > 1.3) and (self.alpha <= 3):
+        # guess is within (1.5, 3], we skip numerical fitting.
+        if self.discrete and self.estimate_discrete and (self.alpha > 1.5) and (self.alpha <= 3):
             self.compute_distance_metrics()
             return
 
         # If we want to use the continuous estimation and the initial
-        # guess is within  (1.3, 3], we skip numerical fitting.
-        if not self.discrete and (self.alpha > 1.3) and (self.alpha <= 3):
+        # guess is within  (1.5, 3], we skip numerical fitting.
+        if (not self.discrete) and (self.alpha > 1.5) and (self.alpha <= 3):
             self.compute_distance_metrics()
             return
 
         # Otherwise we run the numerical fitting
         return Distribution.fit(self, data)
-
-
-    @property
-    def name(self):
-        return "power_law"
 
 
     @property
@@ -1643,14 +1795,27 @@ class Power_Law(Distribution):
         # the upper limit of the distribution. When alpha < 1, we have to
         # assume the distribution ends at xmax otherwise it is not
         # normalizable.
-        if self.alpha <= 1 and not self.xmax:
-            if self.verbose:
-                warnings.warn('Distribution with alpha <= 1 has no xmax; setting xmax to be max(data) otherwise cannot continue. Consider setting an explicit value for xmax')
-            xmax = np.max(self.data)
-        else:
+        xmax = None
+        if self.xmax:
             xmax = self.xmax
 
-        if self.pdf_ends_at_xmax or self.alpha <= 1:
+        else:
+            if self.alpha <= 1:
+                # If we have data available, we should use the maximum value and warn.
+                if hasattr(self.data, '__iter__'):
+                    if self.verbose:
+                        warnings.warn('Distribution with alpha <= 1 has no xmax; setting xmax to be max(data) otherwise cannot continue. Consider setting an explicit value for xmax')
+
+                        xmax = np.max(self.data)
+
+                # Otherwise, we need to raise an error, since we cant have
+                # a distribution with alpha <= 1, no xmax, and no data to
+                # infer an xmax from.
+                else:
+                    raise ValueError('Power law distribution with alpha <= 1 must have an xmax or at least data to infer an implicit xmax from.')
+
+
+        if xmax:
             return (1 - self.alpha)/(xmax**(1 - self.alpha) - self.xmin**(1 - self.alpha))
         else:
             return (self.alpha - 1) * self.xmin**(self.alpha - 1)
@@ -1664,45 +1829,42 @@ class Power_Law(Distribution):
         C = 1.0/C
         return C
 
-    # TODO: this doesn't work for alpha <= 1
     def _generate_random_continuous(self, r):
         return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
 
 
     def _generate_random_discrete_estimate(self, r):
+        # This estimation only works for alpha > 1
+        # So even if we explicitly pass estimate_discrete=True, we can't
+        # use this when alpha <= 1.
+        if self.alpha <= 1:
+            raise ValueError('Discrete power law random generator estimation only works for alpha > 1! Use estimate_discrete=False.')
+
         x = (self.xmin - 0.5) * (1 - r) ** (-1/(self.alpha - 1)) + 0.5
         return np.around(x)
 
 
 class Exponential(Distribution):
+    r"""
+    An exponential distribution :math:`p(x) \sim e^{- \lambda x}`.
 
-    def __init__(self, **kwargs):
-        r"""
-        An exponential distribution, with pdf:
+    For expressions for normalization for discrete and continuous
+    distributions, see Clauset et al. (2009) [1], Table 2.1.
 
-            $$ p(x) ~ exp(- \lambda x) $$
+    References
+    ----------
+    [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+    Power-law distributions in empirical data. SIAM Review, 51(4),
+    661–703. https://doi.org/10.1137/070710111
+    """
+    name = 'exponential'
 
-        For expressions for normalization for discrete and continuous
-        distributions, see Clauset et al. (2009) [1], Table 2.1.
+    # Note that Lambda has a capital L; I guess this is because
+    # the authors didn't want to cause confusion with Python's lambda
+    # expressions.
+    parameter_names = ['Lambda']
 
-        References
-        ----------
-        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
-        Power-law distributions in empirical data. SIAM Review, 51(4),
-        661–703. https://doi.org/10.1137/070710111
-        """
-        # Note that Lambda has a capital L; I guess this is because
-        # the authors didn't want to cause confusion with Python's lambda
-        # expressions.
-        self.parameter_names = ['Lambda']
-        self.DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None]}
-
-        Distribution.__init__(self, **kwargs)
-
-
-    @property
-    def name(self):
-        return "exponential"
+    DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None]}
 
 
     def generate_initial_parameters(self, data):
@@ -1835,41 +1997,34 @@ class Exponential(Distribution):
 
 
 class Stretched_Exponential(Distribution):
+    r"""
+    A stretched exponential distribution, :math:`p(x) \sim (x \lambda)^{\beta - 1}
+    e^{- (\lambda x)^\beta}`.
 
-    def __init__(self, **kwargs):
-        r"""
-        A stretched exponential distribution, with PDF:
+    For expressions for normalization for discrete and continuous
+    distributions, see Clauset et al. (2009) [1], Table 2.1.
 
-            $$ p(x) ~ (x \lambda)^{\beta - 1} exp(- (\lambda x)^\beta) $$
+    References
+    ----------
+    [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
+    Power-law distributions in empirical data. SIAM Review, 51(4),
+    661–703. https://doi.org/10.1137/070710111
+    """
+    # Note that Lambda has a capital L; I guess this is because
+    # the authors didn't want to cause confusion with Python's lambda
+    # expressions.
+    # That being said, the old code had:
+    # self.parameter1 = self.Lambda
+    # self.parameter1_name = 'lambda'
+    # Which is inconsistent; I've chosen the capital lambda so far,
+    # but should look into making this more consistent later. TODO
 
-        For expressions for normalization for discrete and continuous
-        distributions, see Clauset et al. (2009) [1], Table 2.1.
+    name = 'stretched_exponential'
 
-        References
-        ----------
-        [1] Clauset, A., Shalizi, C. R., & Newman, M. E. J. (2009).
-        Power-law distributions in empirical data. SIAM Review, 51(4),
-        661–703. https://doi.org/10.1137/070710111
-        """
-        # Note that Lambda has a capital L; I guess this is because
-        # the authors didn't want to cause confusion with Python's lambda
-        # expressions.
-        # That being said, the old code had:
-        # self.parameter1 = self.Lambda
-        # self.parameter1_name = 'lambda'
-        # Which is inconsistent; I've chosen the capital lambda so far,
-        # but should look into making this more consistent later. TODO
+    parameter_names = ['Lambda', 'beta']
 
-        self.parameter_names = ['Lambda', 'beta']
-        self.DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None],
-                                         'beta': [0, None]}
-
-        Distribution.__init__(self, **kwargs)
-
-
-    @property
-    def name(self):
-        return "stretched_exponential"
+    DEFAULT_PARAMETER_RANGES = {'Lambda': [0, None],
+                                'beta': [0, None]}
 
 
     def generate_initial_parameters(self, data):
@@ -1976,30 +2131,21 @@ class Stretched_Exponential(Distribution):
 
 
 class Truncated_Power_Law(Distribution):
+    r"""
+    A power law distribution truncated by an exponential, :math:`p(x) \sim
+    x^{-\alpha} e^{-\lambda x}`.
 
-    def __init__(self, **kwargs):
-        r"""
-        A power law distribution truncated by an exponential with form:
+    The exponent :math:`\alpha` should be positive, though can have any
+    positive value and still be normalizable. Unlike a true power law,
+    there is no trouble having :math:`\alpha \le 1`, since the
+    exponential tail ensures that the distribution is always normalizable.
+    """
+    name = 'truncated_power_law'
 
-            $$ p(x) ~ x^{-alpha} exp(-\lambda x)$$
+    parameter_names = ['alpha', 'Lambda']
 
-        The exponent alpha should be positive. 
-
-        Parameters
-        ----------
-
-        """
-
-        self.parameter_names = ['alpha', 'Lambda']
-        self.DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3],
-                                         'Lambda': [0, None]}
-
-        Distribution.__init__(self, **kwargs)
-
-
-    @property
-    def name(self):
-        return "truncated_power_law"
+    DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3],
+                                'Lambda': [0, None]}
 
 
     def generate_initial_parameters(self, data):
@@ -2150,27 +2296,21 @@ class Truncated_Power_Law(Distribution):
 
 
 class Lognormal(Distribution):
+    r"""
+    A lognormal distribution, :math:`p(x) \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`.
 
-    def __init__(self, **kwargs):
-        r"""
-        A lognormal distribution:
+    Note that :math:`\sigma` is referred to as `width` in the package
+    so as to not confuse it with the standard error of other distributions.
+    """
 
-            $$ p(x) ~ 1/x exp( -(log(x) - mu)^2 / 2 width^2 )$$
+    name = 'lognormal'
 
-        """
+    # I have renamed this to be width from 'sigma' since there is
+    # already a sigma defined as the standard error in this package.
+    parameter_names = ['mu', 'width']
 
-        # I have renamed this to be width from 'sigma' since there is
-        # already a sigma defined as the standard error in this package.
-        self.parameter_names = ['mu', 'width']
-        self.DEFAULT_PARAMETER_RANGES = {'mu': [None, None],
-                                         'width': [0, None]}
-
-        Distribution.__init__(self, **kwargs)
-
-
-    @property
-    def name(self):
-        return "lognormal"
+    DEFAULT_PARAMETER_RANGES = {'mu': [None, None],
+                                'width': [0, None]}
 
 
     def generate_initial_parameters(self, data):
@@ -2435,24 +2575,16 @@ class Lognormal(Distribution):
 
 
 class Lognormal_Positive(Lognormal):
+    r"""
+    A lognormal distribution with strictly positive :math:`\mu`, :math:`p(x)
+    \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`.
 
-    def __init__(self, **kwargs):
-        r"""
-        A lognormal distribution with only positive center:
+    """
+    name = 'lognormal_positive'
 
-            $$ p(x) ~ 1/x exp( -(log(x) - mu)^2 / 2 width^2 )$$
+    # I have renamed this to be width from 'sigma' since there is
+    # already a sigma defined as the standard error in this package.
+    parameter_names = ['mu', 'width']
 
-        """
-
-        # I have renamed this to be width from 'sigma' since there is
-        # already a sigma defined as the standard error in this package.
-        self.parameter_names = ['mu', 'width']
-        self.DEFAULT_PARAMETER_RANGES = {'mu': [0, None],
-                                         'width': [0, None]}
-
-        Distribution.__init__(self, **kwargs)
-
-
-    @property
-    def name(self):
-        return "lognormal_positive"
+    DEFAULT_PARAMETER_RANGES = {'mu': [0, None],
+                                'width': [0, None]}

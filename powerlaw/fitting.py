@@ -38,16 +38,19 @@ SUPPORTED_DISTRIBUTIONS = {'power_law': Power_Law,
                            'stretched_exponential': Stretched_Exponential,
                            'lognormal_positive': Lognormal_Positive,
                            }
-                            #'gamma': None}
 
 SUPPORTED_DISTRIBUTION_LIST = list(SUPPORTED_DISTRIBUTIONS.keys())
 
 """
+Currently just templated; doesn't work yet.
+
 Whether to enable parallelization for certain heavy calculations, eg. 
 fitting the xmin value.
 """
 PARALLEL_ENABLE = False
 """
+Currently just templated; doesn't work yet.
+
 This is the number of cores that the library should leave free when doing
 certain heavy calculations. For example, if you have 8 cores, and this is
 set to 2, then the processing would use (up to) 6 cores.
@@ -61,20 +64,23 @@ class Fit(object):
 
     For fits to power laws, the methods of Clauset et al. 2007 are used.
     These methods identify the portion of the tail of the distribution that
-    follows a power law, beyond a value xmin. If no xmin is
+    follows a power law, beyond a value ``xmin``. If no ``xmin`` is
     provided, the optimal one is calculated and assigned at initialization.
+
+    All supported distributions can be accessed as properties of this
+    class, at which time they will be automatically fit to the data.
 
     Parameters
     ----------
-    data : list or array
+    data : array_like
         The data to fit.
 
-    discrete : boolean, optional
+    discrete : bool, optional
         Whether the data is discrete (integers).
 
     xmin : int or float, optional
         The data value beyond which distributions should be fitted. If
-        None an optimal one will be calculated.
+        ``None`` an optimal one will be calculated.
 
     xmax : int or float, optional
         The maximum value of the fitted distributions.
@@ -82,55 +88,105 @@ class Fit(object):
     estimate_discrete : bool, optional
         Whether to estimate the fit of a discrete power law using fast
         analytical methods, instead of calculating the fit exactly with
-        slow numerical methods. Very accurate with xmin>6
+        slow numerical methods. Most accurate when ``xmin`` > 6.
 
-    discrete_approximation : {'round', 'xmax', ...} or int, optional
-        The type of approximation to use in computing parameter values
-        and/or normalization
+    discrete_normalization : {"round", "sum"}, optional
+        Approximation method to use in calculating the PDF (especially the
+        PDF normalization constant) for a discrete distribution in the case
+        that there is no analytical expression available.
+
+        ``"round"`` uses the probability mass in the range ``[x - 0.5, x + 0.5]``
+        for each data point.
+
+        ``"sum"`` simply sums the PDF over the defined range to compute the
+        normalization.
 
     sigma_threshold : float, optional
         Upper limit on the standard error of the power law fit. Used after
-        fitting, when identifying valid xmin values.
+        fitting, when identifying valid ``xmin`` values.
+
+    initial_parameters : dict, optional
+        The initial parameters for fitting various distributions.
+
+        Must be given as a dictionary so it is clear which value corresponds
+        to which parameter of different distributions.
 
     parameter_ranges : dict, optional
         Dictionary of valid parameter ranges for fitting. Formatted as a
-        dictionary of parameter names ('alpha' and/or 'sigma') and tuples
-        of their lower and upper limits (ex. (1.5, 2.5), (None, .1)
+        dictionary of parameter names (eg. ``'alpha'``) and tuples/lists/etc.
+        of their lower and upper limits (eg. ``(1.5, 2.5)``, ``(None, .1)``).
 
-    pdf_ends_at_xmax: bool, optional
-        Whether to use the pdf that has an upper cutoff at xmax to fit the 
-        powerlaw distribution. 
+        The use of ``None`` is preferred over ``np.inf`` to indicate an
+        unbounded limit.
+
+    parameter_constraints : function, list of functions, dict, optional
+        Constraints amongst parameters during fitting. Constraint function(s)
+        should take a single variable as an argument, which will be a tuple
+        with all of the parameter values. The return value of the function
+        should be 0 when the constraint is satisfied.
+
+        For example, if I want to enforce that ``param1`` is greater than
+        ``param2``, I would define my function:
+
+        .. code-block::
+
+            def constraint(params):
+                param1, param2 = params
+                return param1 > param2
+
+        For a single constraint, the function can be directly passed,
+        or for multiple constraints, a list of functions can be passed.
+        Since this is sent to ``scipy.optimize.minimize(constraints=...)``,
+        you can also provide as a dictionary as described in their
+        documentation:
+
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+
+        Note that unless constraints are passed as a dictionary, all functions
+        are assumed to be 'equality' constraints. If you need inequality
+        constraints, pass the argument as a dictionary according to the
+        above documentation and specify the type of constraint explicitly. 
+
+        Constraints are intended to be used only for relations between
+        parameters; for simple bounds on parameter values, use of
+        ``parameter_ranges`` is preferred.
 
     xmin_distance : {'D', 'V', 'Asquare'}, optional
         The distance metric used to determine which value of xmin
         gives the best fit.
 
-        'D' is Kolmogorov-Smirnov, 'V' is Kuiper, 'Asquare' is Anderson-
+        ``'D'`` is Kolmogorov-Smirnov, ``'V'`` is Kuiper, ``'Asquare'`` is Anderson-
         Darling. For more information on these, see the documentation
-        for `Distribution.compute_distance_metrics()`.
+        for ``Distribution.compute_distance_metrics()``.
+
+    xmin_distribution : {'power_law'}, optional
+        The distribution to use in finding the optimal ``xmin`` value.
+
+        Currently, only ``'power_law'`` is supported.
 
     verbose: {0, 1, 2} or bool, optional
         Whether to print updates about where we are in the fitting process.
         
-        `0` means print nothing, `1` or `True` means only print warnings
-        (default), `2` means print status messages and warnings.
+        ``0`` or ``False`` means print nothing, ``1`` or ``True`` means
+        only print warnings (default), ``2`` means print status messages
+        and warnings.
     
     """
-    # TODO: Update the arguments for this function
-    def __init__(self, data,
+    def __init__(self,
+                 data,
                  discrete=False,
-                 xmin=None, xmax=None,
+                 xmin=None,
+                 xmax=None,
                  fit_method='likelihood',
-                 estimate_discrete=True,
-                 discrete_approximation='round',
+                 estimate_discrete=None,
+                 discrete_normalization='round',
                  sigma_threshold=None,
+                 initial_parameters=None,
                  parameter_ranges=None,
-                 fit_optimizer=None,
+                 parameter_constraints=None,
                  xmin_distance='D',
                  xmin_distribution='power_law',
-                 pdf_ends_at_xmax=False,
-                 verbose=1,
-                 **kwargs):
+                 verbose=1):
 
         self.verbose = verbose
 
@@ -144,9 +200,12 @@ class Fit(object):
 
         self.fit_method = fit_method
         self.estimate_discrete = estimate_discrete
-        self.discrete_approximation = discrete_approximation
+        self.discrete_normalization = discrete_normalization
         self.sigma_threshold = sigma_threshold
+
+        self.initial_parameters = initial_parameters
         self.parameter_ranges = parameter_ranges
+        self.parameter_constraints = parameter_constraints
 
         # We keep track of the xmin and xmax values if they are provided.
         # I don't really see the purpose for this variable, but I'll leave
@@ -196,11 +255,10 @@ class Fit(object):
             self.fixed_xmin = False
 
         self.xmin_distance = xmin_distance
-        self.pdf_ends_at_xmax = pdf_ends_at_xmax
 
         if 0 in self.data:
             if self.verbose:
-                warnings.warn("Values less than or equal to 0 in data. Throwing out 0 or negative values")
+                warnings.warn("Values less than or equal to 0 in data. Throwing out 0 or negative values.")
 
             self.data = self.data[self.data > 0]
 
@@ -215,7 +273,6 @@ class Fit(object):
         self.supported_distributions = SUPPORTED_DISTRIBUTIONS
 
         self.xmin_distribution = self.supported_distributions[xmin_distribution]
-        self.xmin_distribution.pdf_ends_at_xmax = self.pdf_ends_at_xmax
 
         # If we have a fixed xmin, we can directly fit a power law distribution
         if self.fixed_xmin:
@@ -243,7 +300,8 @@ class Fit(object):
 
         As such, we add the list of distribution names to the __dir__
         function used for autocomplete so we can autocomplete them
-        before they exist.
+        before they exist. That being said, this still only works after the
+        Fit object is created.
         """
         current_attrs = self.__dict__.keys()
         total_attrs = list(current_attrs) + list(self.supported_distributions)
@@ -253,6 +311,11 @@ class Fit(object):
 
 
     def __getattr__(self, name):
+        """
+        This function is redefined such that we can access the supported
+        distributions and have them inherit the data and options from the
+        Fit class.
+        """
         # This is used for getting the individual distributions, which we
         # only fit if they are accessed.
         if name in SUPPORTED_DISTRIBUTION_LIST:
@@ -269,8 +332,10 @@ class Fit(object):
                          discrete=self.discrete,
                          fit_method=self.fit_method,
                          estimate_discrete=self.estimate_discrete,
-                         discrete_approximation=self.discrete_approximation,
+                         discrete_normalization=self.discrete_normalization,
+                         parameters=self.initial_parameters,
                          parameter_ranges=self.parameter_ranges,
+                         parameter_constraints=self.parameter_constraints,
                          parent_Fit=self))
 
             return getattr(self, name)
@@ -282,9 +347,9 @@ class Fit(object):
     def find_xmin(self, xmin_distance=None):
         """
         Returns the optimal xmin beyond which the scaling regime of the power
-        law fits best. The attribute self.xmin of the Fit object is also set.
+        law fits best. The attribute ``self.xmin`` of the Fit object is also set.
 
-        The optimal xmin beyond which the scaling regime of the power law fits
+        The optimal ``xmin`` beyond which the scaling regime of the power law fits
         best is identified by minimizing the Kolmogorov-Smirnov distance
         between the data and the theoretical power law fit.
         This is the method of Clauset et al. 2007.
@@ -300,9 +365,15 @@ class Fit(object):
             The distance metric used to determine which value of xmin
             gives the best fit.
 
-            'D' is Kolmogorov-Smirnov, 'V' is Kuiper, 'Asquare' is Anderson-
+            ``'D'`` is Kolmogorov-Smirnov, ``'V'`` is Kuiper, ``'Asquare'`` is Anderson-
             Darling. For more information on these, see the documentation
-            for `Distribution.compute_distance_metrics()`.
+            for ``Distribution.compute_distance_metrics()``.
+
+        Returns
+        -------
+
+        xmin : float
+            The optimal xmin value for the fit.
         """
         # This function will be called if xmin is None, and we will already
         # have a defined xmin_range from __init__
@@ -359,11 +430,11 @@ class Fit(object):
                                         discrete=self.discrete,
                                         fit_method=self.fit_method,
                                         data=self.data,
-                                        parameters=None,
+                                        parameters=self.initial_parameters,
                                         parameter_ranges=self.parameter_ranges,
+                                        parameter_constraints=self.parameter_constraints,
                                         parent_Fit=self,
                                         estimate_discrete=self.estimate_discrete,
-                                        pdf_ends_at_xmax=self.pdf_ends_at_xmax,
                                         verbose=0)
 
             if not hasattr(pl, 'sigma'):
@@ -371,7 +442,7 @@ class Fit(object):
             if not hasattr(pl, 'alpha'):
                 pl.alpha = nan
 
-            return getattr(pl, xmin_distance), pl.alpha, pl.sigma, pl.in_range()
+            return getattr(pl, xmin_distance), pl.alpha, pl.sigma, (pl.in_range() and not pl.noise_flag)
 
         num_xmin = len(possible_xmin)
 
@@ -451,7 +522,7 @@ class Fit(object):
             # I've set this to be a warning as it is more in the spirit of
             # the previous code, though it's worth discussing if it should
             # instead just be an error.
-            warnings.warn('No valid fit found.')
+            warnings.warn('No valid values for xmin found.')
 
         # Set the Fit's xmin to the optimal xmin
         self.xmin = possible_xmin[min_index]
@@ -474,32 +545,9 @@ class Fit(object):
         return self.xmin
 
 
-    def nested_distribution_compare(self, dist1, dist2, nested=True, **kwargs):
-        """
-        Returns the loglikelihood ratio, and its p-value, between the two
-        distribution fits, assuming the candidate distributions are nested.
+    # There used to be a nested_distribution_compare but it is redundant
+    # since we can just use the nested keyword of distribution_compare.
 
-        Parameters
-        ----------
-        dist1 : string
-            Name of the first candidate distribution (ex. 'power_law')
-        dist2 : string
-            Name of the second candidate distribution (ex. 'exponential')
-        nested : bool or None, optional
-            Whether to assume the candidate distributions are nested versions
-            of each other. None assumes not unless the name of one distribution
-            is a substring of the other. True by default.
-
-        Returns
-        -------
-        R : float
-            Loglikelihood ratio of the two distributions' fit to the data. If
-            greater than 0, the first distribution is preferred. If less than
-            0, the second distribution is preferred.
-        p : float
-            Significance of R
-        """
-        return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
     def distribution_compare(self, dist1, dist2, nested=None, **kwargs):
         """
@@ -508,10 +556,12 @@ class Fit(object):
 
         Parameters
         ----------
-        dist1 : string
-            Name of the first candidate distribution (ex. 'power_law')
-        dist2 : string
-            Name of the second candidate distribution (ex. 'exponential')
+        dist1 : str
+            Name of the first candidate distribution (eg. 'power_law')
+
+        dist2 : str
+            Name of the second candidate distribution (eg. 'exponential')
+
         nested : bool or None, optional
             Whether to assume the candidate distributions are nested versions
             of each other. If None (default), the function will automatically
@@ -525,8 +575,9 @@ class Fit(object):
             Loglikelihood ratio of the two distributions' fit to the data. If
             greater than 0, the first distribution is preferred. If less than
             0, the second distribution is preferred.
+
         p : float
-            Significance of R
+            Significance of R.
         """
         if (dist1 in dist2) or (dist2 in dist1) and nested is None:
             nested = True
@@ -545,7 +596,32 @@ class Fit(object):
 
     def loglikelihood_ratio(self, dist1, dist2, nested=None, **kwargs):
         """
-        Another name for distribution_compare.
+        Another name for ``distribution_compare``.
+
+        Parameters
+        ----------
+        dist1 : str
+            Name of the first candidate distribution (eg. 'power_law')
+
+        dist2 : str
+            Name of the second candidate distribution (eg. 'exponential')
+
+        nested : bool or None, optional
+            Whether to assume the candidate distributions are nested versions
+            of each other. If None (default), the function will automatically
+            set nested=True if one distribution name is a substring of the other
+            (i.e., if either dist1 in dist2 or dist2 in dist1). Otherwise, it
+            will assume nested=False.
+
+        Returns
+        -------
+        R : float
+            Loglikelihood ratio of the two distributions' fit to the data. If
+            greater than 0, the first distribution is preferred. If less than
+            0, the second distribution is preferred.
+
+        p : float
+            Significance of R.
         """
         return self.distribution_compare(dist1, dist2, nested=nested, **kwargs)
 
@@ -562,10 +638,10 @@ class Fit(object):
 
         Returns
         -------
-        X : array
+        X : numpy.ndarray
             The sorted, unique values in the data.
 
-        probabilities : array
+        probabilities : numpy.ndarray
             The portion of the data that is less than or equal to X.
         """
         if original_data:
@@ -593,10 +669,10 @@ class Fit(object):
 
         Returns
         -------
-        X : array
+        X : numpy.ndarray
             The sorted, unique values in the data.
 
-        probabilities : array
+        probabilities : numpy.ndarray
             The portion of the data that is greater than or equal to X.
         """
         if original_data:
@@ -636,10 +712,10 @@ class Fit(object):
 
         Returns
         -------
-        bin_edges : array
+        bin_edges : numpy.ndarray
             The edges of the bins of the probability density function.
 
-        probabilities : array
+        probabilities : numpy.ndarray
             The portion of the data that is within the bin. Length 1 less than
             bin_edges, as it corresponds to the spaces between them.
         """
@@ -660,7 +736,8 @@ class Fit(object):
 
     def plot_cdf(self, original_data=False, ax=None, **kwargs):
         """
-        Plots the CDF to a new figure or to axis ax if provided.
+        Plot the cumulative distribution function (CDF) to a new figure or
+        to axis ``ax`` if provided.
 
         Parameters
         ----------
@@ -694,7 +771,8 @@ class Fit(object):
 
     def plot_ccdf(self, original_data=False, ax=None, **kwargs):
         """
-        Plots the CCDF to a new figure or to axis ax if provided.
+        Plot the complementary cumulative distribution function (CCDF) to a
+        new figure or to axis ``ax`` if provided.
 
         Parameters
         ----------
@@ -728,8 +806,8 @@ class Fit(object):
 
     def plot_pdf(self, original_data=False, linear_bins=False, bins=None, ax=None, **kwargs):
         """
-        Plots the probability density function (PDF) or the data to a new figure
-        or to axis ax if provided.
+        Plot the probability density function (PDF) or the data to a new figure
+        or to axis ``ax`` if provided.
 
         Parameters
         ----------
@@ -746,13 +824,13 @@ class Fit(object):
 
             If not provided, will be generated based on the range of the data.
             By default, the bins will be logarithmically spaced, but can be
-            linear if `linear_bins=True`.
+            linear if ``linear_bins=True``.
 
         ax : matplotlib axis, optional
             The axis to which to plot. If None, a new figure is created.
 
         kwargs
-            Other keyword arguments are passed to `matplotlib.pyplot.plot()`.
+            Other keyword arguments are passed to ``matplotlib.pyplot.plot()``.
 
         Returns
         -------

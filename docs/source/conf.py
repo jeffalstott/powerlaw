@@ -47,3 +47,4 @@ numpydoc_class_members_toctree = False
 html_theme = 'furo'
 html_static_path = ['_static']
 
+html_css_files = ['overrides.css']

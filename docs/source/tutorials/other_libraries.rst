@@ -8,7 +8,7 @@ be immediately obvious the difference between ``powerlaw`` and others like
 In these latter libraries, a fit is performed by defining some cost function
 :math:`C(\vec p)` with parameters :math:`\vec p`, and then finding the
 particular parameter values that minimize that cost function. Often for
-fitting a particular function :math:`f(x, \vec p)`, you will define this
+fitting a particular function :math:`f(x, \vec p)` to some data, you will define this
 cost as some difference between the fitted values and the true values:
 
 .. code-block::
@@ -104,7 +104,9 @@ particular (usually arbitrary) threshold. This is especially true when you
 consider that you can always fit you data with an arbitrary number of parameters
 to drive that fitting error to zero. Instead it is more convincing --- to
 us at least --- to show which physically-plausible distribution fits your
-data the best in comparison to other candidate distributions.
+data the best in comparison to other candidate distributions. For a more
+in-depth discussion, see the `Comparing distributions <comparing_distributions.html>`_
+tutorial.
 
 Most of the time this extra work required to implement a fit function is
 not relevant anyway, since many of the most common distributions measured in nature

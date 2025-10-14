@@ -43,8 +43,7 @@ def nested_loglikelihood_ratio(loglikelihoods1, loglikelihoods2, **kwargs):
             nested=True, **kwargs)
 
 
-def loglikelihood_ratio(loglikelihoods1, loglikelihoods2,
-        nested=False, normalized_ratio=False):
+def loglikelihood_ratio(loglikelihoods1, loglikelihoods2, nested=False, normalized_ratio=False):
     """
     Calculates a loglikelihood ratio and the p-value for testing which of two
     probability distributions is more likely to have created a set of
