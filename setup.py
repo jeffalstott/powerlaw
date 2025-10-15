@@ -23,7 +23,7 @@ setuptools.setup(
     author='Jeff Alstott',
     author_email='jeffalstott@gmail.com',
     url='http://www.github.com/jeffalstott/powerlaw',
-    install_requires=['scipy', 'numpy', 'matplotlib', 'mpmath'],
+    install_requires=['scipy', 'numpy', 'matplotlib', 'mpmath', 'tqdm'],
     license='MIT',
     classifiers=[
         'License :: OSI Approved :: MIT License',
