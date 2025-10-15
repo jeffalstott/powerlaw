@@ -1,0 +1,566 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="next" title="Generating data" href="generating_data.html" /><link rel="prev" title="Parameter Ranges and Constraints" href="ranges_and_constraints.html" />
+
+    <!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>Comparing distributions - powerlaw 1.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
+    <link rel="stylesheet" type="text/css" href="../_static/overrides.css?v=e9ec496f" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">powerlaw 1.6.0 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  
+  <span class="sidebar-brand-text">powerlaw 1.6.0 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../tutorials_top.html">Tutorials</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Tutorials</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="other_libraries.html">Differences with other libraries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="loading_data.html">Loading data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="visualization.html">Visualization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="scaling_range.html">Identifying the scaling range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="discrete_continuous.html">Continuous and discrete data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ranges_and_constraints.html">Parameter Ranges and Constraints</a></li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Comparing distributions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="generating_data.html">Generating data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="warnings.html">Warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="new_distributions.html">Adding New Distributions</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../api.html">API</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of API</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../fit.html"><code class="docutils literal notranslate"><span class="pre">Fit</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html"><code class="docutils literal notranslate"><span class="pre">Distribution</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html#powerlaw.Power_Law"><code class="docutils literal notranslate"><span class="pre">Power_Law</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html#powerlaw.Truncated_Power_Law"><code class="docutils literal notranslate"><span class="pre">Truncated_Power_Law</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html#powerlaw.Exponential"><code class="docutils literal notranslate"><span class="pre">Exponential</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html#powerlaw.Stretched_Exponential"><code class="docutils literal notranslate"><span class="pre">Stretched_Exponential</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html#powerlaw.Lognormal"><code class="docutils literal notranslate"><span class="pre">Lognormal</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../distributions.html#powerlaw.Lognormal_Positive"><code class="docutils literal notranslate"><span class="pre">Lognormal_Positive</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/tutorials/comparing_distributions.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="comparing-distributions">
+<h1>Comparing distributions<a class="headerlink" href="#comparing-distributions" title="Link to this heading">¶</a></h1>
+<p>As introduced in <a class="reference external" href="other_libraries.html">the comparison between this library and others</a>
+one of the main advantages of having properly defined probability
+distributions is being able to easily make comparisons between different
+candidate distributions.</p>
+<p>The goodness of fit of a distributions must be evaluated before concluding
+that a power law (or another distribution) is a good description of the data.
+The goodness of fit for each distribution can be considered individually —
+using bootstrapping and the Kolmogorov-Smirnov test to generate a p-value —
+or by comparison to other distributions — using loglikelihood ratios to
+identify which of two fits is better [1]. There are several reasons, both
+practical and philosophical, to focus on the latter, comparative tests.</p>
+<p>Practically, bootstrapping is more computationally intensive and loglikelihood
+ratio tests are faster. Philosophically, it is frequently insufficient and
+unnecessary to answer the question of whether a distribution “really” follows
+a power law. Instead the question is whether a power law is the best
+description available. In such a case, the knowledge that a bootstrapping
+test has passed is insufficient; bootstrapping could indeed find that a power
+law distribution would produce a given dataset with sufficient likelihood,
+but a comparative test could identify that a lognormal fit could have
+produced it with even greater likelihood. On the other hand, the knowledge
+that a bootstrapping test has failed may be unnecessary; real world systems
+have noise, and so few empirical phenomena could be expected to follow a
+power law with the perfection of a theoretical distribution. Given enough
+data, an empirical dataset with any noise or imperfections will always fail
+a bootstrapping test for any theoretical distribution. If one keeps absolute
+adherence to the exact theoretical distribution, one can enter the tricky
+position of passing a bootstrapping test, but only with few enough data [2]</p>
+<p>Thus, it is generally more sound and useful to compare the fits of many
+candidate distributions, and identify which one fits the best. This is
+easily done using <code class="docutils literal notranslate"><span class="pre">powerlaw</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Let&#39;s use the blackouts dataset</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">load_test_dataset</span><span class="p">(</span><span class="s1">&#39;blackouts&#39;</span><span class="p">)</span>
+
+<span class="n">fit</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">Fit</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+<span class="c1"># Plot the data and two candidate distributions</span>
+<span class="n">fit</span><span class="o">.</span><span class="n">plot_pdf</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;Data&#39;</span><span class="p">)</span>
+<span class="n">fit</span><span class="o">.</span><span class="n">power_law</span><span class="o">.</span><span class="n">plot_pdf</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;Power law fit&#39;</span><span class="p">)</span>
+<span class="n">fit</span><span class="o">.</span><span class="n">exponential</span><span class="o">.</span><span class="n">plot_pdf</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;Exponential fit&#39;</span><span class="p">)</span>
+
+<span class="o">...</span>
+
+<span class="c1"># See which distribution fits the data better</span>
+<span class="n">R</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">fit</span><span class="o">.</span><span class="n">distribution_compare</span><span class="p">(</span><span class="s1">&#39;power_law&#39;</span><span class="p">,</span> <span class="s1">&#39;exponential&#39;</span><span class="p">,</span>
+                                <span class="n">normalized_ratio</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+</pre></div>
+</div>
+<figure class="align-default" id="id1">
+<img alt="../_images/blackouts_compare.png" src="../_images/blackouts_compare.png" />
+<figcaption>
+<p><span class="caption-text">Comparison of the PDFs for power law and exponential fits for <code class="docutils literal notranslate"><span class="pre">blackouts</span></code> dataset.</span><a class="headerlink" href="#id1" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>This function <code class="xref py py-meth docutils literal notranslate"><span class="pre">Fit.distribution_compare()</span></code> gives us two values back:
+the loglikelihood ratio of the two distributions, and the significance
+value of that ratio. For this case, those values are:</p>
+<div class="highlight-output notranslate"><div class="highlight"><pre><span></span><span class="go">(1.4314804849576281, 0.15229255604426545)</span>
+</pre></div>
+</div>
+<p>Since the ratio is positive, that means that the result of the test may support
+the first distribution (power law) over the second distribution (exponential).
+If the value were negative, we would have the opposite possibility.
+To tell if the test actually supports one distribution over
+the other, we look at the magnitude of the ratio, or even better, at the
+significance level. In this particular case, we have a pretty large
+p value, and using most standard choices of significance level – usually
+<span class="math notranslate nohighlight">\(0.01\)</span> or <span class="math notranslate nohighlight">\(0.05\)</span> — we would fail to reject the null hypothesis.
+That is, the power law distribution is not vastly better than the exponential,
+and we don’t have strong enough evidence to conclude that this is really
+a power law. If this were our real data that we want to analyze, we should
+think about gathering more data in order to say more confidently whether this is
+a power law or not.</p>
+<p>The exponential is often the first alternative distribution one should check
+when looking at heavy tailed data. The reason is definitional: the typical
+quantitative definition of a “heavy-tail” is that it is <cite>not</cite> exponentially
+bounded [3]. Thus if a power law is not a better fit than an exponential
+distribution (as in the above example) there is scarce ground for considering
+the distribution to be heavy-tailed at all, let alone a power law.</p>
+<p>Let’s look at another example: the <code class="docutils literal notranslate"><span class="pre">words</span></code> dataset.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">load_test_dataset</span><span class="p">(</span><span class="s1">&#39;word&#39;</span><span class="p">)</span>
+
+<span class="c1"># Remember this is a discrete dataset</span>
+<span class="n">fit</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">Fit</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">discrete</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="o">...</span>
+
+<span class="c1"># See which distribution fits the data better</span>
+<span class="n">R</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">fit</span><span class="o">.</span><span class="n">distribution_compare</span><span class="p">(</span><span class="s1">&#39;power_law&#39;</span><span class="p">,</span> <span class="s1">&#39;exponential&#39;</span><span class="p">,</span>
+                                <span class="n">normalized_ratio</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+</pre></div>
+</div>
+<figure class="align-default" id="id2">
+<img alt="../_images/words_compare.png" src="../_images/words_compare.png" />
+<figcaption>
+<p><span class="caption-text">Comparison of the PDFs for power law and exponential fits for <code class="docutils literal notranslate"><span class="pre">words</span></code> dataset.</span><a class="headerlink" href="#id2" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>It’s pretty clear from the plot that the power law is a much better fit
+than an exponential for this distribution; indeed the log likelihood
+comparison agrees:</p>
+<div class="highlight-output notranslate"><div class="highlight"><pre><span></span><span class="go">(9.135914718777004, 6.485614241379349e-20)</span>
+</pre></div>
+</div>
+<p>Since our p value is (much) smaller than any reasonable significance value,
+we have pretty strong evidence that this distribution follows a power law
+much more than an exponential.</p>
+<p>However, the exponential distribution is only the minimum alternative
+candidate distribution to consider when describing a probability distribution.
+Among the other common heavy-tailed distributions are the exponentially
+truncated power law, the lognormal, and the stretched exponential (Weibull)
+distributions.</p>
+<p>Of course, one can define their own custom distribution beyond standard
+choices, though care must be taken to avoid the same problem faced by
+bootstrapping: there will always be another distribution that fits the data
+better, until one arrives at a distribution that describes only the exact
+values and frequencies observed in the dataset (overfitting). Indeed, this
+process of overfitting can begin even with very simple distributions; while
+the power law has only one parameter to serve as a degree of freedom for fitting,
+the truncated power law and the alternative heavy-tailed distributions have
+two parameters, and thus a fitting advantage. The overfitting scenario can
+be avoided by incorporating generative mechanisms into the candidate
+distribution selection process.</p>
+<p>The observed data always come from some source, and there must be some
+generative mechanisms behind this source. If there is a plausible domain-specific
+mechanism for creating the data that would yield a particular candidate
+distribution, then that candidate distribution should be considered first-and-
+foremost for fitting. If there is no such hypothesis for how a candidate distribution could be created there is much less reason to use it to describe the dataset.</p>
+<p>Perhaps the simplest generative mechanism is the accumulation of independent
+random variables: the central limit theorem. When random variables are summed,
+the result is the normal distribution. However, when positive random variables
+are multiplied, the result is the lognormal distribution, which is quite
+heavy-tailed. If the generative mechanism for the lognormal is plausible
+for the domain, the lognormal is frequently just as good a fit as the power
+law, if not better. Let’s compare the two for the <code class="docutils literal notranslate"><span class="pre">words</span></code> dataset.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># See which distribution fits the data better</span>
+<span class="n">R</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">fit</span><span class="o">.</span><span class="n">distribution_compare</span><span class="p">(</span><span class="s1">&#39;power_law&#39;</span><span class="p">,</span> <span class="s1">&#39;lognormal&#39;</span><span class="p">,</span>
+                                <span class="n">normalized_ratio</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">R</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-output notranslate"><div class="highlight"><pre><span></span><span class="go">(0.0636808247240506, 0.9492243734054262)</span>
+</pre></div>
+</div>
+<p>Based on our distribution comparison, indeed there is no evidence to suggest
+that a lognormal distribution is better or worse than a power law for this
+data.</p>
+<figure class="align-default" id="id3">
+<img alt="../_images/words_compare_lognormal.png" src="../_images/words_compare_lognormal.png" />
+<figcaption>
+<p><span class="caption-text">Comparison of the CCDFs for power law and lognormal fits for <code class="docutils literal notranslate"><span class="pre">words</span></code> dataset.</span><a class="headerlink" href="#id3" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>There are domains in which the power law distribution is a superior fit to
+the lognormal [eg. 2]. However, difficulties in distinguishing the power law
+from the lognormal are common and well-described, and similar issues apply
+to the stretched exponential and other heavy-tailed distributions [4-6]. If
+faced with such difficulties, it is a good idea to reevaluate the
+justification behind fitting each distribution for your specific data.
+If you still cannot distinguish between feasible candidate distributions using
+the loglikelihood ratio test, you might need to collect more data or try
+other experiments.</p>
+<section id="nested-distributions">
+<h2>Nested distributions<a class="headerlink" href="#nested-distributions" title="Link to this heading">¶</a></h2>
+<p>Comparing the likelihoods of distributions that are nested versions of
+each other requires a particular calculation for the resulting p-value
+[1]. This calculation mode can be enabled explicitly with the <code class="docutils literal notranslate"><span class="pre">nested</span></code>
+keyword in <a class="reference internal" href="../fit.html#powerlaw.Fit.distribution_compare" title="powerlaw.Fit.distribution_compare"><code class="xref py py-meth docutils literal notranslate"><span class="pre">powerlaw.Fit.distribution_compare()</span></code></a> or
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">powerlaw.loglikelihood_ratio()</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Specify whether the distributions are nested
+fit.distribution_compare(’power_law’, ’truncated_power_law’, nested=True)
+
+# Default behavior; let powerlaw decide if they are nested based on name
+fit.distribution_compare(’power_law’, ’truncated_power_law’)
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Manually compare two distributions without the fit object; can still</span>
+<span class="c1"># specify the nested keyword.</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">load_test_dataset</span><span class="p">(</span><span class="s1">&#39;fires&#39;</span><span class="p">)</span>
+
+<span class="n">loglikelihoods_pl</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">Power_Law</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">loglikelihoods</span><span class="p">()</span>
+<span class="n">loglikelihoods_exp</span> <span class="o">=</span> <span class="n">powerlaw</span><span class="o">.</span><span class="n">Exponential</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">loglikelihoods</span><span class="p">()</span>
+
+<span class="n">powerlaw</span><span class="o">.</span><span class="n">loglikelihood_ratio</span><span class="p">(</span><span class="n">loglikelihoods_pl</span><span class="p">,</span> <span class="n">loglikelihoods_exp</span><span class="p">,</span> <span class="n">nested</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When this keyword is explicitly set, the nested calculation method will only
+be used if the name of one distribution is contained within another, for
+example, if you are comparing <code class="docutils literal notranslate"><span class="pre">'power_law'</span></code> with <code class="docutils literal notranslate"><span class="pre">'truncated_power_law'</span></code>.</p>
+<p>With this in mind, if you create new distributions to add to the library,
+make sure to name them appropriately if they are a specific case of another
+distribution.</p>
+</section>
+<section id="references">
+<h2>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<p>[1] Clauset, A., Shalizi, C. R., &amp; Newman, M. E. J. (2009). Power-law
+distributions in empirical data. SIAM Review, 51(4), 661–703.
+<a class="reference external" href="https://doi.org/10.1137/070710111">https://doi.org/10.1137/070710111</a></p>
+<p>[2] Klaus, A., Yu, S., &amp; Plenz, D. (2011). Statistical Analyses Support
+Power Law Distributions Found in Neuronal Avalanches. PLOS ONE, 6(5),
+e19779. <a class="reference external" href="https://doi.org/10.1371/journal.pone.0019779">https://doi.org/10.1371/journal.pone.0019779</a></p>
+<p>[3] Asmussen Sr (2003) Applied probability and queues. Berlin: Springer</p>
+<p>[4] Malevergne, Y., Pisarenko, V., &amp; Sornette, D. (2011). Testing the
+Pareto against the lognormal distributions with the uniformly most powerful
+unbiased test applied to the distribution of cities. Physical Review E,
+83(3), 036111. <a class="reference external" href="https://doi.org/10.1103/PhysRevE.83.036111">https://doi.org/10.1103/PhysRevE.83.036111</a></p>
+<p>[5] Malevergne, Y., Pisarenko, V. F., &amp; Sornette, D. (2003). Empirical
+Distributions of Log-Returns: Between the Stretched Exponential and the
+Power Law? arXiv.
+<a class="reference external" href="https://doi.org/10.48550/arXiv.physics/0305089">https://doi.org/10.48550/arXiv.physics/0305089</a></p>
+<p>[6] Mitzenmacher, M. (2004). A Brief History of Generative Models for Power
+Law and Lognormal Distributions. Internet Mathematics, 1(2), 226–251.
+<a class="reference external" href="https://doi.org/10.1080/15427951.2004.10129088">https://doi.org/10.1080/15427951.2004.10129088</a></p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="generating_data.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Generating data</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="ranges_and_constraints.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Parameter Ranges and Constraints</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Jeff Alstott
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Comparing distributions</a><ul>
+<li><a class="reference internal" href="#nested-distributions">Nested distributions</a></li>
+<li><a class="reference internal" href="#references">References</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=72d88caf"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </body>
+</html>

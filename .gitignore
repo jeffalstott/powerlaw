@@ -3,9 +3,6 @@ images/
 notebooks/
 *.gif
 
-## Keep the documentation
-!docs/*
-
 ## C++
 
 # Prerequisites
@@ -61,7 +58,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+#build/
 develop-eggs/
 dist/
 downloads/
