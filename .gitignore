@@ -3,6 +3,9 @@ images/
 notebooks/
 *.gif
 
+## Keep the documentation
+!/docs/build/
+
 ## C++
 
 # Prerequisites
