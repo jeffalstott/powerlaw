@@ -4,7 +4,7 @@ notebooks/
 *.gif
 
 ## Keep the documentation
-!/docs/build/
+!docs/*
 
 ## C++
 
