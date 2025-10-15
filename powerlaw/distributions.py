@@ -1132,7 +1132,10 @@ class Distribution(object):
         # Set any zeros to very small values
         likelihoods[likelihoods == 0] = 10**sys.float_info.min_10_exp
 
-        return likelihoods
+        # We cast to float64 since the previous type might have been
+        # float128 (longdouble) and that causes issues with special
+        # functions like erfc
+        return likelihoods.astype(np.float64)
 
 
     @property
