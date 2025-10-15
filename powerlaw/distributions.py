@@ -1988,10 +1988,10 @@ class Exponential(Distribution):
         # have a tiny _pdf_base_function value.
 
         # But in order to store this value in the meantime, we have to
-        # use a float128 type. The ideal solution might be to use a proper
+        # use a float128 (longdouble) type. The ideal solution might be to use a proper
         # infinite precision module like mpmath or decimal, but I think
         # this should work for all cases.
-        return self.Lambda * np.exp(np.float128(self.Lambda * self.xmin))
+        return self.Lambda * np.exp(np.longdouble(self.Lambda * self.xmin))
 
 
     @property
@@ -1999,10 +1999,10 @@ class Exponential(Distribution):
         # Note that we use float128 (long double) here since otherwise
         # we might get an overflow error. See _pdf_continuous_normalizer
         # for full discussion.
-        C = (1 - np.exp(-self.Lambda)) * np.exp(np.float128(self.Lambda * self.xmin))
+        C = (1 - np.exp(-self.Lambda)) * np.exp(np.longdouble(self.Lambda * self.xmin))
 
         if self.xmax:
-            Cxmax = (1 - np.exp(-self.Lambda)) * np.exp(np.float128(self.Lambda * self.xmax))
+            Cxmax = (1 - np.exp(-self.Lambda)) * np.exp(np.longdouble(self.Lambda * self.xmax))
             C = 1.0/C - 1.0/Cxmax
             C = 1.0/C
 
@@ -2136,7 +2136,7 @@ class Stretched_Exponential(Distribution):
     def _pdf_continuous_normalizer(self):
         # Same issue here as with Exponential; we could get an overflow
         # error since this value might be very large, so we use float128.
-        C = self.beta * self.Lambda * np.exp(np.float128(self.Lambda * self.xmin)**self.beta)
+        C = self.beta * self.Lambda * np.exp(np.longdouble(self.Lambda * self.xmin)**self.beta)
         return C
 
 
