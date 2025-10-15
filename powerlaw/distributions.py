@@ -1741,6 +1741,10 @@ class Power_Law(Distribution):
         if self.estimate_discrete is None:
             self.estimate_discrete = (self.xmin >= 10) and (self.xmax is None) and self.discrete
 
+        # Also give a warning if estimate discrete is true but xmin is small
+        if self.estimate_discrete and (self.xmin <= 6) and self.discrete:
+            warnings.warn(f'estimate_discrete=True but xmin is quite small ({self.xmin}). This may give inaccurate results.')
+
         params = {}
 
         # This is generally a very good approximation of the power law
