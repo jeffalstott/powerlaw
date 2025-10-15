@@ -321,7 +321,7 @@
 
 
 <div class="viewcode-block" id="Fit">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit">[docs]</a>
 <span class="k">class</span> <span class="nc">Fit</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    A class to manage data and fits to various distributions.</span>
@@ -383,37 +383,40 @@
 <span class="sd">        The use of ``None`` is preferred over ``np.inf`` to indicate an</span>
 <span class="sd">        unbounded limit.</span>
 
-<span class="sd">    parameter_constraints : function, list of functions, dict, optional</span>
+<span class="sd">    parameter_constraints : dict or list of dict</span>
 <span class="sd">        Constraints amongst parameters during fitting. Constraint function(s)</span>
-<span class="sd">        should take a single variable as an argument, which will be a tuple</span>
-<span class="sd">        with all of the parameter values. The return value of the function</span>
-<span class="sd">        should be 0 when the constraint is satisfied.</span>
+<span class="sd">        should take the distribution object as the only argument.</span>
+<span class="sd">        The return value of the function should be some numerical value</span>
+<span class="sd">        which is either 0 when the constraint is satisfied if an equality</span>
+<span class="sd">        constraint, or a positive non-zero value when the constraint is</span>
+<span class="sd">        satisfied if an inequality constraint.</span>
 
 <span class="sd">        For example, if I want to enforce that ``param1`` is greater than</span>
 <span class="sd">        ``param2``, I would define my function:</span>
 
 <span class="sd">        .. code-block::</span>
 
-<span class="sd">            def constraint(params):</span>
-<span class="sd">                param1, param2 = params</span>
-<span class="sd">                return param1 &gt; param2</span>
+<span class="sd">            def constraint(dist):</span>
+<span class="sd">                return dist.param1 - dist.param2</span>
 
-<span class="sd">        For a single constraint, the function can be directly passed,</span>
-<span class="sd">        or for multiple constraints, a list of functions can be passed.</span>
-<span class="sd">        Since this is sent to ``scipy.optimize.minimize(constraints=...)``,</span>
-<span class="sd">        you can also provide as a dictionary as described in their</span>
-<span class="sd">        documentation:</span>
+<span class="sd">            constraint_dict = {&quot;type&quot;: &#39;ineq&#39;,</span>
+<span class="sd">                               &quot;fun&quot;: constraint}</span>
 
-<span class="sd">        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html</span>
+<span class="sd">        The dictionary (or dictionaries) should contain only the </span>
+<span class="sd">        following keys:</span>
 
-<span class="sd">        Note that unless constraints are passed as a dictionary, all functions</span>
-<span class="sd">        are assumed to be &#39;equality&#39; constraints. If you need inequality</span>
-<span class="sd">        constraints, pass the argument as a dictionary according to the</span>
-<span class="sd">        above documentation and specify the type of constraint explicitly. </span>
+<span class="sd">        ``&quot;type&quot;``: The type of the constraint, either ``&quot;eq&quot;`` or</span>
+<span class="sd">        ``&quot;ineq&quot;``.</span>
 
-<span class="sd">        Constraints are intended to be used only for relations between</span>
-<span class="sd">        parameters; for simple bounds on parameter values, use of</span>
-<span class="sd">        ``parameter_ranges`` is preferred.</span>
+<span class="sd">        ``&quot;fun&quot;``&quot;: The function that implements the constraint.</span>
+
+<span class="sd">        ``&quot;dists&quot;``: The name of the distributions that this constraint</span>
+<span class="sd">        applies to. If not provided, constraint will be applied to</span>
+<span class="sd">        all distributions.</span>
+
+<span class="sd">        After some processsing and wrapping, these constraints are</span>
+<span class="sd">        eventually sent to ``scipy.optimize.minimize(constraints=...)``;</span>
+<span class="sd">        see their documentation for more information.</span>
 
 <span class="sd">    xmin_distance : {&#39;D&#39;, &#39;V&#39;, &#39;Asquare&#39;}, optional</span>
 <span class="sd">        The distance metric used to determine which value of xmin</span>
@@ -609,7 +612,7 @@
 
 
 <div class="viewcode-block" id="Fit.find_xmin">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.find_xmin">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.find_xmin">[docs]</a>
     <span class="k">def</span> <span class="nf">find_xmin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">xmin_distance</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns the optimal xmin beyond which the scaling regime of the power</span>
@@ -817,7 +820,7 @@
 
 
 <div class="viewcode-block" id="Fit.distribution_compare">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.distribution_compare">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.distribution_compare">[docs]</a>
     <span class="k">def</span> <span class="nf">distribution_compare</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dist1</span><span class="p">,</span> <span class="n">dist2</span><span class="p">,</span> <span class="n">nested</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns the loglikelihood ratio, and its p-value, between the two</span>
@@ -865,7 +868,7 @@
 
 
 <div class="viewcode-block" id="Fit.loglikelihood_ratio">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.loglikelihood_ratio">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.loglikelihood_ratio">[docs]</a>
     <span class="k">def</span> <span class="nf">loglikelihood_ratio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dist1</span><span class="p">,</span> <span class="n">dist2</span><span class="p">,</span> <span class="n">nested</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Another name for ``distribution_compare``.</span>
@@ -900,7 +903,7 @@
 
 
 <div class="viewcode-block" id="Fit.cdf">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.cdf">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.cdf">[docs]</a>
     <span class="k">def</span> <span class="nf">cdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_data</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns the cumulative distribution function of the data.</span>
@@ -934,7 +937,7 @@
 
 
 <div class="viewcode-block" id="Fit.ccdf">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.ccdf">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.ccdf">[docs]</a>
     <span class="k">def</span> <span class="nf">ccdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_data</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns the complementary cumulative distribution function of the data.</span>
@@ -968,7 +971,7 @@
 
 
 <div class="viewcode-block" id="Fit.pdf">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.pdf">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.pdf">[docs]</a>
     <span class="k">def</span> <span class="nf">pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">linear_bins</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns the probability density function (normalized histogram) of the</span>
@@ -1017,7 +1020,7 @@
 
 
 <div class="viewcode-block" id="Fit.plot_cdf">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.plot_cdf">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.plot_cdf">[docs]</a>
     <span class="k">def</span> <span class="nf">plot_cdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Plot the cumulative distribution function (CDF) to a new figure or</span>
@@ -1055,7 +1058,7 @@
 
 
 <div class="viewcode-block" id="Fit.plot_ccdf">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.plot_ccdf">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.plot_ccdf">[docs]</a>
     <span class="k">def</span> <span class="nf">plot_ccdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Plot the complementary cumulative distribution function (CCDF) to a</span>
@@ -1093,7 +1096,7 @@
 
 
 <div class="viewcode-block" id="Fit.plot_pdf">
-<a class="viewcode-back" href="../../powerlaw.html#powerlaw.fitting.Fit.plot_pdf">[docs]</a>
+<a class="viewcode-back" href="../../powerlaw.html#powerlaw.Fit.plot_pdf">[docs]</a>
     <span class="k">def</span> <span class="nf">plot_pdf</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">original_data</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">linear_bins</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Plot the probability density function (PDF) or the data to a new figure</span>

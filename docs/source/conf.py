@@ -24,7 +24,8 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.viewcode',
               'numpydoc',
               'sphinx.ext.autosummary',
-              'sphinx_subfigure']
+              'sphinx_subfigure',
+              'sphinx.ext.githubpages']
 
 autodoc_default_options = {
     "members": True,

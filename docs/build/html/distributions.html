@@ -311,30 +311,32 @@ of their lower and upper limits (eg. <code class="docutils literal notranslate">
 <p>The use of <code class="docutils literal notranslate"><span class="pre">None</span></code> is preferred over <code class="docutils literal notranslate"><span class="pre">np.inf</span></code> to indicate an
 unbounded limit.</p>
 </dd>
-<dt><strong>parameter_constraints</strong><span class="classifier">function, list of functions, dict, optional</span></dt><dd><p>Constraints amongst parameters during fitting. Constraint function(s)
-should take a single variable as an argument, which will be a tuple
-with all of the parameter values. The return value of the function
-should be 0 when the constraint is satisfied.</p>
+<dt><strong>parameter_constraints</strong><span class="classifier">dict or list of dict</span></dt><dd><p>Constraints amongst parameters during fitting. Constraint function(s)
+should take the distribution object as the only argument.
+The return value of the function should be some numerical value
+which is either 0 when the constraint is satisfied if an equality
+constraint, or a positive non-zero value when the constraint is
+satisfied if an inequality constraint.</p>
 <p>For example, if I want to enforce that <code class="docutils literal notranslate"><span class="pre">param1</span></code> is greater than
 <code class="docutils literal notranslate"><span class="pre">param2</span></code>, I would define my function:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">constraint</span><span class="p">(</span><span class="n">params</span><span class="p">):</span>
-    <span class="n">param1</span><span class="p">,</span> <span class="n">param2</span> <span class="o">=</span> <span class="n">params</span>
-    <span class="k">return</span> <span class="n">param1</span> <span class="o">&gt;</span> <span class="n">param2</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">constraint</span><span class="p">(</span><span class="n">dist</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">dist</span><span class="o">.</span><span class="n">param1</span> <span class="o">-</span> <span class="n">dist</span><span class="o">.</span><span class="n">param2</span>
+
+<span class="n">constraint_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s1">&#39;ineq&#39;</span><span class="p">,</span>
+                   <span class="s2">&quot;fun&quot;</span><span class="p">:</span> <span class="n">constraint</span><span class="p">}</span>
 </pre></div>
 </div>
-<p>For a single constraint, the function can be directly passed,
-or for multiple constraints, a list of functions can be passed.
-Since this is sent to <code class="docutils literal notranslate"><span class="pre">scipy.optimize.minimize(constraints=...)</span></code>,
-you can also provide as a dictionary as described in their
-documentation:</p>
-<p><a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html</a></p>
-<p>Note that unless constraints are passed as a dictionary, all functions
-are assumed to be ‘equality’ constraints. If you need inequality
-constraints, pass the argument as a dictionary according to the
-above documentation and specify the type of constraint explicitly.</p>
-<p>Constraints are intended to be used only for relations between
-parameters; for simple bounds on parameter values, use of
-<code class="docutils literal notranslate"><span class="pre">parameter_ranges</span></code> is preferred.</p>
+<p>The dictionary (or dictionaries) should contain only the 
+following keys:</p>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;type&quot;</span></code>: The type of the constraint, either <code class="docutils literal notranslate"><span class="pre">&quot;eq&quot;</span></code> or
+<code class="docutils literal notranslate"><span class="pre">&quot;ineq&quot;</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;fun&quot;</span></code>”: The function that implements the constraint.</p>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;dists&quot;</span></code>: The name of the distributions that this constraint
+applies to. If not provided, constraint will be applied to
+all distributions.</p>
+<p>After some processsing and wrapping, these constraints are
+eventually sent to <code class="docutils literal notranslate"><span class="pre">scipy.optimize.minimize(constraints=...)</span></code>;
+see their documentation for more information.</p>
 </dd>
 <dt><strong>discrete_normalization</strong><span class="classifier">{“round”, “sum”}, optional</span></dt><dd><p>Approximation method to use in calculating the PDF (especially the
 PDF normalization constant) for a discrete distribution in the case
