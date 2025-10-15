@@ -70,37 +70,40 @@ class Distribution(object):
         The use of ``None`` is preferred over ``np.inf`` to indicate an
         unbounded limit.
 
-    parameter_constraints : function, list of functions, dict, optional
+    parameter_constraints : dict or list of dict
         Constraints amongst parameters during fitting. Constraint function(s)
-        should take a single variable as an argument, which will be a tuple
-        with all of the parameter values. The return value of the function
-        should be 0 when the constraint is satisfied.
+        should take the distribution object as the only argument.
+        The return value of the function should be some numerical value
+        which is either 0 when the constraint is satisfied if an equality
+        constraint, or a positive non-zero value when the constraint is
+        satisfied if an inequality constraint.
 
         For example, if I want to enforce that ``param1`` is greater than
         ``param2``, I would define my function:
 
         .. code-block::
 
-            def constraint(params):
-                param1, param2 = params
-                return param1 > param2
+            def constraint(dist):
+                return dist.param1 - dist.param2
 
-        For a single constraint, the function can be directly passed,
-        or for multiple constraints, a list of functions can be passed.
-        Since this is sent to ``scipy.optimize.minimize(constraints=...)``,
-        you can also provide as a dictionary as described in their
-        documentation:
+            constraint_dict = {"type": 'ineq',
+                               "fun": constraint}
 
-        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+        The dictionary (or dictionaries) should contain only the 
+        following keys:
 
-        Note that unless constraints are passed as a dictionary, all functions
-        are assumed to be 'equality' constraints. If you need inequality
-        constraints, pass the argument as a dictionary according to the
-        above documentation and specify the type of constraint explicitly. 
+        ``"type"``: The type of the constraint, either ``"eq"`` or
+        ``"ineq"``.
 
-        Constraints are intended to be used only for relations between
-        parameters; for simple bounds on parameter values, use of
-        ``parameter_ranges`` is preferred.
+        ``"fun"``": The function that implements the constraint.
+
+        ``"dists"``: The name of the distributions that this constraint
+        applies to. If not provided, constraint will be applied to
+        all distributions.
+
+        After some processsing and wrapping, these constraints are
+        eventually sent to ``scipy.optimize.minimize(constraints=...)``;
+        see their documentation for more information.
 
     discrete_normalization : {"round", "sum"}, optional
         Approximation method to use in calculating the PDF (especially the
@@ -140,6 +143,18 @@ class Distribution(object):
                  verbose=1,
                  **kwargs):
 
+
+        # When defining a subclass of this one, you should define this
+        # list as a property of the class
+        #parameter_names = []
+        # You also will need to define this in the subclass with the
+        # upper and lower bound for each parameter.
+        #DEFAULT_PARAMETER_RANGES = {}
+        # (but we don't define them here because we don't want to overwrite
+        # the values created in the subclass)
+        # And the name of the distribution
+        #name = 'name'
+
         self.verbose = verbose
 
         self.fit_method = fit_method
@@ -170,22 +185,20 @@ class Distribution(object):
             self.xmin = xmin
         self.xmax = xmax
 
-        # When defining a subclass of this one, you should define this
-        # list in the constructor 
-        #self.parameter_names = []
-        # You also will need to define this in the subclass with the
-        # upper and lower bound for each parameter.
-        #self.DEFAULT_PARAMETER_RANGES = {}
-        # (but we don't define them here because we don't want to overwrite
-        # the values created in the subclass)
-
         # If we don't have a parent fit, we still have to make sure that
         # this variable gets assigned, otherwise we'll have logic issues
         # later on.
         self.parent_Fit = parent_Fit
 
-        if self.parent_Fit and not hasattr(data, '__iter__'):
+        if self.parent_Fit and not hasattr(self.data, '__iter__'):
             self.data = self.parent_Fit.data
+
+        # Crop the data to the domain, but make a copy of the original
+        # first. This means we don't need to trim_to_range whenever
+        # we access the data in the future.
+        if hasattr(self.data, '__iter__'):
+            self.original_data = np.copy(data)
+            self.data = trim_to_range(self.data, xmin=xmin, xmax=xmax)
 
         # Setup the initial parameters and things
         # We have to pass the kwargs here because parameters might be
@@ -277,10 +290,6 @@ class Distribution(object):
         if hasattr(data, '__iter__'):
             # If we aren't given any initial parameters, try to generate
             # them from the data.
-
-            # Make sure that we trim our data to the defined range for
-            # this distribution.
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
             initial_parameters_dict = self.generate_initial_parameters(data)
 
@@ -494,83 +503,124 @@ class Distribution(object):
 
         The constraints are used in ``scipy.optimize.minimize()`` and so
         the end result follows the requirements for dictionary-type
-        constraints described here:
+        constraints described here, though with some slight modifications:
 
         https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
 
         Parameters
         ----------
-        parameter_constraints : function, list of functions, or dict
+        parameter_constraints : dict or list of dict
             Constraints amongst parameters during fitting. Constraint function(s)
-            should take a single variable as an argument, which will be a tuple
-            with all of the parameter values. The return value of the function
-            should be 0 when the constraint is satisfied.
+            should take the distribution object as the only argument.
+            The return value of the function should be some numerical value
+            which is either 0 when the constraint is satisfied if an equality
+            constraint, or a positive non-zero value when the constraint is
+            satisfied if an inequality constraint.
 
             For example, if I want to enforce that ``param1`` is greater than
             ``param2``, I would define my function:
 
             .. code-block::
 
-                def constraint(params):
-                    param1, param2 = params
-                    return param1 > param2
+                def constraint(dist):
+                    return dist.param1 - dist.param2
 
-            For a single constraint, the function can be directly passed,
-            or for multiple constraints, a list of functions can be passed.
-            Since this is sent to ``scipy.optimize.minimize(constraints=...)``,
-            you can also provide a dictionary or list of dictionaries as described
-            in their documentation linked above.
+                constraint_dict = {"type": 'ineq',
+                                   "fun": constraint}
 
-            Note that unless constraints are passed as a dictionary, all functions
-            are assumed to be 'equality' constraints. If you need inequality
-            constraints, pass the argument as a dictionary according to the
-            above documentation and specify the type of constraint explicitly. 
+            The dictionary (or dictionaries) should contain only the 
+            following keys:
+
+            ``"type"``: The type of the constraint, either ``"eq"`` or
+            ``"ineq"``.
+
+            ``"fun"``": The function that implements the constraint.
+
+            ``"dists"``: The name of the distributions that this constraint
+            applies to. If not provided, constraint will be applied to
+            all distributions.
+
+            After some processsing and wrapping, these constraints are
+            eventually sent to ``scipy.optimize.minimize(constraints=...)``;
+            see their documentation for more information.
         """
-        # TODO: Maybe can wrap these functions so they have full access
-        # to the properties of the distribution class, since as of now
-        # they can only make use of parameters that are actively being fit.
-
         # The final constraint object we want is a list of dictionaries that can
-        # be passed to scipy.optimize.minimize. 
+        # be passed to scipy.optimize.minimize.
 
-        # If we are already a list
-        if hasattr(parameter_constraints, '__iter__') and len(parameter_constraints) > 0:
+        # That being said, we have a few extra pieces of information we
+        # want to pass, so even if we are passed a dictionary already, we
+        # should parse all of the information, then create a new dictionary.
 
-            # If we already have a list of dicts, then we assume it is
-            # formatted correctly and are done.
-            if all([type(con) is dict for con in parameter_constraints]):
-                constraint_dict_list = parameter_constraints
+        # From each (if multiple) constraint function, we need the type,
+        # ('eq' or 'ineq'), the function itself, and whether that constraint
+        # applies to this distribution.
+        functions_list = []
+        type_list = []
 
-            # If we have just functions, we need to create a dict for each
-            # one.
-            elif all([hasattr(con, '__call__') for con in parameter_constraints]):
-                constraint_dict_list = []
+        constraint_list = []
 
-                for i in range(len(parameter_constraints)):
-                    con_dict = {'type': 'eq', 'fun': parameter_constraints[i]}
-                    constraint_dict_list.append(con_dict)
+        # First, make a temporary list of the dictionaries if we don't already
+        # have one.
+        if hasattr(parameter_constraints, '__iter__') and type(parameter_constraints) is not dict and len(parameter_constraints) > 0:
+            constraint_list = parameter_constraints
 
-            # Otherwise raise an error
-            else:
-                raise Exception('Invalid value passed for `parameter_constraints`; for multiple constraints, all should be either dict or functions (no mixing).')
-
-        # If we have just a single dictionary, we put it into a list and
-        # are done.
         elif type(parameter_constraints) is dict:
-            constraint_dict_list = [parameter_constraints]
+            constraint_list = [parameter_constraints]
+       
+        # Make sure each entry is a dictionary (this will pass if the
+        # length of constraint_list is zero).
+        assert all([type(con) is dict for con in constraint_list]), f'List of constraints passed to {self.name} but not all are dictionaries.'
 
-        # If we have a function, we make a dict and put it into a list.
-        elif hasattr(parameter_constraints, '__call__'):
-            con_dict = {'type': 'eq', 'fun': parameter_constraints}
-            constraint_dict_list = [con_dict]
+        # Now we parse the information from each dictionary
+        for con in constraint_list:
+            # This whole thing is wrapped in a try statement so we
+            # can return a clearer error if the dictionary is formatted
+            # weirdly.
+            try:
+                # If the dictionary has an entry 'dists', this should be
+                # a list of the distributions to which this constraint
+                # applies. So we only save the constraint if this entry
+                # doesn't exist (implying it applies to all distributions)
+                # or if the name of this dist is in there.
+                if not 'dists' in con:
+                    functions_list.append(con["fun"])
+                    type_list.append(con["type"])
 
-        # If we have none, we use an empty list
-        elif parameter_constraints is None:
-            constraint_dict_list = []
+                elif 'dists' in con and hasattr(con["dists"], '__iter__') and self.name in con["dists"]:
+                    functions_list.append(con["fun"])
+                    type_list.append(con["type"])
 
-        # Otherwise raise an error
-        else:
-            raise Exception('Invalid value passed for `parameter_constraints`; should be function, list, or dict.')
+                # Otherwise, we ignore this constraint
+                else:
+                    pass
+
+            except:
+                raise Exception(f'Malformed constraint dictionary passed to {self.name}: received {con}')
+
+        # The final list of dictionaries we are building
+        constraint_dict_list = []
+
+        # Now that we have the constraints set up, we wrap them in an
+        # outer function which allows us to pass the fit object as the
+        # argument instead of the list of parameter values.
+        for i in range(len(functions_list)):
+
+            # Globals obviously aren't good practice, but this is the
+            # only way I can imagine that we gain access to the whole
+            # Distribution object within the constraint function in
+            # scipy.optimize.minimize.
+            function = functions_list[i]
+            global class_instance
+            class_instance = self
+
+            def wrapped_function(params):
+                # We aren't actually going to use these params
+                # but will load our global class instance and pass that.
+                global class_instance
+                return function(class_instance)
+
+            constraint_dict_list.append({"type": type_list[i],
+                                         "fun": wrapped_function})
 
         # Save the constraints
         self.parameter_constraints = constraint_dict_list
@@ -602,6 +652,8 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             raise ValueError(f'No data to fit distribution ({self.name}) to!')
 
+        # self.data is already trimmed, but if we are passed new data
+        # we need to trim it.
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
         # Define our cost function based on the fitting method we've chosen.
@@ -663,7 +715,8 @@ class Distribution(object):
         #methods = ["Powell", "Nelder-Mead"]
 
         if hasattr(self.parameter_constraints, '__iter__') and len(self.parameter_constraints) > 0:
-            methods = ["COBYLA"]
+            #methods = ["COBYLA"]
+            methods = ["SLSQP"]
         else:
             methods = ['Nelder-Mead']
 
@@ -802,6 +855,8 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             raise ValueError(f'No data to compute distance metrics for in distribution {self.name}!')
 
+        # self.data is already trimmed, but if we are passed new data
+        # we need to trim it.
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
         # If we don't have enough data, return a bunch of nan values
@@ -918,6 +973,8 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             data = self.data
 
+        # self.data is already trimmed, but if we are passed new data
+        # we need to trim it.
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
         n = len(data)
@@ -988,6 +1045,8 @@ class Distribution(object):
         if not hasattr(data, '__iter__'):
             data = self.data
 
+        # self.data is already trimmed, but if we are passed new data
+        # we need to trim it.
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 
         n = len(data)

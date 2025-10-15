@@ -119,37 +119,40 @@ class Fit(object):
         The use of ``None`` is preferred over ``np.inf`` to indicate an
         unbounded limit.
 
-    parameter_constraints : function, list of functions, dict, optional
+    parameter_constraints : dict or list of dict
         Constraints amongst parameters during fitting. Constraint function(s)
-        should take a single variable as an argument, which will be a tuple
-        with all of the parameter values. The return value of the function
-        should be 0 when the constraint is satisfied.
+        should take the distribution object as the only argument.
+        The return value of the function should be some numerical value
+        which is either 0 when the constraint is satisfied if an equality
+        constraint, or a positive non-zero value when the constraint is
+        satisfied if an inequality constraint.
 
         For example, if I want to enforce that ``param1`` is greater than
         ``param2``, I would define my function:
 
         .. code-block::
 
-            def constraint(params):
-                param1, param2 = params
-                return param1 > param2
+            def constraint(dist):
+                return dist.param1 - dist.param2
 
-        For a single constraint, the function can be directly passed,
-        or for multiple constraints, a list of functions can be passed.
-        Since this is sent to ``scipy.optimize.minimize(constraints=...)``,
-        you can also provide as a dictionary as described in their
-        documentation:
+            constraint_dict = {"type": 'ineq',
+                               "fun": constraint}
 
-        https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
+        The dictionary (or dictionaries) should contain only the 
+        following keys:
 
-        Note that unless constraints are passed as a dictionary, all functions
-        are assumed to be 'equality' constraints. If you need inequality
-        constraints, pass the argument as a dictionary according to the
-        above documentation and specify the type of constraint explicitly. 
+        ``"type"``: The type of the constraint, either ``"eq"`` or
+        ``"ineq"``.
 
-        Constraints are intended to be used only for relations between
-        parameters; for simple bounds on parameter values, use of
-        ``parameter_ranges`` is preferred.
+        ``"fun"``": The function that implements the constraint.
+
+        ``"dists"``: The name of the distributions that this constraint
+        applies to. If not provided, constraint will be applied to
+        all distributions.
+
+        After some processsing and wrapping, these constraints are
+        eventually sent to ``scipy.optimize.minimize(constraints=...)``;
+        see their documentation for more information.
 
     xmin_distance : {'D', 'V', 'Asquare'}, optional
         The distance metric used to determine which value of xmin
