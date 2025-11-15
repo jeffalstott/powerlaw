@@ -3,6 +3,8 @@ Utilities used for managing data.
 """
 import numpy as np
 
+import warnings
+
 def checkunique(data):
     """Quickly checks if a sorted array is all unique elements."""
     for i in range(len(data)-1):
@@ -62,8 +64,8 @@ def bisect_map(mn, mx, function, target, tol):
     increasing_func = function(mx) > function(mn)
 
     # Make sure that our target is within the range of mx and mn
-    if (increasing_func and function(mx) > target and function(mn) < target) or \
-       (not increasing_func and function(mn) > target and function(mx) < target):
+    if (increasing_func and (function(mx) > target) and (function(mn) < target)) or \
+       ((not increasing_func) and (function(mn) > target) and (function(mx) < target)):
 
         old_m = 0
         m = 0
@@ -103,4 +105,5 @@ def bisect_map(mn, mx, function, target, tol):
                 return m
 
     else:
+        warnings.warn(f'bisect_map called with bounds that likely dont contain the target value: target={target}, min={mn}, max={mx}')
         return None

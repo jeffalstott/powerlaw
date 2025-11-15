@@ -793,7 +793,7 @@ class Distribution(object):
             self.noise_flag = True
 
             if self.verbose:
-                warnings.warn('Fitted parameters are very close to the edge of parameter ranges; consider changing these ranges.')
+                warnings.warn(f'Fitted parameters are very close to the edge of parameter ranges for distribution {self.name}; consider changing these ranges.')
 
 
     def KS(self, data=None):
@@ -1487,25 +1487,21 @@ class Distribution(object):
             Random numbers drawn from the distribution with shape equal
             to ``size``.
         """
-        # For generating uniform random numbers from ~0 to ~1
-        # We shouldn't actually start from 0, but from _cdf_xmin, which should
-        # be very close to zero.
-        # If we have an xmax, we shouldn't use 1 as the upper bound, but
-        # cdf(xmax). Note that this only works for when we use the continuous
-        # method (either continuous data or discrete data but we don't use
-        # the approximate discrete method). For the approximated discrete
-        # case, we have to calculate a different upper limit (see below).
-
-        if self.xmax:
-            upper_bound = self._cdf_base_function(self.xmax)
-        else:
-            upper_bound = 1
-
         # For continuous random numbers we usually don't need to do any
         # approximations, and can just transform according to the specific
         # distribution.
         if not self.discrete:
-            uniform_r = np.random.uniform(self._cdf_xmin, upper_bound, size=size)
+            # _generate_random_continuous does not take the xmax into
+            # account, so we need to limit the uniform random numbers to
+            # the appropriate upper bound if we have an xmax value.
+            # This function does take xmin into account, so we don't need
+            # to worry about that.
+            if self.xmax:
+                upper_bound = self._cdf_base_function(self.xmax)
+            else:
+                upper_bound = 1
+
+            uniform_r = np.random.uniform(0, upper_bound, size=size)
             r = self._generate_random_continuous(uniform_r)
 
         # For discrete distributions, we usually have to make some
@@ -1545,16 +1541,21 @@ class Distribution(object):
             # desired.
             if estimate_discrete:
                 # Note that if we use the approximate discrete method, the
-                # upper bound is different, since we are using a different
-                # function than _cdf_base_function.
+                # upper bound is different from a continuous one, since we
+                # are using a different function than _cdf_base_function.
                 # So we first do a search to find the maximum value, ie.
                 # the r value such that _generate_random_discrete_estimate(r) = xmax
                 if self.xmax:
-                    upper_bound = bisect_map(mn=0, mx=1,
+                    # For the upper limit mx here, we can't use exactly 1
+                    # since that would lead to an expression evaluating
+                    # as (1 - r)**(-alpha), which would be 0^(-alpha).
+                    upper_bound = bisect_map(mn=0, mx=1-1e-15,
                                              function=self._generate_random_discrete_estimate,
                                              target=self.xmax - 1, # -1 to make sure we always generate values under xmax
                                              tol=1e-8)
 
+                # This function takes xmin into account, so we can just
+                # use 0 as the lower bound.
                 uniform_r = np.random.uniform(0, upper_bound, size=size)
 
                 r = np.array(self._generate_random_discrete_estimate(uniform_r), dtype=np.int64)
@@ -1564,8 +1565,11 @@ class Distribution(object):
                 # inverse search problem to find the specific value of x
                 # where the ccdf is equal to that value of r. The x value
                 # is then the random value we return.
-                print(upper_bound)
-                uniform_r = np.random.uniform(0, upper_bound, size=size)
+
+                # This does the search on the function ccdf which will
+                # automatically account for xmin and xmax, so we can just
+                # use plain 0 and 1 for our bounds.
+                uniform_r = np.random.uniform(0, 1, size=size)
                 r = np.array([self._double_search_discrete(R) for R in uniform_r.flatten()], dtype=np.int64)
 
                 # Now reshape
@@ -1581,14 +1585,17 @@ class Distribution(object):
 
         Parameters
         ----------
-        r : float in [0, 1]
-            A uniform random variable.
+        r : float in [0, 1)
+            A uniform random variable, representing the CDF value for which
+            we want to find the corresponding x value.
 
         Returns
         -------
         x : float
             The sampled value from the theoretical distribution.
         """
+        assert r >= 0 and r <= 1, f'Invalid r value provided to search for: {r}'
+
         # Find a range [x1, x2] that contains our random probability r
         x2 = int(self.xmin)
         while self.ccdf(data=[x2]) >= (1 - r):
@@ -1601,11 +1608,15 @@ class Distribution(object):
                 # And end, since we can't go higher anymore
                 break
 
-        # Use binary search within that range to find the integer that gives
-        # a ccdf value closest to the desired r (or rather, 1 - r).
-        # up to the limit of being between two integers.
+        # Use bisect search within that range to find the integer that gives
+        # a cdf value closest to the desired r (or rather, ccdf closest to 1 - r).
         func = lambda x: self.ccdf(data=[x])[0]
+        # We use a tolerance of 1 since we care about the closest integer
+        # value.
         x = bisect_map(mn=x1, mx=x2, function=func, target=1-r, tol=1)
+
+        if x is None:
+            print(x1, x2, 1-r)
 
         return int(np.around(x))
 
@@ -1832,10 +1843,20 @@ class Power_Law(Distribution):
         """
         # Only is calculable after self.fit is started, when the number of data points is
         # established
+        # If we try to calculate it before then (ie. when self.n doesn't
+        # exist yet) we should return None. This is needed, eg. for
+        # comparing pickled objects.
+        if not hasattr(self, 'n'):
+            return None
+
         return (self.alpha - 1) / np.sqrt(self.n)
 
 
     def _cdf_base_function(self, x):
+        # For alpha = 1 exactly, the cdf has a logarithmic form instead
+        # of another power law. Unfortunately, we can't usually tell if
+        # something has an exact exponent of 1 without already calling
+        # this function several times.
         if self.discrete:
             from scipy.special import zeta
             CDF = 1 - zeta(self.alpha, x)
@@ -1844,6 +1865,7 @@ class Power_Law(Distribution):
             #before xmin and after xmax is handled in Distribution.cdf(), so we don't
             #strictly need this element. It doesn't hurt, for the moment.
             CDF = 1 - (x / self.xmin)**(-self.alpha + 1)
+            #CDF = x**(-self.alpha + 1) - self.xmin**(-self.alpha + 1)
         return CDF
 
 
@@ -2268,12 +2290,14 @@ class Truncated_Power_Law(Distribution):
 
         # If we have a discrete distribution (ie only takes on integer
         # values) we have to shift slightly.
-        if self.discrete and self.estimate_discrete and not self.xmax:
-            params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin - 0.5)))
-
-        else:
-            # For continuous, we just have the usual expression.
-            params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin)))
+        # Update: I think this approximation only applies for a true
+        # power law, so it is better not to use it here.
+        #if self.discrete and self.estimate_discrete and not self.xmax:
+        #    params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin - 0.5)))
+        #
+        #else:
+        # For continuous, we just have the usual expression.
+        params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin)))
 
         params["Lambda"] = 1 / np.mean(data)
 
