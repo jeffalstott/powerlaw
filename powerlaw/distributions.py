@@ -1120,7 +1120,7 @@ class Distribution(object):
                     upper_limit = np.max(self.data)
 
                 # Compute the pdf for all possible values, ie. assuming
-                # we have perfected sampled our distribution.
+                # we have perfectly sampled our distribution.
                 X = np.arange(self.xmin, upper_limit+1)
                 PDF = self._pdf_base_function(X)
 
@@ -1487,21 +1487,77 @@ class Distribution(object):
             Random numbers drawn from the distribution with shape equal
             to ``size``.
         """
+        
+        # For generating random numbers from an arbitrary distribution, we
+        # use inverse transform sampling, which involves finding the inverse
+        # of the cumulative distribution function, and then
+        # evaluating that function for random uniform values in the domain
+        # of the CDF, ie. [0, 1].
+
         # For continuous random numbers we usually don't need to do any
         # approximations, and can just transform according to the specific
         # distribution.
         if not self.discrete:
-            # _generate_random_continuous does not take the xmax into
-            # account, so we need to limit the uniform random numbers to
-            # the appropriate upper bound if we have an xmax value.
-            # This function does take xmin into account, so we don't need
-            # to worry about that.
-            if self.xmax:
-                upper_bound = self._cdf_base_function(self.xmax)
-            else:
-                upper_bound = 1
+            # Note that assuming the full range [0, 1] will give unbounded
+            # random numbers on the upper side; the distribution functions
+            # (_generate_random_continuous) are derived assuming an xmin
+            # value, but no xmax value.
 
-            uniform_r = np.random.uniform(0, upper_bound, size=size)
+            # So for the lower bound we can safely use zero when we don't have
+            # an xmax value.
+            lower_bound = 0
+            upper_bound = 1
+
+            if self.xmax:
+                # When we have an xmax value, we need to change the upper
+                # bound. This is because the whole cumulative distribution 
+                # shifts when we have an xmax.
+
+                # You might be tempted to use the self.cdf() function for that,
+                # but this function already accounts for xmin and xmax, so it will
+                # just give you 0 and 1, which we don't want. What we need is the
+                # unadjusted cdf value, since the inverse transform sampling
+                # function is derived without being adjusted for xmax.
+
+                #upper_bound = self._cdf_base_function(self.xmax)
+
+                # TODO: There is an issue with lognormal and exponential random
+                # number generation, possibly because that inverse cdf is derived
+                # differently than the others, but I don't understand why. For
+                # lognormal or exponential generation to have proper bounds, you
+                # need to somehow change the upper bound to some other value, but
+                # I have no idea what that value is; it doesn't seem to be any
+                # of the obvious combinations of self._cdf_base_function(self.xmin)
+                # and self._cdf_base_function(self.xmax). As such, we just perform
+                # a bisect search to find this value for ALL distributions;
+                # for everything except exponential and lognormal, the value
+                # of this should be identical to self._cdf_base_function(self.xmax).
+
+                # Since this bisect search only needs to perform once per
+                # random generation, this doesn't increase computation
+                # that much, so long as you aren't generate one number at
+                # a time. But of course we should still try to fix this issue.
+
+                # We also have to make sure that our xmax isn't too large;
+                # if we have defined a huge xmax when our distribution
+                # goes to (nearly) zero much before it reaches this value,
+                # we can't actually perform this search (because of
+                # numerical precision). In that case, we can just use
+                # 1 as an upper bound and call it a day :)
+
+                # 1e-10 is arbitrary
+                if 1 - self._cdf_base_function(self.xmax) <= 1e-10:
+                    upper_bound = 1
+
+                else:
+                    upper_bound = bisect_map(mn=0, mx=1-1e-10,
+                                             function=self._generate_random_continuous,
+                                             target=self.xmax, tol=1e-8)
+
+                    # Minus some epsilon since the bisect search isn't perfect
+                    upper_bound -= 1e-6
+
+            uniform_r = np.random.uniform(lower_bound, upper_bound, size=size)
             r = self._generate_random_continuous(uniform_r)
 
         # For discrete distributions, we usually have to make some
@@ -1510,8 +1566,7 @@ class Distribution(object):
             # Make sure that this distribution supports approximating the
             # continuous distribution with some discrete scheme.
             if estimate_discrete and not hasattr(self, '_generate_random_discrete_estimate'):
-                raise AttributeError("This distribution does not have an estimation of the discrete form for \
-                                     generating simulated data. Try the exact form with estimate_discrete=False.")
+                raise AttributeError("This distribution does not have an estimation of the discrete form for generating simulated data. Try the exact form with estimate_discrete=False.")
 
             # If no value for estimate discrete is given, we should decide
             # based on whether the distribution is first able to do this
@@ -1542,17 +1597,19 @@ class Distribution(object):
             if estimate_discrete:
                 # Note that if we use the approximate discrete method, the
                 # upper bound is different from a continuous one, since we
-                # are using a different function than _cdf_base_function.
+                # are using a different function than _generate_random_continuous.
                 # So we first do a search to find the maximum value, ie.
                 # the r value such that _generate_random_discrete_estimate(r) = xmax
                 if self.xmax:
                     # For the upper limit mx here, we can't use exactly 1
-                    # since that would lead to an expression evaluating
-                    # as (1 - r)**(-alpha), which would be 0^(-alpha).
+                    # since that would lead to infinity for most distributions.
                     upper_bound = bisect_map(mn=0, mx=1-1e-15,
                                              function=self._generate_random_discrete_estimate,
                                              target=self.xmax - 1, # -1 to make sure we always generate values under xmax
                                              tol=1e-8)
+
+                else:
+                    upper_bound = 1
 
                 # This function takes xmin into account, so we can just
                 # use 0 as the lower bound.
@@ -2039,49 +2096,49 @@ class Exponential(Distribution):
     # If the if condition evaluates true, then it just calculated the
     # likelihood as _pdf_base_function(x) * _pdf_continuous_normalizer,
     # which is exactly what the parent pdf() does.
-#    def pdf(self, data=None):
-#        if data is None and self.parent_Fit:
-#            data = self.parent_Fit.data
-#
-#        if not self.discrete and self.in_range() and not self.xmax:
-#            print('special pdf2')
-#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-#            from numpy import exp
-#        likelihoods = exp(-Lambda*data)*\
-#                Lambda*exp(Lambda*xmin)
-#
-#            # This is _pdf_base_function(x) * _pdf_continuous_normalizer(xmin)
-#            likelihoods = self.Lambda*exp(self.Lambda*(self.xmin-data))
-#
-#            #Simplified so as not to throw a nan from infs being divided by each other
-#            from sys import float_info
-#            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
-#
-#        else:
-#            likelihoods = Distribution.pdf(self, data)
-#
-#        return likelihoods
-#
-#    def loglikelihoods(self, data=None):
-#        if data is None and self.parent_Fit:
-#            data = self.parent_Fit.data
-#
-#        if not self.discrete and self.in_range() and not self.xmax:
-#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-#            from numpy import log
-#        likelihoods = exp(-Lambda*data)*\
-#                Lambda*exp(Lambda*xmin)
-#            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
-#            #Simplified so as not to throw a nan from infs being divided by each other
-#            from sys import float_info
-#            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
-#        else:
-#            loglikelihoods = Distribution.loglikelihoods(self, data)
-#        return loglikelihoods
+    def pdf(self, data=None):
+        if data is None and self.parent_Fit:
+            data = self.parent_Fit.data
+
+        if not self.discrete and self.in_range() and not self.xmax:
+            print('special pdf2')
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import exp
+        #likelihoods = exp(-Lambda*data)*\
+                #Lambda*exp(Lambda*xmin)
+
+            # This is _pdf_base_function(x) * _pdf_continuous_normalizer(xmin)
+            likelihoods = self.Lambda*exp(self.Lambda*(self.xmin-data))
+
+            #Simplified so as not to throw a nan from infs being divided by each other
+            from sys import float_info
+            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+
+        else:
+            likelihoods = Distribution.pdf(self, data)
+
+        return likelihoods
+
+    def loglikelihoods(self, data=None):
+        if data is None and self.parent_Fit:
+            data = self.parent_Fit.data
+
+        if not self.discrete and self.in_range() and not self.xmax:
+            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+            from numpy import log
+        #likelihoods = exp(-Lambda*data)*\
+        #        Lambda*exp(Lambda*xmin)
+            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
+            #Simplified so as not to throw a nan from infs being divided by each other
+            from sys import float_info
+            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
+        else:
+            loglikelihoods = Distribution.loglikelihoods(self, data)
+        return loglikelihoods
 
 
     def _generate_random_continuous(self, r):
-        return self.xmin - (1/self.Lambda) * np.log(1-r)
+        return self.xmin - (1/self.Lambda) * np.log(1 - r)
 
 
 class Stretched_Exponential(Distribution):
@@ -2372,13 +2429,14 @@ class Truncated_Power_Law(Distribution):
 
 
     def _generate_random_continuous(self, r):
+        # TODO: Try to find a way to do this without rejection sampling.
         def helper(r):
             from numpy import log
             from numpy.random import rand
             while 1:
                 x = self.xmin - (1/self.Lambda) * log(1-r)
                 p = ( x/self.xmin )**-self.alpha
-                if rand()<p:
+                if rand()<p and (x >= self.xmin) and (not self.xmax or x <= self.xmax):
                     return x
                 r = rand()
         from numpy import array
@@ -2444,6 +2502,36 @@ class Lognormal(Distribution):
         theoretical distribution for the values in data within xmin and xmax,
         if present.
 
+        This function is reimplemented solely to call _round_discrete_approx
+        when we want to use that approximation. See that function (or the
+        version of cdf defined in this class, which uses the same technique)
+        for more information, but the goal of that function is to compute the
+        cdf without normalizing until the very end.
+
+        As of now, I can't see any reason why this would ever lead to an
+        underflow error... maybe I'm missing something?
+
+        Here's a minimal example that leads to the overflow error without
+        this function:
+
+        ```
+
+        np.random.seed(0)
+        dist = powerlaw.Lognormal(xmin=1e1, xmax=1e6, parameters=[1.5, 3], discrete=False)
+
+        data = dist.generate_random(50000)
+        powerlaw.plot_pdf(data)
+        dist.plot_pdf()
+
+        fit = powerlaw.Fit(data, xmin=1e1, xmax=1e6)
+
+        fit.lognormal.plot_pdf()
+        plt.show()
+
+        ```
+
+        The fitting will not converge unless you have this overloaded function.
+
         Parameters
         ----------
         data : list or array, optional
@@ -2504,6 +2592,14 @@ class Lognormal(Distribution):
         with the erf function. As implemented, erf(x) quickly approaches 1
         while erfc(x) is more accurate. Since erfc(x) = 1 - erf(x),
         calculations can be written using erfc(x)
+
+        This calculation was originally reformulated to avoid underflow,
+        hence why this class redefines the pdf() function. The main
+        difference is that this computation (q(upper) - q(lower)) / norm, where
+        q is the **unnormalized** _cdf_base_function and norm is the
+        normalization constant, instead of C(upper) - C(lower), where C is the
+        already normalized function. For comparison, see the regular
+        cdf() function when using discrete_normalization='round'.
         """
         import numpy as np
         import scipy.special as ss
@@ -2543,8 +2639,16 @@ class Lognormal(Distribution):
         """
         The cumulative distribution function (CDF) of the lognormal
         distribution. Calculated for the values given in data within xmin and
-        xmax, if present. Calculation was reformulated to avoid underflow
-        errors
+        xmax, if present.
+
+        This function was added to reformulate the calculation to avoid
+        underflow errors, though I think this isn't necessary anymore.
+        As best as I can understand it, the issue was likely with some
+        problems with erf, meaning that erfc was more accurate. But a better
+        solution seems to be just to redefine _cdf_base_function in terms
+        of erfc instead of erf, because then we don't need to redefine this
+        method. I'v made that change in v1.6.0 but I will leave this function
+        here for now; eventually it should be removed.
 
         Parameters
         ----------
@@ -2562,23 +2666,54 @@ class Lognormal(Distribution):
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
-        from numpy import log, sqrt
         import scipy.special as ss
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
 
+        # The passed data takes precedence, but otherwise we use the data
+        # stored in the class instance.
+        if not hasattr(data, '__iter__'):
+            data = self.data
+
+        # self.data is already trimmed, but if we are passed new data
+        # we need to trim it.
         data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+
         n = len(data)
-        from sys import float_info
+
+        if n == 0:
+            raise Exception('No data points in defined range of the distribution.')
+
+        # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
-            from numpy import tile
-            return tile(10**float_info.min_10_exp, n)
+            return np.tile(10**sys.float_info.min_10_exp, n)
 
-        val_data = (log(data)-self.mu) / (sqrt(2)*self.width)
-        val_xmin = (log(self.xmin)-self.mu) / (sqrt(2)*self.width)
-        CDF = 0.5 * (ss.erfc(val_xmin) - ss.erfc(val_data))
+        #if self._cdf_xmin == 1:
+        #    # If cdf_xmin is 1, it means we don't have the numerical accuracy to
+        #    # calculate this tail. So we make everything 1, indicating
+        #    # we're at the end of the tail. Such an xmin should be thrown
+        #    # out by the KS test.
+        #    CDF = np.ones(n)
+        #    return CDF
 
-        norm = 0.5 * ss.erfc(val_xmin)
+        # Compared to the regular cdf function which uses _cdf_base_function,
+        # the difference here is that we evaluate 0.5*erfc(-arg) instead of
+        # 1 - 0.5*erfc(arg)
+
+        # This is the negative of the argument for the erfc for the data
+        val_data = (np.log(data) - self.mu) / (np.sqrt(2)*self.width)
+
+        # This is the negative of the argument for the erfc in _cdf_xmin
+        val_xmin = (np.log(self.xmin) - self.mu) / (np.sqrt(2)*self.width)
+
+        # This is (1 - q(xmin)) - (1 - q(x)) = q(x) - q(xmin)
+        # where q is the unnormalized CDF, ie. _cdf_base_function
+        # TODO: There was an issue here with val_xmin and val_data being
+        # longdouble types, so to be safe, we case here. I should try to
+        # figure out where this is coming from.
+        CDF = 0.5 * (ss.erfc(np.float64(val_xmin)) - ss.erfc(val_data.astype(np.float64)))
+
+        # This is 1 - q(xmin) (because the argument is negative)
+        norm = 0.5 * ss.erfc(np.float64(val_xmin))
+
         if self.xmax:
             # TO DO: Improve this line further for better numerical accuracy?
             norm = norm - (1 - self._cdf_base_function(self.xmax))
@@ -2600,7 +2735,16 @@ class Lognormal(Distribution):
             print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
         return CDF
 
+
     def _cdf_base_function(self, x):
+        r"""
+        :math:`c(x) \sim \frac{1}{2} \left( 1 + \erf \left( \frac{\log x - \mu}{\sigma \sqrt{2}} \right) \right)`
+        :math:` = \frac{1}{2} \erfc \left( - \frac{\log x - \mu}{\sigma \sqrt{2}} \right)`
+        """
+        #from scipy.special import erfc
+        #from mpmath import erfc
+        #return np.float64(0.5 * erfc(-(np.log(x) - self.mu) / (self.width * np.sqrt(2))))
+
         from numpy import sqrt, log
         from scipy.special import erf
         return  0.5 + ( 0.5 *
@@ -2608,6 +2752,10 @@ class Lognormal(Distribution):
 
 
     def _pdf_base_function(self, x):
+        r"""
+        :math:`p(x) \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`
+        """
+        #return 1/x * np.exp(-(np.log(x) - self.mu)**2 / (2 * self.width**2))
         from numpy import exp, log
         return ((1.0/x) *
                 exp(-( (log(x) - self.mu)**2 )/(2*self.width**2)))
@@ -2615,6 +2763,14 @@ class Lognormal(Distribution):
 
     @property
     def _pdf_continuous_normalizer(self):
+        r"""
+        :math:`C = \sigma \sqrt{\pi / 2} \left( 1 + \erf\left( \frac{\mu - \log x_{min}}{ \sigma \sqrt{2}} \right) \right)`
+        :math:` = \sigma \sqrt{\pi / 2} \erfc\left( - \frac{\mu - \log x_{min}}{ \sigma \sqrt{2}} \right)`
+        """
+        #from scipy.special import erfc
+        #from mpmath import erfc
+        #return np.float64(self.width * np.sqrt(np.pi/2) * erfc(-(self.mu - np.log(self.xmin)) / (self.width*np.sqrt(2))))
+
         from mpmath import erfc
 #        from scipy.special import erfc
         from scipy.constants import pi
@@ -2630,38 +2786,24 @@ class Lognormal(Distribution):
 
 
     def _generate_random_continuous(self, r):
-        from numpy import exp, sqrt, log, frompyfunc
-        from mpmath import erf, erfinv
-        #This is a long, complicated function broken into parts.
-        #We use mpmath to maintain numerical accuracy as we run through
-        #erf and erfinv, until we get to more sane numbers. Thanks to
-        #Wolfram Alpha for producing the appropriate inverse of the CCDF
-        #for me, which is what we need to calculate these things.
-        erfinv = frompyfunc(erfinv,1,1)
-        Q = erf( ( log(self.xmin) - self.mu ) / (sqrt(2)*self.width))
-        Q = Q*r - r + 1.0
-        Q = erfinv(Q).astype('float')
-        return exp(self.mu + sqrt(2)*self.width*Q)
+        """
+        An old implementation of this used mpmath for the calculations
+        and mentioned some overflow errors, but I've never encountered
+        any in all of my testing. But just in case we encounter that in
+        the future, we might consider switching back.
+        """
+        from scipy.special import erf, erfinv
 
-#    def _generate_random_continuous(self, r1, r2=None):
-#        from numpy import log, sqrt, exp, sin, cos
-#        from scipy.constants import pi
-#        if r2==None:
-#            from numpy.random import rand
-#            r2 = rand(len(r1))
-#            r2_provided = False
-#        else:
-#            r2_provided = True
-#
-#        rho = sqrt(-2.0 * self.width**2.0 * log(1-r1))
-#        theta = 2.0 * pi * r2
-#        x1 = exp(rho * sin(theta))
-#        x2 = exp(rho * cos(theta))
-#
-#        if r2_provided:
-#            return x1, x2
-#        else:
-#            return x1
+        # To switch back to mpmath, uncomment these two lines
+        #from mpmath import erf, erfinv
+        #erfinv = np.frompyfunc(erfinv,1,1)
+
+        erfinv_arg = erf((self.mu - np.log(self.xmin)) / (np.sqrt(2) * self.width)) * (1 - r) - r
+
+        # To switch back to mpath, use this line instead
+        #return np.exp(self.mu - np.sqrt(2) * self.width * erfinv(erfinv_arg).astype('float')
+
+        return np.exp(self.mu - np.sqrt(2) * self.width * erfinv(erfinv_arg))
 
 
 class Lognormal_Positive(Lognormal):
