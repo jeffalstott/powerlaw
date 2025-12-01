@@ -98,7 +98,8 @@ Indices and tables
 
     tutorials_top
     api
-    contributing
+    derivations_top
+    development_top
 
 * :ref:`genindex`
 * :ref:`search`

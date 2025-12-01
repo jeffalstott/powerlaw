@@ -129,6 +129,15 @@ class Distribution(object):
         keyword arguments.
     """
 
+
+    # This is to indicate whether we should choose bounds based on
+    # xmax for the random number generation, or if this is handled
+    # within the _generate_random_continuous function. For most
+    # cases, if you can derive and implement the inverse CDF following
+    # the standard procedure, this should stay false. For an example
+    # of when you need it to be true, see Truncated power laws.
+    internally_bounded_rng = False
+
     def __init__(self,
                  data=None,
                  xmin=None,
@@ -164,9 +173,10 @@ class Distribution(object):
         self.data = data
 
         # If our data is only integer values, but discrete is not true
-        # or vice versa, give a warning
+        # or vice versa, give a warning, and cast
         if hasattr(self.data, '__iter__') and self.discrete and any(data != np.asarray(data, dtype=np.int64)):
             warnings.warn('discrete=True but data does not exclusively contain integer values. Casting to integer...')
+            self.data = np.around(self.data).astype(np.int64)
 
         elif hasattr(self.data, '__iter__') and (not self.discrete) and all(data == np.asarray(data, dtype=np.int64)):
             warnings.warn('discrete=False but data exclusively contains integer values. Consider using discrete=True.')
@@ -1508,7 +1518,15 @@ class Distribution(object):
             lower_bound = 0
             upper_bound = 1
 
-            if self.xmax:
+            # Truncated power laws are weird because we can't implement
+            # the proper inverse CDF (see _generate_random_continuous for
+            # more information) so we just set the bounds the 0 and 1 and
+            # the rest will be handled by that function.
+            # Similarly, power laws with alpha < 1 will handle the bounds
+            # in their method as well, so we define a bool for each
+            # distribution if it handles the bounds internally or if we
+            # need to set them externally.
+            if self.xmax and not self.internally_bounded_rng:
                 # When we have an xmax value, we need to change the upper
                 # bound. This is because the whole cumulative distribution 
                 # shifts when we have an xmax.
@@ -1554,8 +1572,17 @@ class Distribution(object):
                                              function=self._generate_random_continuous,
                                              target=self.xmax, tol=1e-8)
 
-                    # Minus some epsilon since the bisect search isn't perfect
-                    upper_bound -= 1e-6
+                    # This search might fail for some other mysterious
+                    # reason, most likely that the xmax is too large but
+                    # the previous if statement didn't quite catch it. So
+                    # we should check if it worked, and if it didn't, we
+                    # just use 1.
+                    if not upper_bound:
+                        upper_bound = 1
+    
+                    else:
+                        # Minus some epsilon since the bisect search isn't perfect
+                        upper_bound *= (1 - 1e-5)
 
             uniform_r = np.random.uniform(lower_bound, upper_bound, size=size)
             r = self._generate_random_continuous(uniform_r)
@@ -1668,11 +1695,13 @@ class Distribution(object):
         # Use bisect search within that range to find the integer that gives
         # a cdf value closest to the desired r (or rather, ccdf closest to 1 - r).
         func = lambda x: self.ccdf(data=[x])[0]
-        # We use a tolerance of 1 since we care about the closest integer
-        # value.
-        x = bisect_map(mn=x1, mx=x2, function=func, target=1-r, tol=1)
+        # We use a tolerance of 0.5 since we care about the closest integer
+        # value (if we use 1.0, we will always get X.5 eg. 10.5, 12.5, which
+        # doesn't tell us which integer it actually is, X+1 or X-1).
+        x = bisect_map(mn=x1, mx=x2, function=func, target=1-r, tol=0.5)
 
         if x is None:
+            # DEBUG
             print(x1, x2, 1-r)
 
         return int(np.around(x))
@@ -1763,6 +1792,12 @@ class Power_Law(Distribution):
         # get very messy around there.
         if not self.xmax and self.alpha <= 1.1:
             warnings.warn('Power law distributions with alpha close to 1 without an xmax can be very noisy; it is recommended to give some xmax.')
+
+        # We also need to indicate that random number generation handles
+        # the bounds internally (ie. within _generate_random_continuous)
+        # if alpha < 1 (since otherwise we have issues).
+        if self.alpha < 1:
+            self.internally_bounded_rng = True
 
 
     def generate_initial_parameters(self, data):
@@ -1975,6 +2010,13 @@ class Power_Law(Distribution):
         return C
 
     def _generate_random_continuous(self, r):
+        # If we have an xmax, we can use a different expression; this is
+        # required only for power laws with alpha < 1, otherwise it
+        # will pretty much be equivalent to the alternative, so we can just
+        # use that.
+        if self.alpha < 1:
+            return (r*self.xmax**(1 - self.alpha) + (1 - r)*self.xmin**(1 - self.alpha))**(1/(1 - self.alpha))
+
         return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
 
 
@@ -2143,7 +2185,7 @@ class Exponential(Distribution):
 
 class Stretched_Exponential(Distribution):
     r"""
-    A stretched exponential distribution, :math:`p(x) \sim (x \lambda)^{\beta - 1}
+    A stretched exponential distribution, :math:`p(x) \sim x^{\beta - 1}
     e^{- (\lambda x)^\beta}`.
 
     For expressions for normalization for discrete and continuous
@@ -2209,6 +2251,7 @@ class Stretched_Exponential(Distribution):
     def _pdf_base_function(self, x):
         # TODO: This is different from the base function defined in Clauset
         # et al. 2009. It has extra factors of lambda and exp(lambda^beta)
+        # It should be switched to the derived form in the documentation.
         from numpy import exp
         return (((x*self.Lambda)**(self.beta-1)) *
                 exp(-((self.Lambda*x)**self.beta)))
@@ -2268,11 +2311,7 @@ class Stretched_Exponential(Distribution):
 #        return loglikelihoods
 
     def _generate_random_continuous(self, r):
-        from numpy import log
-#        return ( (self.xmin**self.beta) -
-#            (1/self.Lambda) * log(1-r) )**(1/self.beta)
-        return (1/self.Lambda)* ( (self.Lambda*self.xmin)**self.beta -
-            log(1-r) )**(1/self.beta)
+        return 1/self.Lambda * ((self.Lambda * self.xmin)**self.beta - np.log(1 - r))**(1/self.beta)
 
 
 class Truncated_Power_Law(Distribution):
@@ -2292,6 +2331,10 @@ class Truncated_Power_Law(Distribution):
     DEFAULT_PARAMETER_RANGES = {'alpha': [0, 3],
                                 'Lambda': [0, None]}
 
+    # We can't implement the proper inverse CDF for truncated power laws
+    # since we don't have access to a good enough inverse incomplete
+    # gamma function.
+    internally_bounded_rng = True
 
     def generate_initial_parameters(self, data):
         r"""
@@ -2428,8 +2471,28 @@ class Truncated_Power_Law(Distribution):
 #        return likelihoods
 
 
+#    def _generate_random_continuous(self, r):
+#        """
+#        """
+#        # TODO: Find a way to generate random numbers that doesn't
+#        # involve rejection sampling. The main problem is that there
+#        # doesn't exist an implementation of the inverse regularized lower
+#        # gamma function that can handle negative arguments. 
+#        # scipy.special.gammaincinv computes this quantity, but only for
+#        # positive arguments, see eg.
+#        # https://github.com/scipy/scipy/issues/21498
+#
+#        # Until there is a way to do this, we are stuck with rejection sampling
+#
+#        from scipy.special import gammainc, gammaincinv
+#
+#        gammaincinv_arg = (1 + r) * gammainc(1 - self.alpha, self.Lambda*self.xmin)
+#
+#        return 1/self.Lambda * gammaincinv(1 - self.alpha, gammaincinv_arg)
+
+
     def _generate_random_continuous(self, r):
-        # TODO: Try to find a way to do this without rejection sampling.
+        # TODO: Document this better
         def helper(r):
             from numpy import log
             from numpy.random import rand
@@ -2439,7 +2502,14 @@ class Truncated_Power_Law(Distribution):
                 if rand()<p and (x >= self.xmin) and (not self.xmax or x <= self.xmax):
                     return x
                 r = rand()
+
         from numpy import array
+
+        # This allows the function to be called on a scalar as well as an
+        # iterable
+        if not hasattr(r, '__iter__'):
+            return helper(r)
+
         return array(list(map(helper, r)))
 
 
