@@ -2113,8 +2113,16 @@ class Exponential(Distribution):
 
         # But in order to store this value in the meantime, we have to
         # use a float128 (longdouble) type. The ideal solution might be to use a proper
-        # infinite precision module like mpmath or decimal, but I think
-        # this should work for all cases.
+        # infinite precision module like mpmath or decimal, but that comes 
+        # with some computational costs. The other option is to reformulate
+        # the calculation of the PDF such that we subtract xmin from the
+        # data before computing the exponentials, which is implemented
+        # below. Maybe it's not necessary to use both a reimplementation
+        # of pdf() and longdouble here, but I don't think it hurts anything.
+
+        # Just make sure if you need to use this somewhere outside of the
+        # class, that you convert it back to a float after multiplying it
+        # with data since not all numpy/scipy functions support long doubles.
         return self.Lambda * np.exp(np.longdouble(self.Lambda * self.xmin))
 
 
@@ -2127,56 +2135,76 @@ class Exponential(Distribution):
 
         if self.xmax:
             Cxmax = (1 - np.exp(-self.Lambda)) * np.exp(np.longdouble(self.Lambda * self.xmax))
-            C = 1.0/C - 1.0/Cxmax
-            C = 1.0/C
+            C = 1/C - 1/Cxmax
+            C = 1/C
 
         return C
 
 
-    # This function used to overload the pdf() defined in the super class
-    # but it doesn't seem to do anything different...?
-    # If the if condition evaluates true, then it just calculated the
-    # likelihood as _pdf_base_function(x) * _pdf_continuous_normalizer,
-    # which is exactly what the parent pdf() does.
     def pdf(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
+        # This is reformulated to avoid overflow or underflow errors,
+        # by doing exp(lambda * (xmin - data)) instead of
+        # exp(lambda * xmin) / exp(lambda * data)
+        # This is only relevant for continuous distributions.
 
-        if not self.discrete and self.in_range() and not self.xmax:
-            print('special pdf2')
+        if not self.discrete:
+            # The passed data takes precedence, but otherwise we use the data
+            # stored in the class instance.
+            if not hasattr(data, '__iter__'):
+                data = self.data
+
+            # self.data is already trimmed, but if we are passed new data
+            # we need to trim it.
             data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import exp
-        #likelihoods = exp(-Lambda*data)*\
-                #Lambda*exp(Lambda*xmin)
+
+            n = len(data)
+
+            if n == 0:
+                raise Exception('No data points in defined range of the distribution.')
+
+            # If we aren't in range, we just return a bunch of (nearly) zeros
+            if not self.in_range():
+                return np.tile(10**sys.float_info.min_10_exp, n)
 
             # This is _pdf_base_function(x) * _pdf_continuous_normalizer(xmin)
-            likelihoods = self.Lambda*exp(self.Lambda*(self.xmin-data))
+            # but combined into a single exponential to avoid overflow.
+            likelihoods = self.Lambda * np.exp(self.Lambda * (self.xmin - data))
 
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            likelihoods[likelihoods==0] = 10**float_info.min_10_exp
+            # Simplified so as not to throw a nan from infs being divided by each other
+            likelihoods[likelihoods == 0] = 10**sys.float_info.min_10_exp
 
         else:
+            # Otherwise, we just use the super class function, since we
+            # don't have to worry about overflows.
             likelihoods = Distribution.pdf(self, data)
 
         return likelihoods
 
-    def loglikelihoods(self, data=None):
-        if data is None and self.parent_Fit:
-            data = self.parent_Fit.data
 
-        if not self.discrete and self.in_range() and not self.xmax:
-            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
-            from numpy import log
-        #likelihoods = exp(-Lambda*data)*\
-        #        Lambda*exp(Lambda*xmin)
-            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
-            #Simplified so as not to throw a nan from infs being divided by each other
-            from sys import float_info
-            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
-        else:
-            loglikelihoods = Distribution.loglikelihoods(self, data)
-        return loglikelihoods
+#    def loglikelihoods(self, data=None):
+#        # Just like the above function, this is reformulated to not have
+#        # to compute log(exp(...)) to potentially avoid an overflow. That
+#        # being said, I don't see why this is needed, since likelihoods()
+#        # is already overloaded to avoid this, so if the regular value
+#        # of the likelihood can be stored, certain the logarithm of that
+#        # value can be as well.
+#        # TODO: Figure out if this is necessary.
+#
+#        if data is None and self.parent_Fit:
+#            data = self.parent_Fit.data
+#
+#        if not self.discrete and self.in_range() and not self.xmax:
+#            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
+#            from numpy import log
+#        #likelihoods = exp(-Lambda*data)*\
+#        #        Lambda*exp(Lambda*xmin)
+#            loglikelihoods = log(self.Lambda) + (self.Lambda*(self.xmin-data))
+#            #Simplified so as not to throw a nan from infs being divided by each other
+#            from sys import float_info
+#            loglikelihoods[loglikelihoods==0] = log(10**float_info.min_10_exp)
+#        else:
+#            loglikelihoods = Distribution.loglikelihoods(self, data)
+#        return loglikelihoods
 
 
     def _generate_random_continuous(self, r):
