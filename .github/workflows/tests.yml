@@ -29,11 +29,11 @@ jobs:
 
     - name: Run tests with pytest
       run: |
-        python -m pytest testing/test_powerlaw.py -v
+        python -m pytest testing -v
 
     - name: Run tests with unittest
       run: |
-        python -m unittest testing.test_powerlaw -v
+        python -m unittest testing -v
 
   test-windows:
     runs-on: windows-latest
@@ -57,7 +57,7 @@ jobs:
 
     - name: Run tests
       run: |
-        python -m pytest testing/test_powerlaw.py -v
+        python -m pytest testing -v
 
   test-macos:
     runs-on: macos-latest
@@ -81,4 +81,4 @@ jobs:
 
     - name: Run tests
       run: |
-        python -m pytest testing/test_powerlaw.py -v
+        python -m pytest testing -v
