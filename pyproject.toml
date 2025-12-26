@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "powerlaw"
-version = "1.4.6"
+dynamic = ["version"]
 description = "Toolbox for testing if a probability distribution fits a power law"
 readme = "README.rst"
 authors = [
@@ -44,3 +44,6 @@ Homepage = "http://www.github.com/jeffalstott/powerlaw"
 
 [tool.setuptools]
 py-modules = ["powerlaw"]
+
+[tool.setuptools.dynamic]
+version = {attr = "powerlaw.__version__"}
