@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "powerlaw"
+version = "1.4.6"
+description = "Toolbox for testing if a probability distribution fits a power law"
+readme = "README.rst"
+authors = [
+    {name = "Jeff Alstott", email = "jeffalstott@gmail.com",
+     name = "Adam Ginsburg", email = "adam.g.ginsburg@gmail.com",
+     name = "Jake Featherstone"
+    }
+]
+license = {text = "MIT"}
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 2.7",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+]
+requires-python = ">=2.7"
+dependencies = [
+    "scipy",
+    "numpy",
+    "matplotlib",
+    "mpmath",
+]
+
+[project.optional-dependencies]
+docs = [
+    "furo",
+    "sphinx_subfigure",
+    "numpydoc",
+]
+
+[project.urls]
+Homepage = "http://www.github.com/jeffalstott/powerlaw"
+
+[tool.setuptools]
+py-modules = ["powerlaw"]
