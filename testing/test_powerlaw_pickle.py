@@ -3,7 +3,6 @@ from __future__ import (print_function, absolute_import,
                         unicode_literals, division)
 
 from numpy.testing import assert_allclose
-from numpy import genfromtxt
 
 import walkobj as wo
 
@@ -14,7 +13,7 @@ import pickle
 references = {
         'words': {
             'discrete': True,
-            'data': genfromtxt('testing/reference_data/words.txt'),
+            'data': powerlaw.load_test_dataset('words'),
             'alpha': 1.95,
             'xmin': 7,
             'lognormal': (0.395, 0.69),
@@ -24,7 +23,7 @@ references = {
             },
         'blackouts': {
             'discrete': False,
-            'data': genfromtxt('testing/reference_data/blackouts.txt')/10.0**3,
+            'data': powerlaw.load_test_dataset('blackouts')/10.0**3,
             'alpha': 2.3,
             'xmin': 230,
             'lognormal': (-0.412, 0.68),

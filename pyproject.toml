@@ -10,7 +10,7 @@ readme = "README.rst"
 authors = [
     {name = "Jeff Alstott", email = "jeffalstott@gmail.com"},
     {name = "Adam Ginsburg", email = "adam.g.ginsburg@gmail.com"},
-    {name = "Jake Featherstone"},
+    {name = "Jack Featherstone"},
 ]
 license = {text = "MIT"}
 classifiers = [
