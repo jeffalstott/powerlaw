@@ -336,14 +336,14 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the initial parameters
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for initial parameters: {initial_parameters}.')
+            raise ValueError(f'Invalid value provided for initial parameters: {initial_parameters}.')
 
         # Let's make sure that we got some values, since it's possible we
         # could get to this point by passing no parameters and having
         # no data.
         if any([value is None for value in initial_parameters_dict.values()]):
-            raise Exception('Not enough information provided to assign parameters! Make sure to specific parameter \
-                            values or pass data to generate them.')
+            raise ValueError('Not enough information provided to assign parameters! Make sure to specific parameter '
+                             'values or pass data to generate them.')
 
         # Actually set the values
         for p in self.parameter_names:
@@ -397,7 +397,7 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the parameters
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for setting parameters: {params}.')
+            raise ValueError(f'Invalid value provided for setting parameters: {params}.')
 
         for p in self.parameter_names:
             setattr(self, p, params_dict[p])
@@ -471,7 +471,7 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the ranges
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for parameter ranges: {ranges}')
+            raise ValueError(f'Invalid value provided for parameter ranges: {ranges}')
 
         self.parameter_ranges = ranges_dict
 
@@ -606,7 +606,7 @@ class Distribution(object):
                     pass
 
             except:
-                raise Exception(f'Malformed constraint dictionary passed to {self.name}: received {con}')
+                raise ValueError(f'Malformed constraint dictionary passed to {self.name}: received {con}')
 
         # The final list of dictionaries we are building
         constraint_dict_list = []
@@ -991,7 +991,7 @@ class Distribution(object):
         n = len(data)
 
         if n == 0:
-            raise Exception('No data points in defined range of the distribution.')
+            raise ValueError('No data points in defined range of the distribution.')
 
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
@@ -1063,7 +1063,7 @@ class Distribution(object):
         n = len(data)
 
         if n == 0:
-            raise Exception('No data points in defined range of the distribution.')
+            raise ValueError('No data points in defined range of the distribution.')
 
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
@@ -2185,7 +2185,7 @@ class Exponential(Distribution):
             n = len(data)
 
             if n == 0:
-                raise Exception('No data points in defined range of the distribution.')
+                raise ValueError('No data points in defined range of the distribution.')
 
             # If we aren't in range, we just return a bunch of (nearly) zeros
             if not self.in_range():
@@ -2822,7 +2822,7 @@ class Lognormal(Distribution):
         n = len(data)
 
         if n == 0:
-            raise Exception('No data points in defined range of the distribution.')
+            raise ValueError('No data points in defined range of the distribution.')
 
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
