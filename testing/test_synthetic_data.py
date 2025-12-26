@@ -56,12 +56,12 @@ def generate_fit_generate_fit(parameters_list,
     # We set the last dimension to size 3 instead of num_params because
     # all distributions have 3 parameters in this version of powerlaw, some
     # are just None.
-    #fit_parameters_arr = np.zeros((len(parameters_list), num_samples, 3))
-    #new_fit_parameters_arr = np.zeros((len(parameters_list), num_samples, 3))
+    fit_parameters_arr = np.zeros((len(parameters_list), num_samples, 3))
+    new_fit_parameters_arr = np.zeros((len(parameters_list), num_samples, 3))
 
     # TODO Use this in the new version (PR #115)
-    fit_parameters_arr = np.zeros((len(parameters_list), num_samples, len(distribution.parameter_names)))
-    new_fit_parameters_arr = np.zeros((len(parameters_list), num_samples, len(distribution.parameter_names)))
+    #fit_parameters_arr = np.zeros((len(parameters_list), num_samples, len(distribution.parameter_names)))
+    #new_fit_parameters_arr = np.zeros((len(parameters_list), num_samples, len(distribution.parameter_names)))
 
     for i in range(len(parameters_list)):
         for j in range(num_samples):
@@ -76,9 +76,9 @@ def generate_fit_generate_fit(parameters_list,
             fit = powerlaw.Fit(data=data, xmin=xrange[0], verbose=0, discrete=discrete)
 
             # Generate new data from the fit
-            #new_data = getattr(fit, str(distribution().name)).generate_random(N)
+            new_data = getattr(fit, str(distribution().name)).generate_random(N)
             # TODO Use this in the new version (PR #115)
-            new_data = getattr(fit, distribution.name).generate_random(N)
+            #new_data = getattr(fit, distribution.name).generate_random(N)
 
             if discrete:
                 new_data = new_data.astype(np.int64)
@@ -88,20 +88,20 @@ def generate_fit_generate_fit(parameters_list,
 
             # This is a bit messy because there is no function to return all
             # the parameters of an arbitrary distribution
-            #fit_parameter_values = [getattr(getattr(fit, str(distribution().name)), f'parameter{k+1}') for k in range(3)]
-            #new_fit_parameter_values = [getattr(getattr(new_fit, str(distribution().name)), f'parameter{k+1}') for k in range(3)]
+            fit_parameter_values = [getattr(getattr(fit, str(distribution().name)), f'parameter{k+1}') for k in range(3)]
+            new_fit_parameter_values = [getattr(getattr(new_fit, str(distribution().name)), f'parameter{k+1}') for k in range(3)]
 
-            #fit_parameter_names = [getattr(getattr(fit, distribution().name), f'parameter{k+1}_name') for k in range(3)]
+            fit_parameter_names = [getattr(getattr(fit, distribution().name), f'parameter{k+1}_name') for k in range(3)]
 
-            #fit_parameters_arr[i,j] = fit_parameter_values
-            #new_fit_parameters_arr[i,j] = new_fit_parameter_values
+            fit_parameters_arr[i,j] = fit_parameter_values
+            new_fit_parameters_arr[i,j] = new_fit_parameter_values
 
             # TODO Use this in the new version (PR #115)
-            parameters = getattr(fit, distribution.name).parameters
-            new_parameters = getattr(new_fit, distribution.name).parameters
-            fit_parameters_arr[i,j] = list(parameters.values())
-            new_fit_parameters_arr[i,j] = list(new_parameters.values())
-            fit_parameter_names = list(parameters.keys())
+            #parameters = getattr(fit, distribution.name).parameters
+            #new_parameters = getattr(new_fit, distribution.name).parameters
+            #fit_parameters_arr[i,j] = list(parameters.values())
+            #new_fit_parameters_arr[i,j] = list(new_parameters.values())
+            #fit_parameter_names = list(parameters.keys())
 
 
     # If we want to compare the log of the parameters (if say we only expect

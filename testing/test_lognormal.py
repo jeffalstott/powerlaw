@@ -115,9 +115,9 @@ class TestExternalLognormal(unittest.TestCase):
                 data = lognormal_generate(N, L)
                 fit = powerlaw.Fit(data, xmin=1)
 
-                #assert_allclose([fit.lognormal.sigma], [np.sqrt(N)], rtol=rtol, atol=atol)
+                assert_allclose([fit.lognormal.sigma], [np.sqrt(N)], rtol=rtol, atol=atol)
                 # TODO: For PR #115 replace the above line with this one.
-                assert_allclose([fit.lognormal.width], [np.sqrt(N)], rtol=rtol, atol=atol)
+                #assert_allclose([fit.lognormal.width], [np.sqrt(N)], rtol=rtol, atol=atol)
 
 
 if __name__ == '__main__':
