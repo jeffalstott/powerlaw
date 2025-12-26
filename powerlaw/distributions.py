@@ -1695,6 +1695,7 @@ class Distribution(object):
 
         # Use bisect search within that range to find the integer that gives
         # a cdf value closest to the desired r (or rather, ccdf closest to 1 - r).
+        # The CCDF is used to avoid numerical errors.
         func = lambda x: self.ccdf(data=[x])[0]
         # We use a tolerance of 0.5 since we care about the closest integer
         # value (if we use 1.0, we will always get X.5 eg. 10.5, 12.5, which
