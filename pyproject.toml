@@ -8,10 +8,9 @@ dynamic = ["version"]
 description = "Toolbox for testing if a probability distribution fits a power law"
 readme = "README.rst"
 authors = [
-    {name = "Jeff Alstott", email = "jeffalstott@gmail.com",
-     name = "Adam Ginsburg", email = "adam.g.ginsburg@gmail.com",
-     name = "Jake Featherstone"
-    }
+    {name = "Jeff Alstott", email = "jeffalstott@gmail.com"},
+    {name = "Adam Ginsburg", email = "adam.g.ginsburg@gmail.com"},
+    {name = "Jake Featherstone"},
 ]
 license = {text = "MIT"}
 classifiers = [
