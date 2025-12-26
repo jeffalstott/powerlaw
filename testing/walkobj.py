@@ -46,7 +46,7 @@ def walk(obj, fun):
     elif isinstance(obj, Iterable):
         for item in obj:
             walk(item, fun)
-    elif '__dict__' in dir(obj):
+    elif hasattr(obj, '__dict__'):
         walk(obj.__dict__, fun)
     else:
         fun(obj)
@@ -73,6 +73,6 @@ def typedtree(obj):
         return (dict, [typedtree(obj) for obj in obj.items()])
     if isinstance(obj, Iterable):
         return (type(obj), [typedtree(obj) for obj in obj])
-    if '__dict__' in dir(obj):
+    if hasattr(obj, '__dict__'):
         return (type(obj), typedtree(obj.__dict__))
     return obj

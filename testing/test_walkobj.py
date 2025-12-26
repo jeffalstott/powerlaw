@@ -2,6 +2,7 @@
 
 import unittest
 import numpy as np
+import pytest
 
 import walkobj as wo
 
@@ -49,6 +50,7 @@ testvals = [("abc", "abcd", False),
             ((c1, (c1, (c1, c4))), (c1, (c1, (c1, c3))), False)]
 
 
+@pytest.mark.parametrize("obja,objb,isequal", testvals)
 def test_deep_equals(obja, objb, isequal):
     """Confirm that equality of two objects is correct
 

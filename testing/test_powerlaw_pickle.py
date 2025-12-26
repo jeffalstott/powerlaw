@@ -14,7 +14,7 @@ import pickle
 references = {
         'words': {
             'discrete': True,
-            'data': genfromtxt('reference_data/words.txt'),
+            'data': genfromtxt('testing/reference_data/words.txt'),
             'alpha': 1.95,
             'xmin': 7,
             'lognormal': (0.395, 0.69),
@@ -24,7 +24,7 @@ references = {
             },
         'blackouts': {
             'discrete': False,
-            'data': genfromtxt('reference_data/blackouts.txt')/10.0**3,
+            'data': genfromtxt('testing/reference_data/blackouts.txt')/10.0**3,
             'alpha': 2.3,
             'xmin': 230,
             'lognormal': (-0.412, 0.68),
