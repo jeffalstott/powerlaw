@@ -149,7 +149,8 @@ class TestReferenceData(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         for k in references.keys():
-            data = np.genfromtxt(os.path.join(REFRENCE_DATA_DIR, references[k]['data']))
+            # Load data using powerlaw's data loading function
+            data = powerlaw.load_test_dataset(k)
             data = data * references[k]["data_factor"]
 
             fit = powerlaw.Fit(data, discrete=references[k]['discrete'],

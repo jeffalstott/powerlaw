@@ -177,13 +177,9 @@ def distribution_benchmark(parameters_list,
 
     # We set the last dimension to size 3 instead of num_params because
     # all distributions have 3 parameters in this version of powerlaw, some
-    # are just None.
-    fit_parameters_arr = np.zeros((len(parameters_list), num_samples, 3))
-    distribution_name = str(distribution().name)
-    
-    # TODO Use this in the new version (PR #115)
-    #fit_parameters_arr = np.zeros((len(parameters_list), num_samples, len(distribution.parameter_names)))
-    #distribution_name = distribution.name
+    # Use the number of parameters from the distribution
+    fit_parameters_arr = np.zeros((len(parameters_list), num_samples, len(distribution.parameter_names)))
+    distribution_name = distribution.name
 
     for i in tqdm(range(len(parameters_list)), desc=f'{distribution_name} benchmarking...'):
         for j in range(num_samples):
@@ -197,16 +193,10 @@ def distribution_benchmark(parameters_list,
             # Fit data
             fit = powerlaw.Fit(data=data, xmin=xrange[0], xmax=np.max(data), verbose=0, discrete=discrete)
 
-            # This is a bit messy because there is no function to return all
-            # the parameters of an arbitrary distribution
-            fit_parameter_values = [getattr(getattr(fit, distribution_name), f'parameter{k+1}') for k in range(3)]
-            fit_parameter_names = [getattr(getattr(fit, distribution_name), f'parameter{k+1}_name') for k in range(3)]
-            fit_parameters_arr[i,j] = fit_parameter_values
-
-            # TODO Use this in the new version (PR #115)
-            #parameters = getattr(fit, distribution_name).parameters
-            #fit_parameters_arr[i,j] = list(parameters.values())
-            #fit_parameter_names = list(parameters.keys())
+            # Get fitted parameters
+            parameters = getattr(fit, distribution_name).parameters
+            fit_parameters_arr[i,j] = list(parameters.values())
+            fit_parameter_names = list(parameters.keys())
 
     # Transpose so that the first index corresponds to the parameter index
     #return fit_parameters_arr
