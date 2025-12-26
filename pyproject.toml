@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "setuptools_scm>=8.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -45,5 +45,5 @@ Homepage = "http://www.github.com/jeffalstott/powerlaw"
 [tool.setuptools]
 py-modules = ["powerlaw"]
 
-[tool.setuptools.dynamic]
-version = {attr = "powerlaw.__version__"}
+[tool.setuptools_scm]
+write_to = "powerlaw/_version.py"
