@@ -1,253 +1,167 @@
-# -*- coding: utf-8 -*-
-from __future__ import (print_function, absolute_import,
-                        unicode_literals, division)
+r"""
+This test file contains tests that involve generating synthetic data and
+then fitting to make sure we get the expected result for power law
+distributions.
 
-import unittest
+We generate power law data using inverse sampling transform; so essentially
+the same process as is used internally, but the idea here is to compare
+to a generation function that isn't defined internally, so we can isolate
+issues with random generation from fitting.
+"""
 import powerlaw
+import unittest
+
+import numpy as np
 from numpy.testing import assert_allclose
-from numpy import genfromtxt
 
 
-references = {
-        'words': {
-            'discrete': True,
-            'data': genfromtxt('testing/reference_data/words.txt'),
-            'alpha': 1.95,
-            'xmin': 7,
-            'lognormal': (0.395, 0.69),
-            'exponential': (9.09, 0.0),
-            'stretched_exponential': (4.13, 0.0),
-            'truncated_power_law': (-0.899, 0.18),
-            },
-        'terrorism': {
-            'discrete': True,
-            'data': genfromtxt('testing/reference_data/terrorism.txt'),
-            'alpha': 2.4,
-            'xmin': 12,
-            'lognormal': (-0.278, 0.78),
-            'exponential': (2.457, 0.01),
-            'stretched_exponential': (0.772, 0.44),
-            'truncated_power_law': (-0.077, 0.70),
-            },
-        'blackouts': {
-            'discrete': False,
-            'data': genfromtxt('testing/reference_data/blackouts.txt')/10.0**3,
-            'alpha': 2.3,
-            'xmin': 230,
-            'lognormal': (-0.412, 0.68),
-            'exponential': (1.43, 0.15),    # Clauset value is (1.21, 0.23),
-            'stretched_exponential': (-0.417, 0.68),
-            'truncated_power_law': (-0.382, 0.38),
-            },
-        'cities': {
-            'discrete': False,
-            'data': genfromtxt('testing/reference_data/cities.txt')/10**3,
-            'alpha': 2.37,
-            'xmin': 52.46,
-            'lognormal': (-0.090, 0.93),
-            'exponential': (3.65, 0.0),
-            'stretched_exponential': (0.204, 0.84),
-            'truncated_power_law': (-0.123, 0.62),
-            },
-        'fires': {
-            'discrete': False,
-            'data': genfromtxt('testing/reference_data/fires.txt'),
-            'alpha': 2.2,
-            'xmin': 6324,
-            'lognormal': (-1.78, 0.08),
-            'exponential': (4.00, 0.0),
-            'stretched_exponential': (-1.82, 0.07),
-            'truncated_power_law': (-5.02, 0.0),
-            },
-        'flares': {
-            'discrete': False,
-            'data': genfromtxt('testing/reference_data/flares.txt'),
-            'alpha': 1.79,
-            'xmin': 323,
-            'lognormal': (-0.803, 0.42),
-            'exponential': (13.7, 0.0),
-            'stretched_exponential': (-0.546, 0.59),
-            'truncated_power_law': (-4.52, 0.0),
-            },
-        'quakes': {
-            'discrete': False,
-            'data': (10**genfromtxt('testing/reference_data/quakes.txt'))/10**3,
-            'alpha': 1.95,   # Clauset/plfit value is 1.64
-            'xmin': 10,      # Clauset/plfit value is .794
-            'lognormal': (-0.796, 0.43),     # Clauset value is (-7.14, 0.0)
-            'exponential': (9.7, 0),   # Clauset value is (11.6, 0.0),
-            'stretched_exponential': (-7.09, 0.0),
-            'truncated_power_law': (-24.4, 0.0),
-            },
-        'surnames': {
-            'discrete': False,
-            'data': genfromtxt('testing/reference_data/surnames.txt')/10**3,
-            'alpha': 2.2,       # Clauset/plfit value is 2.5,
-            'xmin': 14.92,      # Clauset/plfit value is 111.92
-            'lognormal': (0.148, 0.88),     # Clauset value is (-0.836, 0.4)
-            'exponential': (10, 0),   # Clauset value is (2.89, 0.0),
-            'stretched_exponential': (-0.844, 0.40),
-            'truncated_power_law': (-1.36, 0.10),
-            }
-        }
-"""
-There is a subtle bug in the Clauset/plfit code involving the calculation of
-the cumulative distribution function. Specifically, it assumes that only
-discrete distributions can have repeat values and therefore performs the
-calculation incorrectly in the case of a continuous distribution with repeated
-values as occurs in the quakes and surnames data sets. The alpha values used
-here for those data sets can be confirmed with the plfit code by forcing it use
-the corresponding xmin values. Forcing powerlaw to calculate the cumulative
-distribution function as done in the plfit code produces the same xmin values
-as the plfit code and the other data sets produce identical results with both
-plfit and powerlaw so the alpha and xmin values were changed as above for the
-quakes and surnames data sets.
-"""
+def randomPowerLaw(alpha, xmin, xmax, size=1):
+    """
+    Power-law gen for:
+        pdf(x) ~ x^{alpha} for xmin <= x <= xmax
 
-results = {
-        'words': {},
-        'terrorism': {},
-        'blackouts': {},
-        'cities': {},
-        'fires': {},
-        'flares': {},
-        'quakes': {},
-        'surnames': {}
-        }
+    Note that this form is slightly different than that of 
+    ``powerlaw.Power_Law._generate_random_continuous()`` since it is
+    derived using an explicit value for xmax instead of infinity.
+    """
+    r = np.random.uniform(0, 1, size=size)
+
+    return (r*xmax**(1 + alpha) + (1 - r)*xmin**(1 + alpha))**(1/(1 + alpha))
 
 
-class FirstTestCase(unittest.TestCase):
+def randomPowerLawXmin(alpha, x0, xmax, size=1):
+    """
+    Power-law gen for:
+        pdf(x) ~ const       for x0   <= x <= xmin
+        pdf(x) ~ x^{alpha}   for xmin <= x <= xmax
 
-    @classmethod
-    def setUpClass(cls):
-        for k in references.keys():
-            data = references[k]['data']
-            fit = powerlaw.Fit(data, discrete=references[k]['discrete'],
-                               estimate_discrete=False)
-            results[k]['alpha'] = fit.alpha
-            results[k]['xmin'] = fit.xmin
-            results[k]['fit'] = fit
+    ie. generate a flat distribution that then decays like a power law
+    so we can test the xmin fitting.
 
-    def test_power_law(self):
-        print("Testing power law fits")
+    xmin is randomly generated from a (log) uniform distribution up
+    to 10**(0.1 np.log10(np.max(data))) * 0.01 is chosen so that
+    way we always have at least two decades to fit the powerlaw to.
 
-        rtol = .1
-        atol = 0.01
+    log(xmax/x0) should probably be at least 5 to give ample range to generate
+    data.
+    """
+    maxExp = np.log10(xmax) - 2
+    xmin = 10**np.random.uniform(np.log10(x0) + 1, maxExp)
+    nonPowerLawFrac = (xmin - x0) / (xmax - x0)
 
-        for k in references.keys():
-            print(k)
-            assert_allclose(results[k]['alpha'], references[k]['alpha'],
-                            rtol=rtol, atol=atol, err_msg=k)
+    r = np.random.random(size=int(size*(1 - nonPowerLawFrac)))
+    xming, xmaxg = xmin**(alpha+1), xmax**(alpha+1)
+    powerLawValues = (xming + (xmaxg - xming)*r)**(1./(alpha+1))
+    hist, bins = np.histogram(powerLawValues, bins=np.logspace(np.log10(xmin), np.log10(xmax), 10))
 
-            assert_allclose(results[k]['xmin'], references[k]['xmin'],
-                            rtol=rtol, atol=atol, err_msg=k)
+    nonPowerLawSamples = (xmin - x0) / (bins[1] - bins[0]) * hist[0]
+    nonPowerLawValues = np.random.uniform(x0, xmin, size=int(nonPowerLawSamples))
 
-    def test_power_law_params(self):
-        print("Testing if power law params are set correctly")
-
-        for k in references.keys():
-            print(k)
-            assert results[k]['fit'].power_law.parameter1 == results[k]['fit'].power_law.alpha
-            assert results[k]['fit'].power_law.parameter1_name == 'alpha'
+    return np.concatenate((nonPowerLawValues, powerLawValues)), xmin
 
 
-    def test_lognormal(self):
-        print("Testing lognormal fits")
+def power_law_fit(alpha_range, discrete=False):
+    """
+    Test power law fits on synthetic data within a specific range.
+    """
+    rtol = .1
+    atol = 0.01
 
-        rtol = .1
-        atol = 0.01
+    # These are chosen arbitrarily.
+    alphaArr = np.linspace(alpha_range[0], alpha_range[1],
+                           int((alpha_range[1] - alpha_range[0])*15))
+    numSamples = 5 # per alpha value
+    N = 3000 # num samples per test
 
-        for k in references.keys():
-            print(k)
-            fit = results[k]['fit']
-            Randp = fit.loglikelihood_ratio('power_law', 'lognormal',
-                                            normalized_ratio=True)
-            results[k]['lognormal'] = Randp
+    fitAlphaArr = np.zeros((len(alphaArr), numSamples))
 
-            assert_allclose(Randp, references[k]['lognormal'],
-                            rtol=rtol, atol=atol, err_msg=k)
+    # Higher xmin value for discrete since it can cause errors
+    xmin = 1 if not discrete else 100
 
-    def test_exponential(self):
-        print("Testing exponential fits")
+    for i in range(len(alphaArr)):
+        for j in range(numSamples):
+            data = randomPowerLaw(-alphaArr[i], xmin=xmin, xmax=1e6, size=N)
+            if discrete:
+                data = data.astype(np.int64)
 
-        rtol = .1
-        atol = 0.01
+            fit = powerlaw.Fit(data=data, xmin=xmin, xmax=np.max(data), verbose=0, discrete=discrete)
 
-        for k in references.keys():
-            print(k)
-            fit = results[k]['fit']
-            Randp = fit.loglikelihood_ratio('power_law', 'exponential',
-                                            normalized_ratio=True)
-            results[k]['exponential'] = Randp
-
-            assert_allclose(Randp, references[k]['exponential'],
-                            rtol=rtol, atol=atol, err_msg=k)
-
-    def test_stretched_exponential(self):
-        print("Testing stretched_exponential fits")
-
-        rtol = .1
-        atol = 0.01
-
-        for k in references.keys():
-            print(k)
-            fit = results[k]['fit']
-            Randp = fit.loglikelihood_ratio('power_law', 'stretched_exponential',
-                    normalized_ratio=True)
-            results[k]['stretched_exponential'] = Randp
-
-            #assert_allclose(Randp, references[k]['stretched_exponential'],
-            #        rtol=rtol, atol=atol, err_msg=k)
-
-    def test_truncated_power_law(self):
-        print("Testing truncated_power_law fits")
-
-        rtol = .1
-        atol = 0.01
-
-        for k in references.keys():
-            print(k)
-            if references[k]['discrete']:
-                continue
-            fit = results[k]['fit']
-            Randp = fit.loglikelihood_ratio('power_law', 'truncated_power_law')
-            results[k]['truncated_power_law'] = Randp
-
-            #assert_allclose(Randp, references[k]['truncated_power_law'],
-            #        rtol=rtol, atol=atol, err_msg=k)
-
-class TestPlotPDF(unittest.TestCase):
-    def test_custom_bins(self):
-
-        import numpy as np
-        import powerlaw
-
-        import matplotlib.pyplot as plt
-
-        data = 1. / np.random.power(4., 1000)
-        fit = powerlaw.Fit(data)
-
-        # ax1 = fit.plot_pdf()
-        plt.figure()
-        bins = 2
-        ax = fit.plot_pdf(marker="*", bins=bins)
-        line = ax.lines[0]
-        assert len(line.get_xdata()) == bins
-        plt.close()
-
-        plt.figure()
-        bins = 10
-        ax = fit.plot_pdf(marker="*", bins=bins)
-        line = ax.lines[0]
-        assert len(line.get_xdata()) == bins
-        plt.close()
+            fitAlphaArr[i,j] = fit.power_law.alpha
 
 
+    for i in range(len(alphaArr)):
+        assert_allclose(fitAlphaArr[i], np.repeat(alphaArr[i], numSamples),
+                        rtol=rtol, atol=atol, err_msg=f'Alpha value: {alphaArr[i]}')
 
 
+def power_law_fit_random_xmin(alpha_range):
+    """
+    Test power law fits on synthetic data within a specific range, with a
+    random xmin value, before which the distribution is flat.
+    """
+    # Higher tolerance, since this fit will be noisier
+    rtol = .2
+    atol = 0.5
 
+    # These are chosen arbitrarily.
+    alphaArr = np.linspace(alpha_range[0], alpha_range[1],
+                           int((alpha_range[1] - alpha_range[0])*5))
+    numSamples = 1 # per alpha value
+    N = 3000 # num samples per test
+
+    xminArr = np.zeros((len(alphaArr), numSamples))
+    fitAlphaArr = np.zeros((len(alphaArr), numSamples))
+    fitXMinArr = np.zeros((len(alphaArr), numSamples))
+
+    for i in range(len(alphaArr)):
+        for j in range(numSamples):
+            data, xmin = randomPowerLawXmin(-alphaArr[i], x0=1, xmax=1e6, size=N)
+            fit = powerlaw.Fit(data, xmax=np.max(data), verbose=0)
+
+            xminArr[i,j] = xmin
+            fitAlphaArr[i,j] = fit.power_law.alpha
+            fitXMinArr[i,j] = fit.xmin
+
+    for i in range(len(alphaArr)):
+        assert_allclose(fitAlphaArr[i], np.repeat(alphaArr[i], numSamples),
+                        rtol=rtol, atol=atol, err_msg=f'alpha mismatch for alpha value: {alphaArr[i]}')
+
+        # For the xmin, just make sure the log of the value is close
+        assert_allclose(np.log(fitXMinArr[i]), np.log(xminArr[i]),
+                        rtol=rtol, atol=atol, err_msg=f'xmin mismatch for alpha value: {alphaArr[i]}')
+
+
+class TestExternalPowerLaw(unittest.TestCase):
+    """
+    These tests compare the fitting of synthetic power law data generated
+    outside of the powerlaw library.
+    """
+
+    def test_alpha_1p0_to_1p5_continuous(self):
+        # Can't do exactly 1.0 beacuse there is a dicontinuity there.
+        power_law_fit([1.02, 1.5], discrete=False)
+
+    def test_alpha_1p5_to_2p5_continuous(self):
+        power_law_fit([1.5, 2.5], discrete=False)
+
+    def test_alpha_2p5_to_3p0_continuous(self):
+        power_law_fit([2.5, 3.0], discrete=False)
+
+    def test_alpha_2p0_to_2p5_continuous_random_xmin(self):
+        # These tests with xmin take much longer, so for now I'll leave
+        # just a single one.
+        power_law_fit_random_xmin([2.0, 2.5])
+
+    def test_alpha_1p0_to_1p5_discrete(self):
+        # Can't do exactly 1.0 beacuse there is a dicontinuity there.
+        power_law_fit([1.02, 1.5], discrete=True)
+
+    def test_alpha_1p5_to_2p5_discrete(self):
+        power_law_fit([1.5, 2.5], discrete=True)
+
+    def test_alpha_2p5_to_3p0_discrete(self):
+        power_law_fit([2.5, 3.0], discrete=True)
 
 
 if __name__ == '__main__':
-    # execute all TestCases in the module
     unittest.main()
