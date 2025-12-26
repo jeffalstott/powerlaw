@@ -193,6 +193,7 @@ class Distribution(object):
 
         else:
             self.xmin = xmin
+
         self.xmax = xmax
 
         # If we don't have a parent fit, we still have to make sure that
@@ -1704,7 +1705,12 @@ class Distribution(object):
             # DEBUG
             print(x1, x2, 1-r)
 
-        return int(np.around(x))
+        # TODO: I would have thought that rounding properly here would give
+        # more accurate distributions, but, specifically for discrete truncated power
+        # law distributions, this actually leads to very bad fits. It could
+        # have something to do with the fact
+        #return int(np.around(x))
+        return int(x)
 
 
 class Power_Law(Distribution):
@@ -1796,8 +1802,21 @@ class Power_Law(Distribution):
         # We also need to indicate that random number generation handles
         # the bounds internally (ie. within _generate_random_continuous)
         # if alpha < 1 (since otherwise we have issues).
-        if self.alpha < 1:
+        # For alpha greater than 1 but close to it, if we have an xmax
+        # we should use the bounded form as well since it's much less
+        # noisy. eg. for alpha ~ 1.03 or below, the inverse cdf with no
+        # xmax will give insane numbers (~1e200). It will technically have
+        # the correct scaling, but the data will be so spread across
+        # such a wide range that it can affect fitting. If you change this
+        # 1.1 value, be sure to change it in _generate_random_continuous too.
+        if self.alpha <= 1.1 and self.xmax:
             self.internally_bounded_rng = True
+
+        # If alpha is exactly 1, we can't handle that. This probably would
+        # never come up for fitting real data, but just in case, we should
+        # raise an error.
+        if self.alpha == 1:
+            raise ValueError('Power laws with exponent exactly equal to 1 are not supported.')
 
 
     def generate_initial_parameters(self, data):
@@ -1956,6 +1975,11 @@ class Power_Law(Distribution):
             #Can this be reformulated to not reference xmin? Removal of the probability
             #before xmin and after xmax is handled in Distribution.cdf(), so we don't
             #strictly need this element. It doesn't hurt, for the moment.
+            # TODO: I believe the answer to this question is no, but should
+            # confirm. For more info, see the power law cdf derivation; I
+            # don't see a way to not include xmin. Some distributions can
+            # be defined assuming xmin is zero (eg. the exponential or
+            # lognormal) but I don't think you can do that for powerlaw.
             CDF = 1 - (x / self.xmin)**(-self.alpha + 1)
             #CDF = x**(-self.alpha + 1) - self.xmin**(-self.alpha + 1)
         return CDF
@@ -2014,7 +2038,7 @@ class Power_Law(Distribution):
         # required only for power laws with alpha < 1, otherwise it
         # will pretty much be equivalent to the alternative, so we can just
         # use that.
-        if self.alpha < 1:
+        if self.alpha <= 1.1 and self.xmax:
             return (r*self.xmax**(1 - self.alpha) + (1 - r)*self.xmin**(1 - self.alpha))**(1/(1 - self.alpha))
 
         return self.xmin * (1 - r) ** (-1/(self.alpha - 1))
@@ -2425,7 +2449,7 @@ class Truncated_Power_Law(Distribution):
         #
         #else:
         # For continuous, we just have the usual expression.
-        params["alpha"] = 1 + n / np.sum(np.log(data / (self.xmin)))
+        params["alpha"] = 1 + n / np.sum(np.log(data / self.xmin))
 
         params["Lambda"] = 1 / np.mean(data)
 
@@ -2433,6 +2457,9 @@ class Truncated_Power_Law(Distribution):
 
 
     def _cdf_base_function(self, x):
+        # TODO: Is this the CDF of a truncated power law? It's not the
+        # same that I was able to derive using the pdf below (see the
+        # documentation for that derivation).
         from mpmath import gammainc
         from numpy import vectorize
         gammainc = vectorize(gammainc)
@@ -2452,13 +2479,13 @@ class Truncated_Power_Law(Distribution):
     @property
     def _pdf_continuous_normalizer(self):
         from mpmath import gammainc
-        C = ( self.Lambda**(1-self.alpha) /
-                float(gammainc(1-self.alpha,self.Lambda*self.xmin)))
+        C = self.Lambda**(1 - self.alpha) / np.float64(gammainc(1 - self.alpha, self.Lambda * self.xmin))
         return C
 
 
     @property
     def _pdf_discrete_normalizer(self):
+        # TODO: find/write up a proper derivation for this
         if 0:
             return False
         from mpmath import lerchphi
@@ -2474,6 +2501,9 @@ class Truncated_Power_Law(Distribution):
 
 
     # Deprecated
+    # I don't know why this was overloaded in the first place; no explanation
+    # is given in the original code, and I can't see a functional difference
+    # between this function and the parent class pdf().
 #    def pdf(self, data=None):
 #        if data is None and self.parent_Fit:
 #            data = self.parent_Fit.data
@@ -2482,9 +2512,9 @@ class Truncated_Power_Law(Distribution):
 #            data = trim_to_range(data, xmin=self.xmin, xmax=self.xmax)
 #            from numpy import exp
 #            from mpmath import gammainc
-#        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
-#                (Lambda**(1-alpha))/\
-#                float(gammainc(1-alpha,Lambda*xmin))
+##        likelihoods = (data**-alpha)*exp(-Lambda*data)*\
+##                (Lambda**(1-alpha))/\
+##                float(gammainc(1-alpha,Lambda*xmin))
 #            likelihoods = ( self.Lambda**(1-self.alpha) /
 #                    (data**self.alpha *
 #                            exp(self.Lambda*data) *
@@ -2520,25 +2550,38 @@ class Truncated_Power_Law(Distribution):
 
 
     def _generate_random_continuous(self, r):
-        # TODO: Document this better
+        # This is a rejection sampling technique, since the proper ITS
+        # method (skeleton above) can't be implemented in Python as of
+        # now.
+        # We generate random numbers from the exponential distribution
+        # that is included in the distribution, and then return those
+        # numbers with probability equal to the PDF of the power law included
+        # in the distribution evaluated for each exponential sample.
         def helper(r):
-            from numpy import log
-            from numpy.random import rand
-            while 1:
-                x = self.xmin - (1/self.Lambda) * log(1-r)
-                p = ( x/self.xmin )**-self.alpha
-                if rand()<p and (x >= self.xmin) and (not self.xmax or x <= self.xmax):
-                    return x
-                r = rand()
+            # This function doesn't actually really care about the argument
+            # r; it is just the first value to try, and upon failure, it
+            # will just generate an entirely new value.
+            while True:
+                # This is the ITS expression for an exponential
+                x = self.xmin - (1/self.Lambda) * np.log(1-r)
 
-        from numpy import array
+                # This is the PDF of a power law, evaluated for the point
+                # we generate from the exponential function
+                p = (x / self.xmin)**(-self.alpha)
+
+                # We can't deal with bounds easily in this combined method
+                # so we have to explicitly check for them.
+                if (np.random.uniform(0, 1) < p) and (x >= self.xmin) and ((self.xmax is None) or (x <= self.xmax)):
+                    return x
+
+                r = np.random.uniform(0, 1)
 
         # This allows the function to be called on a scalar as well as an
         # iterable
         if not hasattr(r, '__iter__'):
             return helper(r)
 
-        return array(list(map(helper, r)))
+        return np.array(list(map(helper, r)))
 
 
 class Lognormal(Distribution):
