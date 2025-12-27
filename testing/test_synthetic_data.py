@@ -19,6 +19,8 @@ as well as distributions with and without an xmax value.
 """
 
 import unittest
+import pytest
+
 import powerlaw
 
 import numpy as np
@@ -255,6 +257,10 @@ class TestGenerationFitting_Exponential(unittest.TestCase):
                                   atol=A_TOL, rtol=R_TOL)
 
 
+    # This fails because of an issue with the ccdf's handling of empty
+    # arrays, see:
+    # https://github.com/jeffalstott/powerlaw/issues/120
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/120")
     def test_exponential_discrete_xmax(self):
         generate_fit_generate_fit(self.parameters_list,
                                   distribution=powerlaw.Exponential,

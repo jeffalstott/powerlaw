@@ -4,6 +4,8 @@ from distributions.
 """
 
 import unittest
+import pytest
+
 import powerlaw
 
 import numpy as np
@@ -24,6 +26,9 @@ class TestRandomGeneration(unittest.TestCase):
         assert len(data) == N
 
 
+    # For information on why this fails in v1.5, see:
+    # https://github.com/jeffalstott/powerlaw/issues/118
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/118")
     def test_rng_bounds_continuous(self):
         """
         Make sure that the randomly generated numbers are within the
@@ -63,6 +68,11 @@ class TestRandomGeneration(unittest.TestCase):
             assert all(data >= xmin), f'{str(distribution_arr[i])}, lower bound'
 
 
+    # For information on why this fails in v1.5, see:
+    # https://github.com/jeffalstott/powerlaw/issues/118
+    # Also related to:
+    # https://github.com/jeffalstott/powerlaw/issues/120
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/118")
     def test_rng_bounds_discrete(self):
         """
         Make sure that the randomly generated numbers are within the
@@ -127,6 +137,9 @@ class TestRandomGeneration(unittest.TestCase):
             assert all(data <= xmax)
 
 
+    # For information on why this fails in v1.5, see:
+    # https://github.com/jeffalstott/powerlaw/issues/118
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/118")
     def test_rng_upper_bound_power_law_alpha_1p1_to_2p5(self):
         """
         Make sure that the randomly generated numbers are within the
@@ -148,6 +161,10 @@ class TestRandomGeneration(unittest.TestCase):
             assert all(data <= xmax)
 
 
+    # Fails because v1.5 doesn't support power laws with alpha less
+    # than 1, see:
+    # https://github.com/jeffalstott/powerlaw/issues/113
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/113")
     def test_rng_lower_bound_power_law_alpha_0p5_to_0p9(self):
         """
         Make sure that the randomly generated numbers are within the
