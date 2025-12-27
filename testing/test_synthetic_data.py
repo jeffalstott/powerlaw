@@ -79,12 +79,13 @@ def generate_fit_generate_fit(parameters_list,
             new_fit = powerlaw.Fit(data=new_data, xmin=xrange[0], verbose=0, discrete=discrete)
 
             # Get the fitted parameters
-            fit_parameters_arr[i,j] = getattr(fit, distribution.name).parameters
-            new_fit_parameters_arr[i,j] = getattr(new_fit, distribution.name).parameters
-            #new_parameters = getattr(new_fit, distribution.name).parameters
-            #fit_parameters_arr[i,j] = list(parameters.values())
-            #new_fit_parameters_arr[i,j] = list(new_parameters.values())
-            #fit_parameter_names = list(parameters.keys())
+            parameters = getattr(fit, distribution.name).parameters
+            new_parameters = getattr(new_fit, distribution.name).parameters
+            fit_parameters_arr[i,j] = list(parameters.values())
+            new_fit_parameters_arr[i,j] = list(new_parameters.values())
+
+    # Get parameter names from the distribution
+    fit_parameter_names = list(getattr(fit, distribution.name).parameters.keys())
 
 
     # If we want to compare the log of the parameters (if say we only expect
