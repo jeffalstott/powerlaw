@@ -2,6 +2,7 @@ import numpy as np
 from numpy import nan
 
 import warnings
+from deprecated import deprecated
 
 import sys
 import types
@@ -1959,9 +1960,12 @@ class Power_Law(Distribution):
 
 
     @property
-    def sigma(self):
+    def standard_err(self):
         """
-        The standard error of the MLE.
+        The standard error of the maximum likelihood estimator.
+
+        This used to be called ``sigma`` though was changed to ``standard_err``
+        to avoid confusion with the lognormal parameter ``sigma``.
         """
         # Only is calculable after self.fit is started, when the number of data points is
         # established
@@ -1972,6 +1976,12 @@ class Power_Law(Distribution):
             return None
 
         return (self.alpha - 1) / np.sqrt(self.n)
+
+
+    @property
+    @deprecated("Standard error for the MLE should be accessed using the 'standard_err' property. Accessing via 'sigma' property will be removed in v2.1.")
+    def sigma(self):
+        return self.standard_err
 
 
     def _cdf_base_function(self, x):
@@ -2595,19 +2605,14 @@ class Truncated_Power_Law(Distribution):
 class Lognormal(Distribution):
     r"""
     A lognormal distribution, :math:`p(x) \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`.
-
-    Note that :math:`\sigma` is referred to as `width` in the package
-    so as to not confuse it with the standard error of other distributions.
     """
 
     name = 'lognormal'
 
-    # I have renamed this to be width from 'sigma' since there is
-    # already a sigma defined as the standard error in this package.
-    parameter_names = ['mu', 'width']
+    parameter_names = ['mu', 'sigma']
 
     DEFAULT_PARAMETER_RANGES = {'mu': [None, None],
-                                'width': [0, None]}
+                                'sigma': [0, None]}
 
 
     def generate_initial_parameters(self, data):
@@ -2640,7 +2645,7 @@ class Lognormal(Distribution):
         logdata = np.log(data)
 
         params["mu"] = np.mean(logdata)
-        params["width"] = np.std(logdata)
+        params["sigma"] = np.std(logdata)
 
         return params
 
@@ -2769,11 +2774,11 @@ class Lognormal(Distribution):
 
 
         # revised calculation written to avoid underflow errors
-        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.width)
-        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.width)
+        arg1 = (np.log(lower_data)-self.mu) / (np.sqrt(2)*self.sigma)
+        arg2 = (np.log(upper_data)-self.mu) / (np.sqrt(2)*self.sigma)
         likelihoods = 0.5*(ss.erfc(arg1) - ss.erfc(arg2))
         if not self.xmax:
-            norm = 0.5*ss.erfc((np.log(self.xmin)-self.mu) / (np.sqrt(2)*self.width))
+            norm = 0.5*ss.erfc((np.log(self.xmin)-self.mu) / (np.sqrt(2)*self.sigma))
         else:
             # may still need to be fixed
             norm = - self._cdf_xmin + self._cdf_base_function(self.xmax)
@@ -2844,10 +2849,10 @@ class Lognormal(Distribution):
         # 1 - 0.5*erfc(arg)
 
         # This is the negative of the argument for the erfc for the data
-        val_data = (np.log(data) - self.mu) / (np.sqrt(2)*self.width)
+        val_data = (np.log(data) - self.mu) / (np.sqrt(2)*self.sigma)
 
         # This is the negative of the argument for the erfc in _cdf_xmin
-        val_xmin = (np.log(self.xmin) - self.mu) / (np.sqrt(2)*self.width)
+        val_xmin = (np.log(self.xmin) - self.mu) / (np.sqrt(2)*self.sigma)
 
         # This is (1 - q(xmin)) - (1 - q(x)) = q(x) - q(xmin)
         # where q is the unnormalized CDF, ie. _cdf_base_function
@@ -2884,16 +2889,16 @@ class Lognormal(Distribution):
         :math:` = \frac{1}{2} \erfc \left( - \frac{\log x - \mu}{\sigma \sqrt{2}} \right)`
         """
         #from mpmath import erfc
-        #return np.float64(0.5 * ss.erfc(-(np.log(x) - self.mu) / (self.width * np.sqrt(2))))
+        #return np.float64(0.5 * ss.erfc(-(np.log(x) - self.mu) / (self.sigma * np.sqrt(2))))
 
-        return  0.5 + (0.5 * ss.erf((np.log(x) - self.mu) / (np.sqrt(2) * self.width)))
+        return  0.5 + (0.5 * ss.erf((np.log(x) - self.mu) / (np.sqrt(2) * self.sigma)))
 
 
     def _pdf_base_function(self, x):
         r"""
         :math:`p(x) \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`
         """
-        return 1/x * np.exp(-(np.log(x) - self.mu)**2 / (2 * self.width**2))
+        return 1/x * np.exp(-(np.log(x) - self.mu)**2 / (2 * self.sigma**2))
 
 
     @property
@@ -2903,7 +2908,7 @@ class Lognormal(Distribution):
         :math:` = \sigma \sqrt{\pi / 2} \erfc\left( - \frac{\mu - \log x_{min}}{ \sigma \sqrt{2}} \right)`
         """
         from mpmath import erfc
-        return np.float64(self.width * np.sqrt(np.pi/2) * erfc(-(self.mu - np.log(self.xmin)) / (self.width*np.sqrt(2))))
+        return np.float64(self.sigma * np.sqrt(np.pi/2) * erfc(-(self.mu - np.log(self.xmin)) / (self.sigma * np.sqrt(2))))
 
 
     @property
@@ -2923,26 +2928,23 @@ class Lognormal(Distribution):
         #from mpmath import erf, erfinv
         #erfinv = np.frompyfunc(erfinv, 1, 1)
 
-        erfinv_arg = ss.erf((self.mu - np.log(self.xmin)) / (np.sqrt(2) * self.width)) * (1 - r) - r
+        erfinv_arg = ss.erf((self.mu - np.log(self.xmin)) / (np.sqrt(2) * self.sigma)) * (1 - r) - r
 
         # To switch back to mpath, use this line instead (we need to
         # cast back to a proper numeric type instead of an mpmath type).
-        #return np.exp(self.mu - np.sqrt(2) * self.width * erfinv(erfinv_arg).astype('float')
+        #return np.exp(self.mu - np.sqrt(2) * self.sigma* erfinv(erfinv_arg).astype('float')
 
-        return np.exp(self.mu - np.sqrt(2) * self.width * ss.erfinv(erfinv_arg))
+        return np.exp(self.mu - np.sqrt(2) * self.sigma * ss.erfinv(erfinv_arg))
 
 
 class Lognormal_Positive(Lognormal):
     r"""
     A lognormal distribution with strictly positive :math:`\mu`, :math:`p(x)
     \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`.
-
     """
     name = 'lognormal_positive'
 
-    # I have renamed this to be width from 'sigma' since there is
-    # already a sigma defined as the standard error in this package.
-    parameter_names = ['mu', 'width']
+    parameter_names = ['mu', 'sigma']
 
     DEFAULT_PARAMETER_RANGES = {'mu': [0, None],
-                                'width': [0, None]}
+                                'sigma': [0, None]}
