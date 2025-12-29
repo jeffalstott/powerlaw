@@ -6,6 +6,7 @@ import warnings
 import sys
 import types
 import scipy.optimize
+import scipy.special as ss
 
 from .statistics import *
 from .plotting import *
@@ -336,13 +337,13 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the initial parameters
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for initial parameters: {initial_parameters}.')
+            raise ValueError(f'Invalid value provided for initial parameters: {initial_parameters}.')
 
         # Let's make sure that we got some values, since it's possible we
         # could get to this point by passing no parameters and having
         # no data.
         if any([value is None for value in initial_parameters_dict.values()]):
-            raise Exception('Not enough information provided to assign parameters! Make sure to specific parameter \
+            raise ValueError('Not enough information provided to assign parameters! Make sure to specific parameter \
                             values or pass data to generate them.')
 
         # Actually set the values
@@ -397,7 +398,7 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the parameters
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for setting parameters: {params}.')
+            raise ValueError(f'Invalid value provided for setting parameters: {params}.')
 
         for p in self.parameter_names:
             setattr(self, p, params_dict[p])
@@ -471,7 +472,7 @@ class Distribution(object):
         else:
             # Otherwise, something must be wrong with the ranges
             # provided, so we raise an error.
-            raise Exception(f'Invalid value provided for parameter ranges: {ranges}')
+            raise ValueError(f'Invalid value provided for parameter ranges: {ranges}')
 
         self.parameter_ranges = ranges_dict
 
@@ -606,7 +607,7 @@ class Distribution(object):
                     pass
 
             except:
-                raise Exception(f'Malformed constraint dictionary passed to {self.name}: received {con}')
+                raise ValueError(f'Malformed constraint dictionary passed to {self.name}: received {con}')
 
         # The final list of dictionaries we are building
         constraint_dict_list = []
@@ -991,7 +992,7 @@ class Distribution(object):
         n = len(data)
 
         if n == 0:
-            raise Exception('No data points in defined range of the distribution.')
+            raise ValueError('No data points in defined range of the distribution.')
 
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
@@ -1063,7 +1064,7 @@ class Distribution(object):
         n = len(data)
 
         if n == 0:
-            raise Exception('No data points in defined range of the distribution.')
+            raise ValueError('No data points in defined range of the distribution.')
 
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
@@ -1185,6 +1186,14 @@ class Distribution(object):
         It is not currently implemented since the value will depend on your
         specific distribution, so it should be implemented in child classes.
         """
+        # When not implemented, this should actually return a false value,
+        # (eg. instead of raising a not implemented exception) since the
+        # way Distribution.pdf() checks if a discrete expression is
+        # available is by doing:
+        # if self._pdf_discrete_normalizer:
+        #     ...
+        # TODO: Maybe this should be cleaned up in the future to use better
+        # practices to check if there is a discrete expression.
         return False
 
 
@@ -1708,8 +1717,9 @@ class Distribution(object):
 
         # TODO: I would have thought that rounding properly here would give
         # more accurate distributions, but, specifically for discrete truncated power
-        # law distributions, this actually leads to very bad fits. It could
-        # have something to do with the fact
+        # law distributions, this actually leads to very bad fits. For more
+        # information, see:
+        # https://github.com/jeffalstott/powerlaw/pull/115#discussion_r2649110410
         #return int(np.around(x))
         return int(x)
 
@@ -1970,8 +1980,7 @@ class Power_Law(Distribution):
         # something has an exact exponent of 1 without already calling
         # this function several times.
         if self.discrete:
-            from scipy.special import zeta
-            CDF = 1 - zeta(self.alpha, x)
+            CDF = 1 - ss.zeta(self.alpha, x)
         else:
             #Can this be reformulated to not reference xmin? Removal of the probability
             #before xmin and after xmax is handled in Distribution.cdf(), so we don't
@@ -2185,7 +2194,7 @@ class Exponential(Distribution):
             n = len(data)
 
             if n == 0:
-                raise Exception('No data points in defined range of the distribution.')
+                raise ValueError('No data points in defined range of the distribution.')
 
             # If we aren't in range, we just return a bunch of (nearly) zeros
             if not self.in_range():
@@ -2543,11 +2552,9 @@ class Truncated_Power_Law(Distribution):
 #
 #        # Until there is a way to do this, we are stuck with rejection sampling
 #
-#        from scipy.special import gammainc, gammaincinv
+#        gammaincinv_arg = (1 + r) * ss.gammainc(1 - self.alpha, self.Lambda*self.xmin)
 #
-#        gammaincinv_arg = (1 + r) * gammainc(1 - self.alpha, self.Lambda*self.xmin)
-#
-#        return 1/self.Lambda * gammaincinv(1 - self.alpha, gammaincinv_arg)
+#        return 1/self.Lambda * ss.gammaincinv(1 - self.alpha, gammaincinv_arg)
 
 
     def _generate_random_continuous(self, r):
@@ -2743,8 +2750,7 @@ class Lognormal(Distribution):
         already normalized function. For comparison, see the regular
         cdf() function when using discrete_normalization='round'.
         """
-        import numpy as np
-        import scipy.special as ss
+
         """ Temporarily expand xmin and xmax to be able to grab the extra bit of
         probability mass beyond the (integer) values of xmin and xmax
         Note this is a design decision. One could also say this extra
@@ -2777,7 +2783,8 @@ class Lognormal(Distribution):
 
         return likelihoods/norm
 
-    def cdf(self, data=None, survival=False):
+
+    def cdf(self, data=None):
         """
         The cumulative distribution function (CDF) of the lognormal
         distribution. Calculated for the values given in data within xmin and
@@ -2797,19 +2804,15 @@ class Lognormal(Distribution):
         data : list or array, optional
             If not provided, attempts to use the data from the Fit object in
             which the Distribution object is contained.
-        survival : bool, optional
-            Whether to calculate a CDF (False) or CCDF (True).
-            False by default.
 
         Returns
         -------
         X : array
             The sorted, unique values in the data.
+
         probabilities : array
             The portion of the data that is less than or equal to X.
         """
-        import scipy.special as ss
-
         # The passed data takes precedence, but otherwise we use the data
         # stored in the class instance.
         if not hasattr(data, '__iter__'):
@@ -2822,7 +2825,7 @@ class Lognormal(Distribution):
         n = len(data)
 
         if n == 0:
-            raise Exception('No data points in defined range of the distribution.')
+            raise ValueError('No data points in defined range of the distribution.')
 
         # If we aren't in range, we just return a bunch of (nearly) zeros
         if not self.in_range():
@@ -2849,7 +2852,7 @@ class Lognormal(Distribution):
         # This is (1 - q(xmin)) - (1 - q(x)) = q(x) - q(xmin)
         # where q is the unnormalized CDF, ie. _cdf_base_function
         # TODO: There was an issue here with val_xmin and val_data being
-        # longdouble types, so to be safe, we case here. I should try to
+        # longdouble types, so to be safe, we cast here. I should try to
         # figure out where this is coming from.
         CDF = 0.5 * (ss.erfc(np.float64(val_xmin)) - ss.erfc(val_data.astype(np.float64)))
 
@@ -2857,24 +2860,21 @@ class Lognormal(Distribution):
         norm = 0.5 * ss.erfc(np.float64(val_xmin))
 
         if self.xmax:
-            # TO DO: Improve this line further for better numerical accuracy?
+            # TODO: Improve this line further for better numerical accuracy?
+            # Update 2025/12/29: This comment above was here for a long time,
+            # I'm not sure what the issue with the numerical accuracy is.
             norm = norm - (1 - self._cdf_base_function(self.xmax))
 
-        CDF = CDF/norm
+        CDF = CDF / norm
 
-        if survival:
-            CDF = 1 - CDF
+        # If we have any nan values in the cdf, it is indicative of a
+        # numerical error, so we should warn.
+        # np.min will always give nan if there are any nans
+        possible_numerical_error = np.isnan(np.min(CDF))
 
-        possible_numerical_error = False
-        from numpy import isnan, min
-        if isnan(min(CDF)):
-            print("'nan' in fit cumulative distribution values.", file=sys.stderr)
-            possible_numerical_error = True
-        #if 0 in CDF or 1 in CDF:
-        #    print("0 or 1 in fit cumulative distribution values.", file=sys.stderr)
-        #    possible_numerical_error = True
-        if possible_numerical_error:
-            print("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.", file=sys.stderr)
+        if possible_numerical_error and self.verbose:
+            warnings.warn("Likely underflow or overflow error: the optimal fit for this distribution gives values that are so extreme that we lack the numerical precision to calculate them.")
+
         return CDF
 
 
@@ -2883,24 +2883,17 @@ class Lognormal(Distribution):
         :math:`c(x) \sim \frac{1}{2} \left( 1 + \erf \left( \frac{\log x - \mu}{\sigma \sqrt{2}} \right) \right)`
         :math:` = \frac{1}{2} \erfc \left( - \frac{\log x - \mu}{\sigma \sqrt{2}} \right)`
         """
-        #from scipy.special import erfc
         #from mpmath import erfc
-        #return np.float64(0.5 * erfc(-(np.log(x) - self.mu) / (self.width * np.sqrt(2))))
+        #return np.float64(0.5 * ss.erfc(-(np.log(x) - self.mu) / (self.width * np.sqrt(2))))
 
-        from numpy import sqrt, log
-        from scipy.special import erf
-        return  0.5 + ( 0.5 *
-                erf((log(x)-self.mu) / (sqrt(2)*self.width)))
+        return  0.5 + (0.5 * ss.erf((np.log(x) - self.mu) / (np.sqrt(2) * self.width)))
 
 
     def _pdf_base_function(self, x):
         r"""
         :math:`p(x) \sim x^{-1} e^{-(\log(x) - \mu)^2 / 2 \sigma^2}`
         """
-        #return 1/x * np.exp(-(np.log(x) - self.mu)**2 / (2 * self.width**2))
-        from numpy import exp, log
-        return ((1.0/x) *
-                exp(-( (log(x) - self.mu)**2 )/(2*self.width**2)))
+        return 1/x * np.exp(-(np.log(x) - self.mu)**2 / (2 * self.width**2))
 
 
     @property
@@ -2909,17 +2902,8 @@ class Lognormal(Distribution):
         :math:`C = \sigma \sqrt{\pi / 2} \left( 1 + \erf\left( \frac{\mu - \log x_{min}}{ \sigma \sqrt{2}} \right) \right)`
         :math:` = \sigma \sqrt{\pi / 2} \erfc\left( - \frac{\mu - \log x_{min}}{ \sigma \sqrt{2}} \right)`
         """
-        #from scipy.special import erfc
-        #from mpmath import erfc
-        #return np.float64(self.width * np.sqrt(np.pi/2) * erfc(-(self.mu - np.log(self.xmin)) / (self.width*np.sqrt(2))))
-
         from mpmath import erfc
-#        from scipy.special import erfc
-        from scipy.constants import pi
-        from numpy import sqrt, log
-        C = (erfc((log(self.xmin) - self.mu) / (sqrt(2) * self.width)) /
-             sqrt(2/(pi*self.width**2)))
-        return float(C)
+        return np.float64(self.width * np.sqrt(np.pi/2) * erfc(-(self.mu - np.log(self.xmin)) / (self.width*np.sqrt(2))))
 
 
     @property
@@ -2934,18 +2918,18 @@ class Lognormal(Distribution):
         any in all of my testing. But just in case we encounter that in
         the future, we might consider switching back.
         """
-        from scipy.special import erf, erfinv
-
         # To switch back to mpmath, uncomment these two lines
+        # and remove the ss. prefix from these functions below.
         #from mpmath import erf, erfinv
-        #erfinv = np.frompyfunc(erfinv,1,1)
+        #erfinv = np.frompyfunc(erfinv, 1, 1)
 
-        erfinv_arg = erf((self.mu - np.log(self.xmin)) / (np.sqrt(2) * self.width)) * (1 - r) - r
+        erfinv_arg = ss.erf((self.mu - np.log(self.xmin)) / (np.sqrt(2) * self.width)) * (1 - r) - r
 
-        # To switch back to mpath, use this line instead
+        # To switch back to mpath, use this line instead (we need to
+        # cast back to a proper numeric type instead of an mpmath type).
         #return np.exp(self.mu - np.sqrt(2) * self.width * erfinv(erfinv_arg).astype('float')
 
-        return np.exp(self.mu - np.sqrt(2) * self.width * erfinv(erfinv_arg))
+        return np.exp(self.mu - np.sqrt(2) * self.width * ss.erfinv(erfinv_arg))
 
 
 class Lognormal_Positive(Lognormal):
