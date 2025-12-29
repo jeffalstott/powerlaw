@@ -2,7 +2,6 @@ import numpy as np
 from numpy import nan
 
 import warnings
-from deprecated import deprecated
 
 import sys
 import types
@@ -1979,8 +1978,9 @@ class Power_Law(Distribution):
 
 
     @property
-    @deprecated("Standard error for the MLE should be accessed using the 'standard_err' property. Accessing via 'sigma' property will be removed in v2.1.")
     def sigma(self):
+        warnings.warn("Standard error for the MLE should be accessed using the 'standard_err' property. Accessing via 'sigma' property will be removed in v2.1.",
+                     DeprecationWarning)
         return self.standard_err
 
 
