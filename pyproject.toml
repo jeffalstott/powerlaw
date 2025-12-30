@@ -29,6 +29,7 @@ dependencies = [
     "numpy",
     "matplotlib",
     "mpmath",
+    "tqdm"
 ]
 
 [project.optional-dependencies]
