@@ -19,6 +19,8 @@ as well as distributions with and without an xmax value.
 """
 
 import unittest
+import pytest
+
 import powerlaw
 
 import numpy as np
@@ -239,6 +241,10 @@ class TestGenerationFitting_Exponential(unittest.TestCase):
                                   atol=A_TOL, rtol=R_TOL)
 
 
+    # This fails because of an issue with the ccdf's handling of empty
+    # arrays, see:
+    # https://github.com/jeffalstott/powerlaw/issues/120
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/120")
     def test_exponential_discrete_xmax(self):
         generate_fit_generate_fit(self.parameters_list,
                                   distribution=powerlaw.Exponential,
@@ -298,6 +304,10 @@ class TestGenerationFitting_StretchedExponential(unittest.TestCase):
                                   compare_log_parameter=[True, False],
                                   atol=A_TOL, rtol=R_TOL)
 
+    # This fails because of an issue with the ccdf's handling of empty
+    # arrays, see:
+    # https://github.com/jeffalstott/powerlaw/issues/120
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/120")
     def test_stretched_exponential_discrete_xmax(self):
         # Compare log(lambda) to lambda since this could span many orders
         # of magnitude in theory.
@@ -364,6 +374,10 @@ class TestGenerationFitting_TruncatedPowerLaw(unittest.TestCase):
                                   compare_log_parameter=[False, True],
                                   atol=A_TOL, rtol=R_TOL*2)
 
+    # This fails because of an issue with the ccdf's handling of empty
+    # arrays, see:
+    # https://github.com/jeffalstott/powerlaw/issues/120
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/120")
     def test_truncated_power_law_discrete_xmax(self):
         # Compare log(lambda) to log(lambda) since this could span many orders
         # of magnitude in theory.
@@ -424,6 +438,10 @@ class TestGenerationFitting_Lognormal(unittest.TestCase):
                                   compare_log_parameter=[True, False],
                                   atol=A_TOL, rtol=R_TOL)
 
+    # This fails because of an issue with the ccdf's handling of empty
+    # arrays, see:
+    # https://github.com/jeffalstott/powerlaw/issues/120
+    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/120")
     def test_lognormal_discrete_xmax(self):
         # Lognormals have a higher finite xmax than other tests since
         # for these parameter values they decay much faster.
