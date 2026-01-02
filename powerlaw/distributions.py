@@ -788,7 +788,7 @@ class Distribution(object):
         # the value is close to the edge.
         eps = 1e-2
         nearBoundary = False
-        # TODO Should there be different behavior is a limit is 0? So that
+        # TODO Should there be different behavior if a limit is 0? So that
         # we don't trigger this warning just from having a (possibly totally
         # reasonable) small value? Maybe make eps scale with the magnitude
         # of the parameter value?
@@ -1711,9 +1711,9 @@ class Distribution(object):
         # doesn't tell us which integer it actually is, X+1 or X-1).
         x = bisect_map(mn=x1, mx=x2, function=func, target=1-r, tol=0.5)
 
-        if x is None:
-            # DEBUG
-            print(x1, x2, 1-r)
+        # DEBUG
+        #if x is None:
+        #    print(x1, x2, 1-r)
 
         # TODO: I would have thought that rounding properly here would give
         # more accurate distributions, but, specifically for discrete truncated power
@@ -2479,7 +2479,10 @@ class Truncated_Power_Law(Distribution):
     def _cdf_base_function(self, x):
         # TODO: Is this the CDF of a truncated power law? It's not the
         # same that I was able to derive using the pdf below (see the
-        # documentation for that derivation).
+        # documentation for that derivation). Wait maybe it is the same,
+        # since we are using the incomplete gamma function, still need
+        # to confirm this (and describe how you transform the derived 
+        # version to this version).
         from mpmath import gammainc
         from numpy import vectorize
         gammainc = vectorize(gammainc)
@@ -2696,7 +2699,7 @@ class Lognormal(Distribution):
         -------
         probabilities : array
         """
-        # TODO clean this up
+        # TODO Clean this up and better document why it might over/underflow.
         if data is None and self.parent_Fit:
             data = self.parent_Fit.data
 

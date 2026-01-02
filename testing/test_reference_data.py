@@ -3,24 +3,77 @@ This test file contains tests that involve fitting distributions to
 reference data and checking that the results are similar to previously
 saved values.
 
+All of the test datasets can be loaded using ``powerlaw.load_test_dataset()``
+if you would like to experiment with them.
+
 Note: in the original repo, quakes.txt was given such that to get the
 actual data, you need to do 10**(data). This is confusing since it is
 the only file that requires special preprocessing, so I've saved the
 data just directly in this exponentiated form. The original values can
 be found in quakes_original.txt.
+
+"""
+
+# TODO
+"""
+There are a few parts of this test that need to be updated.
+
+First, I highlight that this type of test is good to have, since it shows
+that this library can give the same (or better) results as have already
+been published in literature or otherwise shared.
+
+That being said, there are several things that need to be addressed:
+
+1. The source of each of the test datasets is not well-documented. I started
+trying to gather sources to list in the documentation, but succeeded only
+for two datasets (blackouts and words). See the tutorial on "Loading data"
+for this information.
+
+2. The source of each comparison value should be made more clear. Some
+of them are commented in the dictionary below (Clauset or plfit seem to
+be the main sources, but not sure about this for the other ones).
+
+3. As of now, these tests are good comparisons for the power law distribution
+(which to be fair, is the namesake of this library) but are somewhat arbitrary
+for the other distributions. We compare the loglikelihood of each other
+distribution to a power law (as a ratio) but since each dataset seems to have
+a power law form, the specific ratios we get are pretty much arbitrary, and
+depend only on how well the numerical optimization can do given a dataset that
+clearly doesn't match the fitted form. The fix for this would be to have
+more datasets, including ones that, to the best of our knowledge, actually
+follow other distributions. You can see why this is a problem if you actually
+look at the parameter values for some of the comparison fits, eg. for the 'words'
+dataset, the stretched exponential fit has parameters:
+{'Lambda': 71128767.8789453, 'beta': 0.10458555901993033}
+That lambda value is so large that it's pretty much meaningless.
+
+4. A side of effect of only comparing loglikelihood ratios for distributions
+other than power law is that we have no way to tell if the test fits are
+reasonable, or, like the above example, and just the optimization routine
+doing its best with a fit that is destined to fail. This also means that these
+could be failing because the library is actually _better_ at fitting than it
+used to be (or other libraries used to be). I think this is the case currently
+for truncated power law and stretched exponential (which are commented out), since
+in all reference data tests, the power law fit always passes, but the others
+fail **with a lower value of the loglikelihood ratio**. So power law fitting
+is at least as good as it used to be, but just the other distributions fit
+better. Since the actual parameter values aren't given for the cached results,
+I don't think we can explicitly confirm this. I would guess the better fitting
+comes from the fact that parameter bounds are explicitly included in the
+numerical optimization; it makes sense then that this wouldn't affect power
+laws much since most of the time they just the MLE without numerical
+optimization.
+
+This is a pretty big todo item, but it isn't that urgent since we now have
+(in v2.0) a much more complete suite of tests that don't have the issues
+stated above. Either way, I would start by trying to track down sources
+for each dataset, and go from there.
 """
 
 import unittest
 import powerlaw
 from numpy.testing import assert_allclose
 import numpy as np
-
-import pathlib, os
-
-# Use the path for this file as a marker to find the reference data, so
-# it doesn't matter which folder you run the tests from.
-REFRENCE_DATA_DIR = os.path.join(str(pathlib.Path(__file__).parent.resolve()), 'reference_data/')
-
 
 # data_factor below is the factor by which to multiply the data before
 # doing any fitting. This is needed because some samples are things like
@@ -31,7 +84,6 @@ REFRENCE_DATA_DIR = os.path.join(str(pathlib.Path(__file__).parent.resolve()), '
 references = {
         'words': {
             'discrete': True,
-            'data': 'words.txt',
             'data_factor': 1,
             'alpha': 1.95,
             'xmin': 7,
@@ -42,7 +94,6 @@ references = {
             },
         'terrorism': {
             'discrete': True,
-            'data': 'terrorism.txt',
             'data_factor': 1,
             'alpha': 2.4,
             'xmin': 12,
@@ -53,7 +104,6 @@ references = {
             },
         'blackouts': {
             'discrete': False,
-            'data': 'blackouts.txt',
             'data_factor': 1e-3,
             'alpha': 2.3,
             'xmin': 230,
@@ -64,7 +114,6 @@ references = {
             },
         'cities': {
             'discrete': False,
-            'data': 'cities.txt',
             'data_factor': 1e-3,
             'alpha': 2.37,
             'xmin': 52.46,
@@ -75,7 +124,6 @@ references = {
             },
         'fires': {
             'discrete': False,
-            'data': 'fires.txt',
             'data_factor': 1,
             'alpha': 2.2,
             'xmin': 6324,
@@ -86,7 +134,6 @@ references = {
             },
         'flares': {
             'discrete': False,
-            'data': 'flares.txt',
             'data_factor': 1,
             'alpha': 1.79,
             'xmin': 323,
@@ -97,7 +144,6 @@ references = {
             },
         'quakes': {
             'discrete': False,
-            'data': 'quakes.txt',
             'data_factor': 1e-3,
             'alpha': 1.95,   # Clauset/plfit value is 1.64
             'xmin': 10,      # Clauset/plfit value is .794
@@ -108,7 +154,6 @@ references = {
             },
         'surnames': {
             'discrete': False,
-            'data': 'surnames.txt',
             'data_factor': 1e-3,
             'alpha': 2.2,       # Clauset/plfit value is 2.5,
             'xmin': 14.92,      # Clauset/plfit value is 111.92
@@ -227,6 +272,7 @@ class TestReferenceData(unittest.TestCase):
                     normalized_ratio=True)
             results[k]['stretched_exponential'] = Randp
 
+            # TODO: See the todo item at the top of this file.
             #assert_allclose(Randp, references[k]['stretched_exponential'],
             #        rtol=rtol, atol=atol, err_msg=k)
 
@@ -244,6 +290,7 @@ class TestReferenceData(unittest.TestCase):
             Randp = fit.loglikelihood_ratio('power_law', 'truncated_power_law')
             results[k]['truncated_power_law'] = Randp
 
+            # TODO: See the todo item at the top of this file.
             #assert_allclose(Randp, references[k]['truncated_power_law'],
             #        rtol=rtol, atol=atol, err_msg=k)
 

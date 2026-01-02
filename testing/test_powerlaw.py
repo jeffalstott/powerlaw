@@ -139,9 +139,6 @@ class TestExternalPowerLaw(unittest.TestCase):
     outside of the powerlaw library.
     """
 
-    # This fails because of the divergence of the pdf/cdf close to 1, see:
-    # https://github.com/jeffalstott/powerlaw/issues/119
-    @pytest.mark.xfail(reason="https://github.com/jeffalstott/powerlaw/issues/119")
     def test_alpha_1p0_to_1p5_continuous(self):
         # Can't do exactly 1.0 beacuse there is a dicontinuity there.
         power_law_fit([1.02, 1.5], discrete=False)

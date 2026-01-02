@@ -5,35 +5,53 @@ powerlaw: A Python Package for Analysis of Heavy-Tailed Distributions
    :target: https://github.com/jeffalstott/powerlaw/actions
    :alt: Tests
 
-``powerlaw`` is a toolbox using the statistical methods developed in
-`Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`_ and `Klaus et al. 2011 <http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779>`_ to determine if a
-probability distribution fits a power law. Academics, please cite as:
+``powerlaw`` is a toolbox implementing the statistical methods developed in
+`Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`_ and
+`Klaus et al. 2011 <https://doi.org/10.1371/journal.pone.0019779>`_
+to fit heavy-tailed distributions like power laws. Academics, please cite as:
 
 Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2014). powerlaw: a Python package
-for analysis of heavy-tailed distributions. `PLoS ONE 9(1): e85777 <http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0085777>`_
+for analysis of heavy-tailed distributions.
+`PLoS ONE 9(1): e85777 <https://doi.org/10.1371/journal.pone.0085777>`_
 
 Also available at `arXiv:1305.0215 [physics.data-an] <http://arxiv.org/abs/1305.0215>`_
 
 
 Basic Usage
 ------------
-For the simplest, typical use cases, this tells you everything you need to
-know.::
+The most basic use of this library is to fit some data, extract parameters,
+and make comparisons to other distributions:
+
+.. code-block::
 
     import powerlaw
-    data = array([1.7, 3.2 ...]) # data can be list or numpy array
-    results = powerlaw.Fit(data)
-    print(results.power_law.alpha)
-    print(results.power_law.xmin)
-    R, p = results.distribution_compare('power_law', 'lognormal')
+    import numpy as np
 
-For more explanation, understanding, and figures, see the paper,
-which illustrates all of ``powerlaw``'s features. For details of the math,
-see Clauset et al. 2007, which developed these methods.
+    data = np.array([1.7, 3.2 ...]) # data can be list or numpy array
+    fit = powerlaw.Fit(data)
+
+    print(fit.power_law.alpha)
+    print(fit.power_law.xmin)
+
+    R, p = fit.distribution_compare('power_law', 'lognormal')
+
+You can also plot various results easily using ``matplotlib``:
+
+.. code-block::
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+
+    fit.plot_pdf(ax=ax, label='PDF')
+    fit.power_law.plot_pdf(ax=ax, label='Power law fit')
+
+    plt.legend()
+    plt.show()
+
 
 Quick Links
 ------------
-`Paper illustrating all of powerlaw's features, with figures <http://arxiv.org/abs/1305.0215>`__
+`Original paper illustrating powerlaw's features, with figures <http://arxiv.org/abs/1305.0215>`__
 
 `Code examples from manuscript, as an IPython Notebook <http://nbviewer.ipython.org/github/jeffalstott/powerlaw/blob/master/manuscript/Manuscript_Code.ipynb>`__
 Note: Some results involving lognormals will now be different from the
@@ -42,54 +60,54 @@ greater numerical precision.
 
 `Documentation <http://pythonhosted.org/powerlaw/>`__
 
-This code was developed and tested for Python 2.7+ and 3.x. For scientific Python distributions, consider using
-`Anaconda <https://www.anaconda.com/>`__ or `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`__.
-
 
 Installation
 ------------
-``powerlaw`` is hosted on `PyPI <https://pypi.org/project/powerlaw/>`__ and can be installed using pip::
+The package can be installed from PyPi using pip:
 
-    pip install powerlaw
+.. code-block:: console
 
-All required dependencies (``numpy``, ``scipy``, ``matplotlib``, and ``mpmath``) will be installed automatically.
+    $ pip install powerlaw
 
-For development installation from source::
+Alternatively, you can install directly from the source:
 
-    git clone https://github.com/jeffalstott/powerlaw.git
-    cd powerlaw
-    pip install -e .
+.. code-block:: console
 
-To install with documentation dependencies::
+    $ git clone https://github.com/jeffalstott/powerlaw
+    $ cd powerlaw
+    $ pip install .
 
-    pip install -e .[docs]
+This library depends on the usual scientific computing libraries that you
+probably already have installed: ``numpy``, ``scipy``, ``matplotlib``, and
+``mpmath``.
 
-Testing
--------
-To run the test suite, you can use either pytest or unittest::
+The package ``tqdm`` is used for creating progress bars.
 
-    # Using pytest (recommended)
-    python -m pytest testing/test_powerlaw.py -v
+The requirement of ``mpmath`` will be dropped if/when the scipy functions
+``gamma``, ``gammainc`` and ``gammaincc`` are updated to have sufficient numerical
+accuracy for negative numbers.
 
-    # Using unittest
-    python -m unittest testing.test_powerlaw -v
 
-    # Run all tests in the testing directory
+Development
+-----------
+
+To run the test suite, we recommend using pytest:
+
+.. code-block:: console
+
     python -m pytest testing/ -v
 
-The test suite includes comprehensive tests for power law fitting, distribution comparisons, and statistical validation using reference datasets. All tests should pass successfully.
+The test suite includes comprehensive tests for distribution fitting, comparisons, and statistical validation using reference and synthetic datasets. All tests should pass successfully.
 
-Continuous Integration
-~~~~~~~~~~~~~~~~~~~~~~
 This repository uses GitHub Actions for continuous integration. Tests are automatically run on every push and pull request across multiple Python versions (3.8-3.12) and operating systems (Ubuntu, Windows, macOS). The CI status is shown in the badge above.
+
+The original author of `powerlaw`, Jeff Alstott, is now only writing minor tweaks, but ``powerlaw`` remains open for further development by the community. If there's a feature you'd like to see in ``powerlaw`` you can `submit an issue <https://github.com/jeffalstott/powerlaw/issues>`_, but pull requests are even better. Offers for expansion or inclusion in other projects are welcomed and encouraged.
+
 
 Mailing List
 ~~~~~~~~~~~~
 Questions/discussions/help go on the Google Group `here <https://groups.google.com/g/powerlaw-general>`__. Also receives update info.
 
-Further Development
------------------
-The original author of `powerlaw`, Jeff Alstott, is now only writing minor tweaks, but ``powerlaw`` remains open for further development by the community. If there's a feature you'd like to see in ``powerlaw`` you can `submit an issue <https://github.com/jeffalstott/powerlaw/issues>`_, but pull requests are even better. Offers for expansion or inclusion in other projects are welcomed and encouraged.
 
 Acknowledgements
 ----------------

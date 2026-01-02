@@ -11,7 +11,7 @@
 powerlaw/_version.py
 
 # Byte-compiled / optimized / DLL files
-__pycache__/
+*__pycache__/
 *.py[cod]
 *$py.class
 
