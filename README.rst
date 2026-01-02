@@ -5,35 +5,53 @@ powerlaw: A Python Package for Analysis of Heavy-Tailed Distributions
    :target: https://github.com/jeffalstott/powerlaw/actions
    :alt: Tests
 
-``powerlaw`` is a toolbox using the statistical methods developed in
-`Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`_ and `Klaus et al. 2011 <http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0019779>`_ to determine if a
-probability distribution fits a power law. Academics, please cite as:
+``powerlaw`` is a toolbox implementing the statistical methods developed in
+`Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`_ and
+`Klaus et al. 2011 <https://doi.org/10.1371/journal.pone.0019779>`_
+to fit heavy-tailed distributions like power laws. Academics, please cite as:
 
 Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2014). powerlaw: a Python package
-for analysis of heavy-tailed distributions. `PLoS ONE 9(1): e85777 <http://www.plosone.org/article/info%3Adoi%2F10.1371%2Fjournal.pone.0085777>`_
+for analysis of heavy-tailed distributions.
+`PLoS ONE 9(1): e85777 <https://doi.org/10.1371/journal.pone.0085777>`_
 
 Also available at `arXiv:1305.0215 [physics.data-an] <http://arxiv.org/abs/1305.0215>`_
 
 
 Basic Usage
 ------------
-For the simplest, typical use cases, this tells you everything you need to
-know.::
+The most basic use of this library is to fit some data, extract parameters,
+and make comparisons to other distributions:
+
+.. code-block:: python
 
     import powerlaw
-    data = array([1.7, 3.2 ...]) # data can be list or numpy array
-    results = powerlaw.Fit(data)
-    print(results.power_law.alpha)
-    print(results.power_law.xmin)
-    R, p = results.distribution_compare('power_law', 'lognormal')
+    import numpy as np
 
-For more explanation, understanding, and figures, see the paper,
-which illustrates all of ``powerlaw``'s features. For details of the math,
-see Clauset et al. 2007, which developed these methods.
+    data = np.array([1.7, 3.2, 5.4, 2.1, 1.5, 2.8]) # data can be a list or a numpy array
+    fit = powerlaw.Fit(data)
+
+    print(fit.power_law.alpha)
+    print(fit.power_law.xmin)
+
+    R, p = fit.distribution_compare('power_law', 'lognormal')
+
+You can also plot various results easily using ``matplotlib``:
+
+.. code-block:: python
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+
+    fit.plot_pdf(ax=ax, label='PDF')
+    fit.power_law.plot_pdf(ax=ax, label='Power law fit')
+
+    plt.legend()
+    plt.show()
+
 
 Quick Links
-------------
-`Paper illustrating all of powerlaw's features, with figures <http://arxiv.org/abs/1305.0215>`__
+-----------
+`Original paper illustrating powerlaw's features, with figures <http://arxiv.org/abs/1305.0215>`__
 
 `Code examples from manuscript, as an IPython Notebook <http://nbviewer.ipython.org/github/jeffalstott/powerlaw/blob/master/manuscript/Manuscript_Code.ipynb>`__
 Note: Some results involving lognormals will now be different from the
@@ -42,60 +60,57 @@ greater numerical precision.
 
 `Documentation <http://pythonhosted.org/powerlaw/>`__
 
-This code was developed and tested for Python 2.x and later amended to be
-compatible with 3.x. For scientific Python distributions, consider using
-`Anaconda <https://www.anaconda.com/>`__ or `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`__.
-
 
 Installation
 ------------
-``powerlaw`` is hosted on `PyPI <https://pypi.org/project/powerlaw/>`__, so installation is straightforward. The easiest way to install type this at the command line (Linux, Mac, or Windows)::
+The package can be installed from PyPi using pip:
 
-    easy_install powerlaw
+.. code-block:: console
 
-or, better yet::
+    $ pip install powerlaw
 
-    pip install powerlaw
+Alternatively, you can install directly from the source:
 
-``easy_install`` or ``pip`` just need to be on your PATH, which for Linux or Mac is probably the case.
+.. code-block:: console
 
-``pip`` should install all dependencies automagically. These other dependencies are ``numpy``, ``scipy``, and ``matplotlib``. These are all present in Enthought, Anaconda, and most other scientific Python stacks. To fit truncated power laws or gamma distributions, ``mpmath`` is also required, which is less common and is installable with::
+    $ git clone https://github.com/jeffalstott/powerlaw
+    $ cd powerlaw
+    $ pip install .
 
-    pip install mpmath
+This library depends on the usual scientific computing libraries that you
+probably already have installed: ``numpy``, ``scipy``, ``matplotlib``, and
+``mpmath``.
 
-The requirement of ``mpmath`` will be dropped if/when the ``scipy`` functions ``gamma``, ``gammainc`` and ``gammaincc`` are updated to have sufficient numerical accuracy for negative numbers.
+The package ``tqdm`` is used for creating progress bars.
 
-You can also build from source from the code here on Github, though it may be a development version slightly ahead of the PyPI version.
+The requirement of ``mpmath`` will be dropped if/when the scipy functions
+``gamma``, ``gammainc`` and ``gammaincc`` are updated to have sufficient numerical
+accuracy for negative numbers.
 
-Testing
--------
-To run the test suite, you can use either pytest or unittest::
 
-    # Using pytest (recommended)
-    python -m pytest testing/test_powerlaw.py -v
+Development
+-----------
 
-    # Using unittest
-    python -m unittest testing.test_powerlaw -v
+To run the test suite, we recommend using pytest:
 
-    # Run all tests in the testing directory
+.. code-block:: console
+
     python -m pytest testing/ -v
 
-The test suite includes comprehensive tests for power law fitting, distribution comparisons, and statistical validation using reference datasets. All tests should pass successfully.
+The test suite includes comprehensive tests for distribution fitting, comparisons, and statistical validation using reference and synthetic datasets. All tests should pass successfully.
 
-Continuous Integration
-~~~~~~~~~~~~~~~~~~~~~~
 This repository uses GitHub Actions for continuous integration. Tests are automatically run on every push and pull request across multiple Python versions (3.8-3.12) and operating systems (Ubuntu, Windows, macOS). The CI status is shown in the badge above.
+
+The original author of `powerlaw`, Jeff Alstott, is now only writing minor tweaks, but ``powerlaw`` remains open for further development by the community. If there's a feature you'd like to see in ``powerlaw`` you can `submit an issue <https://github.com/jeffalstott/powerlaw/issues>`_, but pull requests are even better. Offers for expansion or inclusion in other projects are welcomed and encouraged.
+
 
 Mailing List
 ~~~~~~~~~~~~
 Questions/discussions/help go on the Google Group `here <https://groups.google.com/g/powerlaw-general>`__. Also receives update info.
 
-Further Development
------------------
-The original author of `powerlaw`, Jeff Alstott, is now only writing minor tweaks, but ``powerlaw`` remains open for further development by the community. If there's a feature you'd like to see in ``powerlaw`` you can `submit an issue <https://github.com/jeffalstott/powerlaw/issues>`_, but pull requests are even better. Offers for expansion or inclusion in other projects are welcomed and encouraged.
 
 Acknowledgements
------------------
+----------------
 Many thanks to Andreas Klaus, Mika Rubinov and Shan Yu for helpful
 discussions. Thanks also to Andreas Klaus,
 `Aaron Clauset, Cosma Shalizi <https://aaronclauset.github.io/powerlaws/>`_,
@@ -105,7 +120,7 @@ making ``powerlaw``.
 
 
 Power Laws vs. Lognormals and powerlaw's 'lognormal_positive' option
------------------
+--------------------------------------------------------------------
 When fitting a power law to a data set, one should compare the goodness of fit to that of a `lognormal distribution <https://en.wikipedia.org/wiki/Lognormal_distribution>`__. This is done because lognormal distributions are another heavy-tailed distribution, but they can be generated by a very simple process: multiplying random positive variables together. The lognormal is thus much like the normal distribution, which can be created by adding random variables together; in fact, the log of a lognormal distribution is a normal distribution (hence the name), and the exponential of a normal distribution is the lognormal (which maybe would be better called an expnormal). In contrast, creating a power law generally requires fancy or exotic generative mechanisms (this is probably why you're looking for a power law to begin with; they're sexy). So, even though the power law has only one parameter (``alpha``: the slope) and the lognormal has two (``mu``: the mean of the random variables in the underlying normal and ``sigma``: the standard deviation of the underlying normal distribution), we typically consider the lognormal to be a simpler explanation for observed data, as long as the distribution fits the data just as well. For most data sets, a power law is actually a worse fit than a lognormal distribution, or perhaps equally good, but rarely better. This fact was one of the central empirical results of the paper `Clauset et al. 2007 <http://arxiv.org/abs/0706.1062>`__, which developed the statistical methods that ``powerlaw`` implements.
 
 However, for many data sets, the superior lognormal fit is only possible if one allows the fitted parameter ``mu`` to go negative. Whether or not this is sensible depends on your theory of what's generating the data. If the data is thought to be generated by multiplying random positive variables, ``mu`` is just the log of the distribution's median; a negative ``mu`` just indicates those variables' products are typically below 1. However, if the data is thought to be generated by exponentiating a normal distribution, then ``mu`` is interpreted as the median of the underlying normal data. In that case, the normal data is likely generated by summing random variables (positive and negative), and ``mu`` is those sums' median (and mean). A negative ``mu``, then, indicates that the random variables are typically negative. For some physical systems, this is perfectly possible. For the data you're studying, though, it may be a weird assumption. For starters, all of the data points you're fitting to are positive by definition, since power laws must have positive values (indeed, ``powerlaw`` throws out 0s or negative values). Why would those data be generated by a process that sums and exponentiates *negative* variables?

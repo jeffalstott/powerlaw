@@ -1,4 +1,5 @@
-from setuptools import setup
+import setuptools
+
 with open('README.rst') as file:
         long_description = file.read()
 
@@ -11,22 +12,27 @@ except LookupError:
     func = lambda name, enc=ascii: {True: enc}.get(name=='mbcs')
     codecs.register(func)
 
-setup(
+setuptools.setup(
     name='powerlaw',
-    py_modules=['powerlaw'],
-    version= '1.4.6',
+    packages=setuptools.find_packages(),
+    package_data={'powerlaw': ['reference_data/*.txt']},
+    include_package_data=True,
     description='Toolbox for testing if a probability distribution fits a power law',
     long_description=long_description,
     author='Jeff Alstott',
     author_email='jeffalstott@gmail.com',
     url='http://www.github.com/jeffalstott/powerlaw',
-    install_requires=['scipy', 'numpy', 'matplotlib', 'mpmath'],
+    install_requires=['scipy', 'numpy', 'matplotlib', 'mpmath', 'tqdm'],
     license='MIT',
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Operating System :: OS Independent',
         'Topic :: Scientific/Engineering :: Mathematics',
         'Development Status :: 5 - Production/Stable',
