@@ -22,12 +22,12 @@ Basic Usage
 The most basic use of this library is to fit some data, extract parameters,
 and make comparisons to other distributions:
 
-.. code-block::
+.. code-block:: python
 
     import powerlaw
     import numpy as np
 
-    data = np.array([1.7, 3.2 ...]) # data can be list or numpy array
+    data = np.array([1.7, 3.2, 5.4, 2.1, 1.5, 2.8]) # data can be a list or a numpy array
     fit = powerlaw.Fit(data)
 
     print(fit.power_law.alpha)
@@ -37,7 +37,7 @@ and make comparisons to other distributions:
 
 You can also plot various results easily using ``matplotlib``:
 
-.. code-block::
+.. code-block:: python
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
@@ -50,7 +50,7 @@ You can also plot various results easily using ``matplotlib``:
 
 
 Quick Links
-------------
+-----------
 `Original paper illustrating powerlaw's features, with figures <http://arxiv.org/abs/1305.0215>`__
 
 `Code examples from manuscript, as an IPython Notebook <http://nbviewer.ipython.org/github/jeffalstott/powerlaw/blob/master/manuscript/Manuscript_Code.ipynb>`__
