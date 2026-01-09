@@ -135,6 +135,7 @@ class BaseTestCase(unittest.TestCase):
             assert_allclose(CDF[-1], 1.0)
 
     def test_pdf(self):
+        import numpy as np
         np.random.seed(0)
         data = np.random.lognormal(mean=0, sigma=1, size=1000)
         # We test limits
