@@ -275,7 +275,7 @@ class Fit(object):
         # static variable.
         self.supported_distributions = SUPPORTED_DISTRIBUTIONS
 
-        self.xmin_distribution = self.supported_distributions[xmin_distribution]
+        self.xmin_distribution_cls = self.supported_distributions[xmin_distribution]
 
         # If we have a fixed xmin, we can directly fit a power law distribution
         if self.fixed_xmin:
@@ -346,6 +346,9 @@ class Fit(object):
         else:
             raise AttributeError(name)
 
+    @property
+    def xmin_distribution(self):
+        return getattr(self, self.xmin_distribution_cls.name)
 
     def find_xmin(self, xmin_distance=None):
         """
@@ -428,7 +431,7 @@ class Fit(object):
         def fit_function(xmin):
 
             # Generate a distribution with the current values of xmin
-            pl = self.xmin_distribution(xmin=xmin,
+            pl = self.xmin_distribution_cls(xmin=xmin,
                                         xmax=self.xmax,
                                         discrete=self.discrete,
                                         fit_method=self.fit_method,
