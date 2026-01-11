@@ -275,12 +275,11 @@ class Fit(object):
         # static variable.
         self.supported_distributions = SUPPORTED_DISTRIBUTIONS
 
-        self.xmin_distribution_cls = self.supported_distributions[xmin_distribution]
+        self.xmin_distribution_cls: type[Distribution] = self.supported_distributions[xmin_distribution]
 
         # If we have a fixed xmin, we can directly fit a power law distribution
         if self.fixed_xmin:
             self.xmin = float(xmin)
-
         else:
             if self.verbose:
                 print(f'Calculating best minimal value for {xmin_distribution.replace("_"," ")} fit')
@@ -418,20 +417,32 @@ class Fit(object):
             self.V = nan
             self.Asquare = nan
             self.Kappa = nan
-            self.alpha = nan
-            self.sigma = nan
             self.n_tail = nan
             setattr(self, xmin_distance+'s', np.array([nan]))
             self.noise_flag = True
 
             return self.xmin
 
-        # TODO: Make sure that this works if you set your xmin distribution
-        # to be something other than powerlaw
+
+        num_xmin = len(possible_xmin)
+        # The original documentation states that it is desired to hold onto
+        # the xmin fitting data (below) because the user may want to
+        # explore if there are multiple possible fits for a single dataset.
+        # That being said, I think it is a little confusing to have these
+        # variables directly available as properties of this class. I
+        # propose a better alternative is to have them contained in a
+        # dictionary called xmin_fitting_results.
+        distances = np.zeros(num_xmin)
+        param_names = self.xmin_distribution_cls.parameter_names
+        num_params = len(param_names)
+        params = np.zeros((num_params, num_xmin))
+        # Used to be called in_ranges
+        valid_fits = np.zeros(num_xmin, dtype=bool)
+
         def fit_function(xmin):
 
             # Generate a distribution with the current values of xmin
-            pl = self.xmin_distribution_cls(xmin=xmin,
+            dist = self.xmin_distribution_cls(xmin=xmin,
                                         xmax=self.xmax,
                                         discrete=self.discrete,
                                         fit_method=self.fit_method,
@@ -443,27 +454,9 @@ class Fit(object):
                                         estimate_discrete=self.estimate_discrete,
                                         verbose=0)
 
-            if not hasattr(pl, 'sigma'):
-                pl.sigma = nan
-            if not hasattr(pl, 'alpha'):
-                pl.alpha = nan
-
-            return getattr(pl, xmin_distance), pl.alpha, pl.sigma, (pl.in_range() and not pl.noise_flag)
-
-        num_xmin = len(possible_xmin)
-
-        # The original documentation states that it is desired to hold onto
-        # the xmin fitting data (below) because the user may want to
-        # explore if there are multiple possible fits for a single dataset.
-        # That being said, I think it is a little confusing to have these
-        # variables directly available as properties of this class. I
-        # propose a better alternative is to have them contained in a
-        # dictionary called xmin_fitting_results.
-        distances = np.zeros(num_xmin)
-        alphas = np.zeros(num_xmin)
-        sigmas = np.zeros(num_xmin)
-        # Used to be called in_ranges
-        valid_fits = np.zeros(num_xmin, dtype=bool)
+            params = [getattr(dist, param) for param in param_names]
+            valid = dist.in_range() and not dist.noise_flag
+            return getattr(dist, xmin_distance), valid, params
 
         # Disable all warnings so we don't get messages since we'll be
         # fitting a lot of times. Otherwise, you'll almost always get an
@@ -495,12 +488,12 @@ class Fit(object):
                     # use an unordered map
                     result_mapping = pool.imap_unordered(fit_function, possible_xmin)
                     for result in tqdm(result_mapping, desc="Fitting xmin") if self.verbose else result_mapping:
-                        distances[i], alphas[i], sigmas[i], valid_fits[i] = result
+                        distances[i], valid_fits[i], params[:, i] = result
 
             else:
                 # For non-parallel case, we just use a simple for loop
                 for i in tqdm(range(num_xmin), desc='Fitting xmin') if self.verbose else range(num_xmin):
-                    distances[i], alphas[i], sigmas[i], valid_fits[i] = fit_function(possible_xmin[i])
+                    distances[i], valid_fits[i], params[:, i] = fit_function(possible_xmin[i])
       
 
         # The possible xmin values should of course have all parameters
@@ -509,8 +502,9 @@ class Fit(object):
 
         # If we have a threshold, we throw out any values that are below
         # that
-        if self.sigma_threshold:
-            good_indices = good_indices * (sigmas < self.sigma_threshold)
+        if self.sigma_threshold and 'sigma' in param_names:
+            sigma_idx = param_names.index('sigma')
+            good_indices = good_indices * (params[sigma_idx] < self.sigma_threshold)
 
         # If we have no good values, the fit failed
         if not good_indices.any():
@@ -533,15 +527,14 @@ class Fit(object):
         # Set the Fit's xmin to the optimal xmin
         self.xmin = possible_xmin[min_index]
         setattr(self, xmin_distance, distances[min_index])
-        self.alpha = alphas[min_index]
-        self.sigma = sigmas[min_index]
 
         # Save the fitting information to a dictionary
         xmin_fitting_results = {"distances": distances,
-                                "alphas": alphas,
-                                "sigmas": sigmas,
                                 "xmins": possible_xmin,
+                                "min_index":min_index,
                                 "valid_fits": valid_fits}
+        for vals, name in zip(params, param_names):
+            xmin_fitting_results[name] = vals
         self.xmin_fitting_results = xmin_fitting_results
 
         # Update the fitting CDF given the new xmin, in case other objects, like
