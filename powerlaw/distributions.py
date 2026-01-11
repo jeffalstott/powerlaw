@@ -139,6 +139,11 @@ class Distribution(object):
     # of when you need it to be true, see Truncated power laws.
     internally_bounded_rng = False
 
+    # Placeholders for autocomplete. These should be set by subclasses of Distribution
+    name = ''
+    parameter_names = []
+    DEFAULT_PARAMETER_RANGES = {}
+
     def __init__(self,
                  data=None,
                  xmin=None,
