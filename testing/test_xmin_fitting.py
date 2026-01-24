@@ -114,11 +114,15 @@ def distribution_fit_xmin(distribution, x0=1, xmax=1e6, xmin=None):
     fit = powerlaw.Fit(data, xmax=np.max(data), verbose=0)
 
     # For the xmin, just make sure the log of the value is close
-    assert_allclose(np.log([true_xmin]), np.log([xmin]),
+    assert_allclose(np.log10([true_xmin]), np.log10([xmin]),
                     rtol=rtol, atol=atol, err_msg=f'xmin mismatch for dist: {distribution.name}, {distribution.parameters}')
 
 
 class TestXminFitting(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        np.random.seed(0)
 
     def test_power_law(self):
         dist = powerlaw.Power_Law(xmin=1, alpha=1.5)

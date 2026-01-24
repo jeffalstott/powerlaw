@@ -198,9 +198,14 @@ class TestReferenceData(unittest.TestCase):
             data = powerlaw.load_test_dataset(k)
             data = data * references[k]["data_factor"]
 
+            # We test all xmin values because otherwise the results won't
+            # match the cached results. It's not that there will be that much
+            # of a difference, but due to the problems mentioned in the
+            # big comment above, tiny differences will be greatly magnified
+            # when the distribution isn't actually a powerlaw.
             fit = powerlaw.Fit(data, discrete=references[k]['discrete'],
-                               estimate_discrete=False)
-            results[k]['alpha'] = fit.alpha
+                               estimate_discrete=False, test_all_xmin=True)
+            results[k]['alpha'] = fit.power_law.alpha
             results[k]['xmin'] = fit.xmin
             results[k]['fit'] = fit
 

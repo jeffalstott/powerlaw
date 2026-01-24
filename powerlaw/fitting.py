@@ -167,6 +167,11 @@ class Fit(object):
 
         Currently, only ``'power_law'`` is supported.
 
+    test_all_xmin : bool
+        Whether to test every single unique value in the dataset for fitting
+        xmin (True) or generate a uniform distribution of values that spans
+        the data.
+
     verbose: {0, 1, 2} or bool, optional
         Whether to print updates about where we are in the fitting process.
         
@@ -189,6 +194,7 @@ class Fit(object):
                  parameter_constraints=None,
                  xmin_distance='D',
                  xmin_distribution='power_law',
+                 test_all_xmin=False,
                  verbose=1):
 
         self.verbose = verbose
@@ -285,7 +291,7 @@ class Fit(object):
                 print(f'Calculating best minimal value for {xmin_distribution.replace("_"," ")} fit')
 
             # This function tries to optimize the fit based on the xmin
-            self.find_xmin()
+            self.find_xmin(xmin_distance, test_all_xmin)
 
         # Crop the data to the xmin and
         self.data = self.data[self.data >= self.xmin]
@@ -349,7 +355,7 @@ class Fit(object):
     def xmin_distribution(self):
         return getattr(self, self.xmin_distribution_cls.name)
 
-    def find_xmin(self, xmin_distance=None):
+    def find_xmin(self, xmin_distance=None, test_all_xmin=False):
         """
         Returns the optimal xmin beyond which the scaling regime of the power
         law fits best. The attribute ``self.xmin`` of the Fit object is also set.
@@ -390,21 +396,25 @@ class Fit(object):
         # Take unique values
         possible_xmin, possible_ind = np.unique(possible_xmin, return_index=True)
 
-        # Don't look at last xmin, as that's also the xmax
-        possible_xmin = possible_xmin[:-1]
-        possible_ind = possible_ind[:-1]
 
-        # Originally, we just used every single datapoint as a possible
-        # xmin value, but this probably *way* oversamples the values we
-        # actually need to test. An alternative, which is much faster, is
-        # to just generate evenly spaced values.
+        # We have the option to use every value (usually quite slow) or
+        # an evenly sampled set of values as possible xmin values (usually
+        # much faster).
+        if test_all_xmin:
+            # Don't look at last xmin, as that's also the xmax
+            possible_xmin = possible_xmin[:-1]
+            #possible_ind = possible_ind[:-1]
 
-        # 10% of the number of datapoints sounds good. And note that we
-        # only generate bins up into the 3rd to last point so we always
-        # have enough points to calculate distance metrics.
-        # DEBUG
-        #max_bin_value = np.sort(possible_xmin)[-3]
-        #possible_xmin = np.logspace(np.log10(np.min(self.data)), np.log10(max_bin_value), len(self.data) // 10)[:-5]
+        else:
+            max_bin_value = np.sort(possible_xmin)[-3]
+
+            # 10% of the number of datapoints sounds good. And note that we
+            # only generate bins up into the 3rd to last point so we always
+            # have enough points to calculate distance metrics.
+            num_bins = max(100, len(self.data) // 10)
+
+            # These are logarithmically spaced
+            possible_xmin = np.logspace(np.log10(np.min(self.data)), np.log10(max_bin_value), num_bins)
 
         # If not provided here, take the value from the constructor
         if xmin_distance is None:
