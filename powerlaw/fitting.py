@@ -27,6 +27,7 @@ import h5py
 # For saving function source code when saving/loading
 import inspect
 import json
+import textwrap
 
 import warnings
 from tqdm import tqdm
@@ -247,7 +248,12 @@ class Fit(object):
 
         self.parameter_ranges = parameter_ranges
 
-        self.parameter_constraints = parameter_constraints
+        # Make sure that we are given a list of constraints; so even if we
+        # are only given a single one, added it to a list
+        if type(parameter_constraints) is dict:
+            self.parameter_constraints = [parameter_constraints]
+        else:
+            self.parameter_constraints = parameter_constraints
 
         # We keep track of the xmin and xmax values if they are provided.
         # I don't really see the purpose for this variable, but I'll leave
@@ -903,7 +909,17 @@ class Fit(object):
         Note that this doesn't use Python's pickling framework, but instead
         saves the relevant data and fitting information in an hdf5 file.
         This way, the data can easily be recovered even if you aren't
-        working with Python.
+        working with this library or even with Python. The cost of this is that
+        the saving and loading methods are relatively complex (or at least
+        just long) since we have to parse all of the important information
+        into generic formats. As an end-user, this isn't a problem at all,
+        but might make maintenance slightly more difficult.
+
+        Note that saving and loading imposes some restrictions on the
+        form of constraint functions. This saving and loading is done by
+        using the actual source code of the constraint functions, which
+        means that each function must be fully self-contained. For more
+        information, see the tutorial page about parameter constraints.
 
         The current version of ``powerlaw`` will be saved within the file;
         if you try to load a file from a different version, you will be shown
@@ -934,6 +950,7 @@ class Fit(object):
             metadata["xmin_distribution_name"] = self.xmin_distribution_cls.name
             metadata["xmin_distance"] = self.xmin_distance
             metadata["test_all_xmin"] = self.test_all_xmin
+            metadata["noise_flag"] = getattr(self, 'noise_flag', False)
 
             # For the initial parameters and parameter ranges, we're going
             # to have to unpack each entry in those dictionaries (since we
@@ -976,7 +993,30 @@ class Fit(object):
                                                      'dists': constr.get("dists", ''),
                                                      'name': function_name})
 
-            # TODO: Add xmin fitting results
+            # Include the xmin fitting results if available.
+            if hasattr(self, 'xmin_fitting_results'):
+                # We'll make a new dataset folder with entries for each of
+                # the arrays
+
+                # We also save the minimum index of these arrays in each
+                # one. This might be a little redundant, but again the idea
+                # of using h5 in the first place is that it is accessible
+                # outside of this library and outside of even Python.
+                distances = f.create_dataset('xmin_fitting_results/distances', data=self.xmin_fitting_results["distances"])
+                distances.attrs['min_index'] = self.xmin_fitting_results["min_index"]
+
+                xmins = f.create_dataset('xmin_fitting_results/xmins', data=self.xmin_fitting_results["xmins"])
+                xmins.attrs['min_index'] = self.xmin_fitting_results["min_index"]
+
+                valid_fits = f.create_dataset('xmin_fitting_results/valid_fits', data=self.xmin_fitting_results["valid_fits"])
+                valid_fits.attrs['min_index'] = self.xmin_fitting_results["min_index"]
+
+                # Now we have to create arrays for the parameters of the specific
+                # xmin distribution we are using
+                xmin_fitting_parameters = self.xmin_distribution_cls.parameter_names
+                for param in xmin_fitting_parameters:
+                    param_dataset = f.create_dataset(f'xmin_fitting_results/{param}', data=self.xmin_fitting_results[param])
+                    param_dataset.attrs['min_index'] = self.xmin_fitting_results["min_index"]
 
             # Finally, we include the version, since we want to warn if we
             # open a file made in another version.
@@ -985,10 +1025,29 @@ class Fit(object):
             dataset.attrs.update(metadata)
 
 
-    # Note that this is a static method
     @staticmethod
     def load(filename, verbose=1):
         """
+        Load a saved fit object.
+
+        See also ``powerlaw.Fit.save()``.
+
+        Note that the loading and saving imposes some restrictions on the
+        form of constraint functions. This saving and loading is done by
+        using the actual source code of the constraint functions, which
+        means that each function must be fully self-contained. For more
+        information, see the tutorial page about parameter constraints.
+
+        Parameters
+        ----------
+        filename : str or Path
+            The path to the file that will be loaded.
+
+        Returns
+        -------
+        fit : Fit
+            The loaded fit object, which should be functionally identical
+            to the saved object.
         """
         with h5py.File(filename) as f:
             data = f["data"][:]
@@ -1002,6 +1061,9 @@ class Fit(object):
                 if "initial_" in k:
                     variable_name = k.split('_')[1]
                     initial_parameters[variable_name] = v if (not np.isnan(v)) else None
+
+            if len(initial_parameters) == 0:
+                initial_parameters = None
 
             # Parse the parameter ranges
             # These will be entries of the form "range_{var}_min" or "range_{var}_max"
@@ -1020,6 +1082,60 @@ class Fit(object):
 
                     parameter_ranges[variable_name] = current_range
 
+            if len(parameter_ranges) == 0:
+                parameter_ranges = None
+
+            # Parse the parameter constraints
+            parameter_constraints = []
+            for dataset in f.keys():
+                if "constraint_" in dataset:
+                    function_source = f[dataset][:][0]
+
+                    # Execute the source code to load the function in
+                    try:
+                        # Note that we have to "dedent" this function since it
+                        # will maintain any indentation from exactly where
+                        # it was written. This gets rid of extra indentation
+                        # and puts the "def ..." line at zero indent.
+                        exec(textwrap.dedent(function_source.decode('utf-8')))
+
+                    except:
+                        raise ValueError(f'Malformed constraint function {dataset} in file {filename}.')
+
+                    constraint_metadata = dict(f[dataset].attrs)
+
+                    function_name = constraint_metadata["name"]
+                    function_type = constraint_metadata["type"]
+                    dists = constraint_metadata["dists"]
+
+                    constraint_dict = {"type": function_type,
+                                       "fun": eval(function_name)}
+                    if len(dists) > 0:
+                        constraint_dict["dists"] = list(dists)
+
+                    parameter_constraints.append(constraint_dict)
+
+
+            if len(parameter_constraints) == 0:
+                parameter_constraints = None
+
+            # Parse xmin fitting results. These are stored in separate
+            # datasets within the folder (within the file) 'xmin_fitting_results'.
+            if not metadata["fixed_xmin"]:
+
+                xmin_fitting_results = {}
+                xmin_fitting_results["distances"] = f["xmin_fitting_results/distances"][:]
+                xmin_fitting_results["valid_fits"] = f["xmin_fitting_results/valid_fits"][:]
+                xmin_fitting_results["xmins"] = f["xmin_fitting_results/xmins"][:]
+
+                xmin_fitting_results["min_index"] = f["xmin_fitting_results/xmins"].attrs["min_index"]
+
+                # Now get the parameter arrays
+                xmin_fitting_parameters = SUPPORTED_DISTRIBUTIONS[metadata["xmin_distribution_name"]].parameter_names
+                for param in xmin_fitting_parameters:
+                    xmin_fitting_results[param] = f[f"xmin_fitting_results/{param}"][:]
+
+
             # There are various issues that might arise if you use a different
             # version of the package from the one that created the cached
             # file. For example, if there was a bug in some calculation
@@ -1037,17 +1153,32 @@ class Fit(object):
                       xmin=metadata["xmin"],
                       xmax=metadata["xmax"] if (not np.isnan(metadata["xmax"])) else None,
                       fit_method=metadata["fit_method"],
-                      estimate_discrete=metadata["estimate_discrete"],
+                      estimate_discrete=metadata["estimate_discrete"] if metadata["discrete"] else None,
                       discrete_normalization=metadata["discrete_normalization"],
-                      sigma_threshold=metadata["sigma_threshold"],
+                      sigma_threshold=metadata["sigma_threshold"] if (not np.isnan(metadata["sigma_threshold"])) else None,
                       initial_parameters=initial_parameters,
                       parameter_ranges=parameter_ranges,
-                      parameter_constraints=None,
+                      parameter_constraints=parameter_constraints,
                       xmin_distance=metadata["xmin_distance"],
                       xmin_distribution=metadata["xmin_distribution_name"],
                       test_all_xmin=metadata["test_all_xmin"],
                       verbose=verbose)
+
+            # Now we have to adjust the fact that maybe we did actually do
+            # xmin fitting (but we just cached the result)
+            if not metadata["fixed_xmin"]:
+                fit.fixed_xmin = False
+                fit.noise_flag = metadata["noise_flag"]
+
+                fit.xmin_fitting_results = xmin_fitting_results
         
+                # Set the Fit's xmin to the optimal xmin
+                setattr(fit, metadata["xmin_distance"], xmin_fitting_results["distances"][xmin_fitting_results["min_index"]])
+
+                # Update the fitting CDF given the new xmin, in case other objects, like
+                # Distributions, want to use it for fitting (like if they do KS fitting)
+                fit.fitting_cdf_bins, fit.fitting_cdf = fit.cdf()
+
         return fit
 
 
