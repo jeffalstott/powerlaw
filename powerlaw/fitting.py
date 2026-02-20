@@ -19,12 +19,30 @@ import multiprocessing
 # So we can ignore this warning while fitting xmin
 from scipy.optimize import OptimizeWarning
 
+# So we can hash the fit object for caching
+import hashlib
+
+# For saving and loading
+import h5py
+# For saving function source code when saving/loading
+import inspect
+import json
+
 import warnings
 from tqdm import tqdm
 
 from .plotting import *
 from .statistics import *
 from .distributions import *
+
+# Try and grab the current version of the package from the _version.py file.
+# This is for comparing with saved/loaded Fit objects. If we can't find that
+# file, we have to work without it.
+try:
+    from ._version import __version__
+    POWERLAW_VERSION = __version__
+except:
+    POWERLAW_VERSION = None
 
 # This needs to be a list of the keys in the supported_distributions
 # attribute of the Fit class.  The __getattr__ method needs the list.
@@ -212,8 +230,23 @@ class Fit(object):
         self.discrete_normalization = discrete_normalization
         self.sigma_threshold = sigma_threshold
 
+        # For initial parameters and ranges, we need to do some standardization
+        # such that we can nicely save and load Fit objects to files. This
+        # is primarily relevant to the hashing, since we need to make sure
+        # the type of numbers in either case is a float or None.
+        if hasattr(initial_parameters, '__iter__'):
+            for k, v in initial_parameters.items():
+                initial_parameters[k] = float(v) if v else None
+
         self.initial_parameters = initial_parameters
+ 
+        if hasattr(parameter_ranges, '__iter__'):
+            for k, v in parameter_ranges.items():
+                parameter_ranges[k][0] = float(v[0]) if v[0] else None
+                parameter_ranges[k][1] = float(v[1]) if v[1] else None
+
         self.parameter_ranges = parameter_ranges
+
         self.parameter_constraints = parameter_constraints
 
         # We keep track of the xmin and xmax values if they are provided.
@@ -282,6 +315,9 @@ class Fit(object):
         self.supported_distributions = SUPPORTED_DISTRIBUTIONS
 
         self.xmin_distribution_cls: type[Distribution] = self.supported_distributions[xmin_distribution]
+        # We need to save this for hashing; otherwise, we never use it
+        # again after passing to find_xmin().
+        self.test_all_xmin = test_all_xmin
 
         # If we have a fixed xmin, we can directly fit a power law distribution
         if self.fixed_xmin:
@@ -350,6 +386,7 @@ class Fit(object):
 
         else:
             raise AttributeError(name)
+
 
     @property
     def xmin_distribution(self):
@@ -858,4 +895,239 @@ class Fit(object):
 
         return plot_pdf(data, xmin=xmin, xmax=xmax, linear_bins=linear_bins, bins=bins, ax=ax, **kwargs)
 
+    
+    def save(self, filename):
+        """
+        Save the fit object to a file.
 
+        Note that this doesn't use Python's pickling framework, but instead
+        saves the relevant data and fitting information in an hdf5 file.
+        This way, the data can easily be recovered even if you aren't
+        working with Python.
+
+        The current version of ``powerlaw`` will be saved within the file;
+        if you try to load a file from a different version, you will be shown
+        a warning.
+
+        Parameters
+        ----------
+        filename : str or Path
+            The file to which to save the ``Fit`` data.
+        """
+
+        with h5py.File(filename, 'w') as f:
+            # Create the main dataset
+            dataset = f.create_dataset('data', data=self.data_original)
+
+            # h5 files can't save Python's NoneType (since they should
+            # work with any language) so we have to do a little parsing.
+            metadata = {}
+            metadata["xmin"] = self.xmin
+            metadata["fixed_xmin"] = self.fixed_xmin
+            metadata["xmax"] = self.xmax if self.xmax else np.nan
+
+            metadata["discrete"] = self.discrete
+            metadata["fit_method"] = self.fit_method
+            metadata["estimate_discrete"] = self.estimate_discrete if self.discrete else False
+            metadata["discrete_normalization"] = self.discrete_normalization
+            metadata["sigma_threshold"] = self.sigma_threshold if self.sigma_threshold else np.nan
+            metadata["xmin_distribution_name"] = self.xmin_distribution_cls.name
+            metadata["xmin_distance"] = self.xmin_distance
+            metadata["test_all_xmin"] = self.test_all_xmin
+
+            # For the initial parameters and parameter ranges, we're going
+            # to have to unpack each entry in those dictionaries (since we
+            # can't store a proper dictionary).
+            if self.initial_parameters:
+                for k, v in self.initial_parameters.items():
+                    metadata[f"initial_{k}"] = v if v else np.nan
+
+            if self.parameter_ranges:
+                for k, v in self.parameter_ranges.items():
+                    metadata[f"range_{k}_min"] = v[0] if v[0] else np.nan
+                    metadata[f"range_{k}_max"] = v[1] if v[1] else np.nan
+
+            # The parameter constraints are quite tricky as well, since we
+            # can't store a Python function object in an h5 file. Instead, we
+            # just copy the source code for the constraint. Note that this
+            # does mean you can't use values defined outside of your constraint
+            # function, for example:
+            # 
+            # some_value = 5
+            # def constraint(dist):
+            #    return dist.value < some_value
+            #
+            # This above constraint function cannot be saved properly because
+            # some_value is defined outside of its scope.
+            if self.parameter_constraints:
+                for constr in self.parameter_constraints:
+                    function_source = inspect.getsource(constr["fun"])
+                    function_name = constr["fun"].__name__
+
+                    # Can't store a string directly, so we store it as
+                    # an array of strings with only one element.
+                    function_data = np.array([function_source], dtype='S')
+
+                    # We create a new dataset for each constraint, with the
+                    # main data being the function source code
+                    constraint_dataset = f.create_dataset(f'constraint_{function_name}', data=function_data)
+
+                    constraint_dataset.attrs.update({'type': constr["type"],
+                                                     'dists': constr.get("dists", ''),
+                                                     'name': function_name})
+
+            # TODO: Add xmin fitting results
+
+            # Finally, we include the version, since we want to warn if we
+            # open a file made in another version.
+            metadata["powerlaw_version"] = POWERLAW_VERSION if POWERLAW_VERSION else 'Unknown'
+
+            dataset.attrs.update(metadata)
+
+
+    # Note that this is a static method
+    @staticmethod
+    def load(filename, verbose=1):
+        """
+        """
+        with h5py.File(filename) as f:
+            data = f["data"][:]
+            # Most of the metadata here we will directly pass to the Fit
+            # object, but we do have to parse a few things.
+            metadata = dict(f["data"].attrs)
+
+            # Parse the initial parameter values
+            initial_parameters = {}
+            for k, v in metadata.items():
+                if "initial_" in k:
+                    variable_name = k.split('_')[1]
+                    initial_parameters[variable_name] = v if (not np.isnan(v)) else None
+
+            # Parse the parameter ranges
+            # These will be entries of the form "range_{var}_min" or "range_{var}_max"
+            parameter_ranges = {}
+            for k, v in metadata.items():
+                if "range_" in k:
+                    if k.split('_')[-1] not in ["max", "min"]:
+                        warnings.warn(f'Malformed h5 file formatting for parameter ranges: {k}:{v}')
+                        continue
+
+                    variable_name = k.split('_')[1]
+                    range_index = int(k.split('_')[-1] == "max")
+
+                    current_range = parameter_ranges.get(variable_name, [None, None])
+                    current_range[range_index] = float(v) if (not np.isnan(v)) else None
+
+                    parameter_ranges[variable_name] = current_range
+
+            # There are various issues that might arise if you use a different
+            # version of the package from the one that created the cached
+            # file. For example, if there was a bug in some calculation
+            # that was fixed in a newer version, you might not recalculate
+            # the value to fix the issue. Most of the time you probably
+            # shouldn't have issues, but we should give a warning just in
+            # case.
+            if POWERLAW_VERSION != "Unknown" and metadata["powerlaw_version"] != "Unknown":
+                if POWERLAW_VERSION != metadata["powerlaw_version"]:
+                    warnings.warn(f'Cached file {filename} was saved with a different version of powerlaw {metadata["powerlaw_version"]} than what you are currently using {POWERLAW_VERSION}! This may cause issues...')
+
+            # Create the fit object
+            fit = Fit(data=data,
+                      discrete=metadata["discrete"],
+                      xmin=metadata["xmin"],
+                      xmax=metadata["xmax"] if (not np.isnan(metadata["xmax"])) else None,
+                      fit_method=metadata["fit_method"],
+                      estimate_discrete=metadata["estimate_discrete"],
+                      discrete_normalization=metadata["discrete_normalization"],
+                      sigma_threshold=metadata["sigma_threshold"],
+                      initial_parameters=initial_parameters,
+                      parameter_ranges=parameter_ranges,
+                      parameter_constraints=None,
+                      xmin_distance=metadata["xmin_distance"],
+                      xmin_distribution=metadata["xmin_distribution_name"],
+                      test_all_xmin=metadata["test_all_xmin"],
+                      verbose=verbose)
+        
+        return fit
+
+
+    def __eq__(self, other):
+        """
+        Check for equality between two ``Fit`` objects.
+
+        This is done using a custom implementation that checks the actual
+        fit data and parameters against each other, such that two separate
+        instances with the exact same information will be deemed equal.
+        """
+        return hash(self) == hash(other)
+
+    
+    def __hash__(self):
+        """
+        Generate a unique hash for this fit based on the data and other
+        fitting parameters, such that the hash is the same for any two
+        identical fits.
+
+        Used for automatic caching of ``Fit`` objects.
+
+        Note that this doesn't do any checks about specific distributions,
+        eg. `fit.power_law`; this is because these may or may not exist
+        depending on whether the user has accessed them.
+
+        Returns
+        -------
+
+        hash : int
+            The integer hash of the ``Fit`` object
+        """
+        # We cast the data to a specific type, since it could be passed
+        # as a float32, float64, int32, int64, etc.
+        # We choose float32 since it's not too large, but includes enough
+        # precision.
+        retyped_data = np.sort(np.array(self.data_original, dtype=np.float32))
+        # Numpy arrays are unhashable, so we need a fixed tuple.
+        retyped_data = tuple(retyped_data)
+
+        # We need to be able to create this hash *before* computing xmin
+        # (if requested), so we can't use the actual xmin value in the hashing
+        # if one isn't explicitly specified.
+        xmin_value = np.float32(self.xmin if self.fixed_xmin else -1)
+        xmax_value = np.float32(self.xmax if self.xmax else -1)
+
+        # For the parameter ranges and initial values, we need to dump the
+        # dictionary objects with sorted keys, otherwise we could see
+        # differences based on the arbitrary order in which keys are added.
+        if hasattr(self.parameter_ranges, '__iter__'):
+            parameter_ranges_value = json.dumps(self.parameter_ranges, sort_keys=True)
+        else:
+            parameter_ranges_value = None
+
+        if hasattr(self.initial_parameters, '__iter__'):
+            initial_parameters_value = json.dumps(self.initial_parameters, sort_keys=True)
+        else:
+            initial_parameters_value = None
+
+        # TODO: It might be good to include parameter constraint functions
+        # here too, but finding a consistent hash for a function like that
+        # would be very difficult...
+
+        # The actual object we will hash is a tuple of the important
+        # identifying information
+        hash_data = retyped_data + (self.fixed_xmin,
+                                    xmin_value,
+                                    xmax_value,
+                                    self.discrete,
+                                    self.fit_method,
+                                    self.estimate_discrete if self.discrete else False,
+                                    self.discrete_normalization if self.discrete else '',
+                                    self.xmin_distribution_cls.name,
+                                    self.xmin_distance,
+                                    self.test_all_xmin,
+                                    parameter_ranges_value,
+                                    initial_parameters_value)
+
+        # Python's basic hash() function isn't consistent across different
+        # runs, so we can't use it to identify the specific properties of a
+        # Fit object. In contrast, hashlib's functions are consistent.
+
+        return int(hashlib.sha256(str(hash_data).encode("utf-8")).hexdigest(), 16)
