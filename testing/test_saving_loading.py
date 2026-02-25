@@ -90,9 +90,15 @@ class TestHashing(unittest.TestCase):
         assert hash(fit_1) != hash(fit_2)
 
 
-TEST_FILE = 'unit_test_saving_loading.h5'
+# The save function will determine what format to use based on the filename
+# given, so we can test both h5 and pickle saving just by changing the name
+# of the output path.
+TEST_FILE_H5 = 'unit_test_saving_loading.h5'
+TEST_FILE_PKL = 'unit_test_saving_loading.pkl'
 
-class TestSavingLoading(unittest.TestCase):
+TEST_FILES = [TEST_FILE_H5, TEST_FILE_PKL]
+
+class TestSavingLoading_H5(unittest.TestCase):
 
     def test_compare_hash(self):
         """
@@ -103,27 +109,28 @@ class TestSavingLoading(unittest.TestCase):
         # The specific dataset is arbitrary
         data = powerlaw.load_test_dataset('blackouts')
 
-        # With fixed xmin
-        try:
-            original_fit = powerlaw.Fit(data, xmin=1)
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+        for test_f in TEST_FILES:
+            # With fixed xmin
+            try:
+                original_fit = powerlaw.Fit(data, xmin=1)
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            assert hash(original_fit) == hash(loaded_fit)
+                assert hash(original_fit) == hash(loaded_fit)
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)
 
-        # Fitting xmin
-        try:
-            original_fit = powerlaw.Fit(data)
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+            # Fitting xmin
+            try:
+                original_fit = powerlaw.Fit(data)
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            assert hash(original_fit) == hash(loaded_fit)
+                assert hash(original_fit) == hash(loaded_fit)
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)
 
 
     def test_compare_xmin_fitting(self):
@@ -135,17 +142,18 @@ class TestSavingLoading(unittest.TestCase):
         # The specific dataset is arbitrary
         data = powerlaw.load_test_dataset('blackouts')
 
-        try:
-            original_fit = powerlaw.Fit(data)
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+        for test_f in TEST_FILES:
+            try:
+                original_fit = powerlaw.Fit(data)
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            fitting_result_keys = ['distances', 'xmins', 'valid_fits']
-            for key in fitting_result_keys:
-                assert_equal(original_fit.xmin_fitting_results[key], loaded_fit.xmin_fitting_results[key])
+                fitting_result_keys = ['distances', 'xmins', 'valid_fits']
+                for key in fitting_result_keys:
+                    assert_equal(original_fit.xmin_fitting_results[key], loaded_fit.xmin_fitting_results[key])
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)
 
 
     def test_compare_fit(self):
@@ -155,26 +163,27 @@ class TestSavingLoading(unittest.TestCase):
 
         This is quite an important test even if it doesn't seem like it. This
         is because the actual distribution objects aren't saved with the
-        cahched file, so they have to be reconstructed based on the parameters
-        and data. So if the distribution fitting is exactly the same, that is
-        quite an important result.
+        cahched file (for h5 format), so they have to be reconstructed based on the parameters
+        and data. So if the distribution fitting is exactly the same, that
+        indicates that indeed everything about the fit is functionally identical.
         """
         # The specific dataset is arbitrary
         data = powerlaw.load_test_dataset('flares')
 
-        try:
-            original_fit = powerlaw.Fit(data)
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+        for test_f in TEST_FILES:
+            try:
+                original_fit = powerlaw.Fit(data)
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            for dist in original_fit.supported_distributions.keys():
-                original_values = list(getattr(original_fit, dist).parameters.values())
-                loaded_values = list(getattr(loaded_fit, dist).parameters.values())
+                for dist in original_fit.supported_distributions.keys():
+                    original_values = list(getattr(original_fit, dist).parameters.values())
+                    loaded_values = list(getattr(loaded_fit, dist).parameters.values())
 
-                assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
+                    assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)
 
 
     def test_compare_fit_initial_parameters(self):
@@ -185,22 +194,23 @@ class TestSavingLoading(unittest.TestCase):
         # The specific dataset is arbitrary
         data = powerlaw.load_test_dataset('flares')
 
-        try:
-            # The parameters are intentionally scattered (and you would almost
-            # never given a None value for one, but since this is for unit
-            # testing we want to push things a bit).
-            original_fit = powerlaw.Fit(data, initial_parameters={"alpha": 1.2, "Lambda": 1e-2, "mu": None})
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+        for test_f in TEST_FILES:
+            try:
+                # The parameters are intentionally scattered (and you would almost
+                # never given a None value for one, but since this is for unit
+                # testing we want to push things a bit).
+                original_fit = powerlaw.Fit(data, initial_parameters={"alpha": 1.2, "Lambda": 1e-2, "mu": None})
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            for dist in original_fit.supported_distributions.keys():
-                original_values = list(getattr(original_fit, dist).parameters.values())
-                loaded_values = list(getattr(loaded_fit, dist).parameters.values())
+                for dist in original_fit.supported_distributions.keys():
+                    original_values = list(getattr(original_fit, dist).parameters.values())
+                    loaded_values = list(getattr(loaded_fit, dist).parameters.values())
 
-                assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
+                    assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)
 
 
     def test_compare_fit_parameter_ranges(self):
@@ -211,22 +221,23 @@ class TestSavingLoading(unittest.TestCase):
         # The specific dataset is arbitrary
         data = powerlaw.load_test_dataset('flares')
 
-        try:
-            # The parameters are intentionally scattered (and you would almost
-            # never given a None value for one, but since this is for unit
-            # testing we want to push things a bit).
-            original_fit = powerlaw.Fit(data, parameter_ranges={"alpha": [1.2, 1.5], "Lambda": [1e-5, None]})
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+        for test_f in TEST_FILES:
+            try:
+                # The parameters are intentionally scattered (and you would almost
+                # never given a None value for one, but since this is for unit
+                # testing we want to push things a bit).
+                original_fit = powerlaw.Fit(data, parameter_ranges={"alpha": [1.2, 1.5], "Lambda": [1e-5, None]})
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            for dist in original_fit.supported_distributions.keys():
-                original_values = list(getattr(original_fit, dist).parameters.values())
-                loaded_values = list(getattr(loaded_fit, dist).parameters.values())
+                for dist in original_fit.supported_distributions.keys():
+                    original_values = list(getattr(original_fit, dist).parameters.values())
+                    loaded_values = list(getattr(loaded_fit, dist).parameters.values())
 
-                assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
+                    assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)
 
 
     def test_compare_fit_parameter_constraints(self):
@@ -237,29 +248,30 @@ class TestSavingLoading(unittest.TestCase):
         # The specific dataset is arbitrary
         data = powerlaw.load_test_dataset('blackouts')
 
-        try:
-            # As discussed in the documentation, this needs to be entirely
-            # self contained.
-            def constr(dist):
-                N = 100
-                return len(dist.data) - N
+        for test_f in TEST_FILES:
+            try:
+                # As discussed in the documentation, this should be entirely
+                # self contained.
+                def constr(dist):
+                    N = 100
+                    return len(dist.data) - N
 
-            constraint_dict = {"type": 'ineq',
-                               "fun": constr,
-                               "dists": ['power_law']}
+                constraint_dict = {"type": 'ineq',
+                                   "fun": constr,
+                                   "dists": ['power_law']}
 
-            # The parameters are intentionally scattered (and you would almost
-            # never given a None value for one, but since this is for unit
-            # testing we want to push things a bit).
-            original_fit = powerlaw.Fit(data, parameter_constraints=[constraint_dict])
-            original_fit.save(TEST_FILE)
-            loaded_fit = powerlaw.Fit.load(TEST_FILE)
+                # The parameters are intentionally scattered (and you would almost
+                # never given a None value for one, but since this is for unit
+                # testing we want to push things a bit).
+                original_fit = powerlaw.Fit(data, parameter_constraints=[constraint_dict])
+                original_fit.save(test_f)
+                loaded_fit = powerlaw.Fit.load(test_f)
 
-            for dist in original_fit.supported_distributions.keys():
-                original_values = list(getattr(original_fit, dist).parameters.values())
-                loaded_values = list(getattr(loaded_fit, dist).parameters.values())
+                for dist in original_fit.supported_distributions.keys():
+                    original_values = list(getattr(original_fit, dist).parameters.values())
+                    loaded_values = list(getattr(loaded_fit, dist).parameters.values())
 
-                assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
+                    assert_allclose(original_values, loaded_values, rtol=0.01, atol=0.01)
 
-        finally:
-            os.remove(TEST_FILE)
+            finally:
+                os.remove(test_f)

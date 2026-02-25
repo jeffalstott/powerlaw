@@ -29,6 +29,12 @@ import inspect
 import json
 import textwrap
 
+# Dill is a drop-in replacement for pickle that allows you to serialize
+# local functions (among other improvements); used for saving and loading
+# fit objects, and parallelization.
+#import pickle
+import dill as pickle
+
 import warnings
 from tqdm import tqdm
 
@@ -67,6 +73,7 @@ Whether to enable parallelization for certain heavy calculations, eg.
 fitting the xmin value.
 """
 PARALLEL_ENABLE = False
+
 """
 Currently just templated; doesn't work yet.
 
@@ -75,6 +82,44 @@ certain heavy calculations. For example, if you have 8 cores, and this is
 set to 2, then the processing would use (up to) 6 cores.
 """
 PARALLEL_UNUSED_CORES = 2
+
+
+"""
+The file types and extensions supported for saving and loading files.
+
+Each key is the name of the format, and the value should be the list of
+extensions that correspond to this format.
+"""
+SUPPORTED_SAVE_FORMATS = {"hdf5": ['h5', 'hdf5'],
+                          "pickle": ['pkl', 'pickle']}
+
+SUPPORTED_SAVE_FILE_EXTENSIONS = [ext for v in SUPPORTED_SAVE_FORMATS.values() for ext in v]
+
+_DEFAULT_SAVE_FORMAT = 'h5'
+    
+"""
+Whether fits are cached automatically or not.
+
+This variable should not be manually set, but rather is automatically
+set to True when a valid path is given using Fit.set_cache_folder().
+"""
+_CACHE_ENABLED = False
+
+"""
+The path to the cache folder.
+
+This variable should not be manually set, but rather set using
+Fit.set_cache_folder().
+"""
+_CACHE_PATH = None
+
+"""
+The format to use when automatically caching files.
+
+This variable should not be manually set, but rather set using
+Fit.set_cache_format(). The default is hdf5.
+"""
+_CACHE_FORMAT = _DEFAULT_SAVE_FORMAT
 
 
 class Fit(object):
@@ -191,6 +236,10 @@ class Fit(object):
         xmin (True) or generate a uniform distribution of values that spans
         the data.
 
+    ignore_cache : bool
+        Whether to ignore cached files, even if automatic cacheing is 
+        enabled.
+
     verbose: {0, 1, 2} or bool, optional
         Whether to print updates about where we are in the fitting process.
         
@@ -214,6 +263,7 @@ class Fit(object):
                  xmin_distance='D',
                  xmin_distribution='power_law',
                  test_all_xmin=False,
+                 ignore_cache=False,
                  verbose=1):
 
         self.verbose = verbose
@@ -325,6 +375,33 @@ class Fit(object):
         # again after passing to find_xmin().
         self.test_all_xmin = test_all_xmin
 
+        ####################################
+        # CHECK CACHE
+        # Now that we have all of our variables set, we should check to see
+        # if we need to look for a cached copy of this fit. Notably, this
+        # happens before we fit xmin, since the point of caching is to
+        # avoid having to repeat that calculation if possible.
+        if _CACHE_ENABLED and not ignore_cache:
+            potential_cache_file = os.path.join(_CACHE_PATH, f'{hash(self)}.{_CACHE_FORMAT}')
+
+            if os.path.exists(potential_cache_file):
+                if self.verbose:
+                    print(f'Found cached file: {potential_cache_file}')
+
+                # You can't just overwrite self, so we have to update
+                # every variable
+                loaded_fit = Fit.load(potential_cache_file)
+                print(self.__dict__)
+                self.__dict__.update(loaded_fit.__dict__)
+                print(self.__dict__)
+                return
+
+            # If we don't find a cache file, no problem, we just continue on with
+            # calculating xmin.
+
+
+        ####################################
+        # FIT XMIN
         # If we have a fixed xmin, we can directly fit a power law distribution
         if self.fixed_xmin:
             self.xmin = float(xmin)
@@ -339,6 +416,17 @@ class Fit(object):
         self.data = self.data[self.data >= self.xmin]
         self.n = float(len(self.data))
         self.n_tail = self.n + n_above_max
+
+        ####################################
+        # CREATE CACHE
+        if _CACHE_ENABLED and not ignore_cache:
+            new_cache_file = os.path.join(_CACHE_PATH, f'{hash(self)}.{_CACHE_FORMAT}')
+
+            if not os.path.exists(new_cache_file):
+                if verbose:
+                    print(f'Caching file at: {new_cache_file}')
+                self.save(new_cache_file)
+
 
 
     def __dir__(self):
@@ -901,8 +989,7 @@ class Fit(object):
 
         return plot_pdf(data, xmin=xmin, xmax=xmax, linear_bins=linear_bins, bins=bins, ax=ax, **kwargs)
 
-    
-    def save(self, filename):
+    def save(self, filename, format=None):
         """
         Save the fit object to a file.
 
@@ -931,98 +1018,35 @@ class Fit(object):
             The file to which to save the ``Fit`` data.
         """
 
-        with h5py.File(filename, 'w') as f:
-            # Create the main dataset
-            dataset = f.create_dataset('data', data=self.data_original)
+        # Determine what type of file we have
+        file_extension = filename.split('.')[-1]
 
-            # h5 files can't save Python's NoneType (since they should
-            # work with any language) so we have to do a little parsing.
-            metadata = {}
-            metadata["xmin"] = self.xmin
-            metadata["fixed_xmin"] = self.fixed_xmin
-            metadata["xmax"] = self.xmax if self.xmax else np.nan
+        # If we have no extension, we follow the value of the format kw
+        if '.' not in filename or file_extension not in SUPPORTED_SAVE_FILE_EXTENSIONS:
 
-            metadata["discrete"] = self.discrete
-            metadata["fit_method"] = self.fit_method
-            metadata["estimate_discrete"] = self.estimate_discrete if self.discrete else False
-            metadata["discrete_normalization"] = self.discrete_normalization
-            metadata["sigma_threshold"] = self.sigma_threshold if self.sigma_threshold else np.nan
-            metadata["xmin_distribution_name"] = self.xmin_distribution_cls.name
-            metadata["xmin_distance"] = self.xmin_distance
-            metadata["test_all_xmin"] = self.test_all_xmin
-            metadata["noise_flag"] = getattr(self, 'noise_flag', False)
+            if format is not None and format in SUPPORTED_SAVE_FILE_EXTENSIONS:
+                full_filename = filename + '.' + format
 
-            # For the initial parameters and parameter ranges, we're going
-            # to have to unpack each entry in those dictionaries (since we
-            # can't store a proper dictionary).
-            if self.initial_parameters:
-                for k, v in self.initial_parameters.items():
-                    metadata[f"initial_{k}"] = v if v else np.nan
+            elif format is not None:
+                raise ValueError('Desired format ({format}) is unsupported.')
 
-            if self.parameter_ranges:
-                for k, v in self.parameter_ranges.items():
-                    metadata[f"range_{k}_min"] = v[0] if v[0] else np.nan
-                    metadata[f"range_{k}_max"] = v[1] if v[1] else np.nan
+            else:
+                # Just use the default format
+                full_filename = filename + '.' + _DEFAULT_SAVE_FORMAT
+                format = _DEFAULT_SAVE_FORMAT
 
-            # The parameter constraints are quite tricky as well, since we
-            # can't store a Python function object in an h5 file. Instead, we
-            # just copy the source code for the constraint. Note that this
-            # does mean you can't use values defined outside of your constraint
-            # function, for example:
-            # 
-            # some_value = 5
-            # def constraint(dist):
-            #    return dist.value < some_value
-            #
-            # This above constraint function cannot be saved properly because
-            # some_value is defined outside of its scope.
-            if self.parameter_constraints:
-                for constr in self.parameter_constraints:
-                    function_source = inspect.getsource(constr["fun"])
-                    function_name = constr["fun"].__name__
+        else:
+            full_filename = filename
+            format = file_extension
 
-                    # Can't store a string directly, so we store it as
-                    # an array of strings with only one element.
-                    function_data = np.array([function_source], dtype='S')
+        if format in ['h5', 'hdf5']:
+            _write_hdf5_file(full_filename, self)
 
-                    # We create a new dataset for each constraint, with the
-                    # main data being the function source code
-                    constraint_dataset = f.create_dataset(f'constraint_{function_name}', data=function_data)
+        elif format in ['pkl', 'pickle']:
+            _write_pickle_file(full_filename, self)
 
-                    constraint_dataset.attrs.update({'type': constr["type"],
-                                                     'dists': constr.get("dists", ''),
-                                                     'name': function_name})
-
-            # Include the xmin fitting results if available.
-            if hasattr(self, 'xmin_fitting_results'):
-                # We'll make a new dataset folder with entries for each of
-                # the arrays
-
-                # We also save the minimum index of these arrays in each
-                # one. This might be a little redundant, but again the idea
-                # of using h5 in the first place is that it is accessible
-                # outside of this library and outside of even Python.
-                distances = f.create_dataset('xmin_fitting_results/distances', data=self.xmin_fitting_results["distances"])
-                distances.attrs['min_index'] = self.xmin_fitting_results["min_index"]
-
-                xmins = f.create_dataset('xmin_fitting_results/xmins', data=self.xmin_fitting_results["xmins"])
-                xmins.attrs['min_index'] = self.xmin_fitting_results["min_index"]
-
-                valid_fits = f.create_dataset('xmin_fitting_results/valid_fits', data=self.xmin_fitting_results["valid_fits"])
-                valid_fits.attrs['min_index'] = self.xmin_fitting_results["min_index"]
-
-                # Now we have to create arrays for the parameters of the specific
-                # xmin distribution we are using
-                xmin_fitting_parameters = self.xmin_distribution_cls.parameter_names
-                for param in xmin_fitting_parameters:
-                    param_dataset = f.create_dataset(f'xmin_fitting_results/{param}', data=self.xmin_fitting_results[param])
-                    param_dataset.attrs['min_index'] = self.xmin_fitting_results["min_index"]
-
-            # Finally, we include the version, since we want to warn if we
-            # open a file made in another version.
-            metadata["powerlaw_version"] = POWERLAW_VERSION if POWERLAW_VERSION else 'Unknown'
-
-            dataset.attrs.update(metadata)
+        else:
+            raise ValueError('Unsupported save format!')
 
 
     @staticmethod
@@ -1038,6 +1062,12 @@ class Fit(object):
         means that each function must be fully self-contained. For more
         information, see the tutorial page about parameter constraints.
 
+        This function can load the following types, signified by their
+        respective extensions:
+
+            HDF5: .h5, .hdf5
+            Pickle: .pkl, .pickle
+
         Parameters
         ----------
         filename : str or Path
@@ -1049,137 +1079,19 @@ class Fit(object):
             The loaded fit object, which should be functionally identical
             to the saved object.
         """
-        with h5py.File(filename) as f:
-            data = f["data"][:]
-            # Most of the metadata here we will directly pass to the Fit
-            # object, but we do have to parse a few things.
-            metadata = dict(f["data"].attrs)
+        # Determine what type of file we have
+        file_extension = filename.split('.')[-1]
 
-            # Parse the initial parameter values
-            initial_parameters = {}
-            for k, v in metadata.items():
-                if "initial_" in k:
-                    variable_name = k.split('_')[1]
-                    initial_parameters[variable_name] = v if (not np.isnan(v)) else None
+        # HDF5
+        if file_extension.lower() in ['h5', 'hdf5']:
+            return _parse_hdf5_file(filename, verbose)
 
-            if len(initial_parameters) == 0:
-                initial_parameters = None
+        # Pickle
+        elif file_extension.lower() in ['pkl', 'pickle']:
+            return _parse_pickle_file(filename)
 
-            # Parse the parameter ranges
-            # These will be entries of the form "range_{var}_min" or "range_{var}_max"
-            parameter_ranges = {}
-            for k, v in metadata.items():
-                if "range_" in k:
-                    if k.split('_')[-1] not in ["max", "min"]:
-                        warnings.warn(f'Malformed h5 file formatting for parameter ranges: {k}:{v}')
-                        continue
-
-                    variable_name = k.split('_')[1]
-                    range_index = int(k.split('_')[-1] == "max")
-
-                    current_range = parameter_ranges.get(variable_name, [None, None])
-                    current_range[range_index] = float(v) if (not np.isnan(v)) else None
-
-                    parameter_ranges[variable_name] = current_range
-
-            if len(parameter_ranges) == 0:
-                parameter_ranges = None
-
-            # Parse the parameter constraints
-            parameter_constraints = []
-            for dataset in f.keys():
-                if "constraint_" in dataset:
-                    function_source = f[dataset][:][0]
-
-                    # Execute the source code to load the function in
-                    try:
-                        # Note that we have to "dedent" this function since it
-                        # will maintain any indentation from exactly where
-                        # it was written. This gets rid of extra indentation
-                        # and puts the "def ..." line at zero indent.
-                        exec(textwrap.dedent(function_source.decode('utf-8')))
-
-                    except:
-                        raise ValueError(f'Malformed constraint function {dataset} in file {filename}.')
-
-                    constraint_metadata = dict(f[dataset].attrs)
-
-                    function_name = constraint_metadata["name"]
-                    function_type = constraint_metadata["type"]
-                    dists = constraint_metadata["dists"]
-
-                    constraint_dict = {"type": function_type,
-                                       "fun": eval(function_name)}
-                    if len(dists) > 0:
-                        constraint_dict["dists"] = list(dists)
-
-                    parameter_constraints.append(constraint_dict)
-
-
-            if len(parameter_constraints) == 0:
-                parameter_constraints = None
-
-            # Parse xmin fitting results. These are stored in separate
-            # datasets within the folder (within the file) 'xmin_fitting_results'.
-            if not metadata["fixed_xmin"]:
-
-                xmin_fitting_results = {}
-                xmin_fitting_results["distances"] = f["xmin_fitting_results/distances"][:]
-                xmin_fitting_results["valid_fits"] = f["xmin_fitting_results/valid_fits"][:]
-                xmin_fitting_results["xmins"] = f["xmin_fitting_results/xmins"][:]
-
-                xmin_fitting_results["min_index"] = f["xmin_fitting_results/xmins"].attrs["min_index"]
-
-                # Now get the parameter arrays
-                xmin_fitting_parameters = SUPPORTED_DISTRIBUTIONS[metadata["xmin_distribution_name"]].parameter_names
-                for param in xmin_fitting_parameters:
-                    xmin_fitting_results[param] = f[f"xmin_fitting_results/{param}"][:]
-
-
-            # There are various issues that might arise if you use a different
-            # version of the package from the one that created the cached
-            # file. For example, if there was a bug in some calculation
-            # that was fixed in a newer version, you might not recalculate
-            # the value to fix the issue. Most of the time you probably
-            # shouldn't have issues, but we should give a warning just in
-            # case.
-            if POWERLAW_VERSION != "Unknown" and metadata["powerlaw_version"] != "Unknown":
-                if POWERLAW_VERSION != metadata["powerlaw_version"]:
-                    warnings.warn(f'Cached file {filename} was saved with a different version of powerlaw {metadata["powerlaw_version"]} than what you are currently using {POWERLAW_VERSION}! This may cause issues...')
-
-            # Create the fit object
-            fit = Fit(data=data,
-                      discrete=metadata["discrete"],
-                      xmin=metadata["xmin"],
-                      xmax=metadata["xmax"] if (not np.isnan(metadata["xmax"])) else None,
-                      fit_method=metadata["fit_method"],
-                      estimate_discrete=metadata["estimate_discrete"] if metadata["discrete"] else None,
-                      discrete_normalization=metadata["discrete_normalization"],
-                      sigma_threshold=metadata["sigma_threshold"] if (not np.isnan(metadata["sigma_threshold"])) else None,
-                      initial_parameters=initial_parameters,
-                      parameter_ranges=parameter_ranges,
-                      parameter_constraints=parameter_constraints,
-                      xmin_distance=metadata["xmin_distance"],
-                      xmin_distribution=metadata["xmin_distribution_name"],
-                      test_all_xmin=metadata["test_all_xmin"],
-                      verbose=verbose)
-
-            # Now we have to adjust the fact that maybe we did actually do
-            # xmin fitting (but we just cached the result)
-            if not metadata["fixed_xmin"]:
-                fit.fixed_xmin = False
-                fit.noise_flag = metadata["noise_flag"]
-
-                fit.xmin_fitting_results = xmin_fitting_results
-        
-                # Set the Fit's xmin to the optimal xmin
-                setattr(fit, metadata["xmin_distance"], xmin_fitting_results["distances"][xmin_fitting_results["min_index"]])
-
-                # Update the fitting CDF given the new xmin, in case other objects, like
-                # Distributions, want to use it for fitting (like if they do KS fitting)
-                fit.fitting_cdf_bins, fit.fitting_cdf = fit.cdf()
-
-        return fit
+        else:
+            raise ValueError(f'Unknown filetype passed ({filename}); make sure that your file has an appropriate extension. See documentation for this function for acceptable extensions.')
 
 
     def __eq__(self, other):
@@ -1262,3 +1174,350 @@ class Fit(object):
         # Fit object. In contrast, hashlib's functions are consistent.
 
         return int(hashlib.sha256(str(hash_data).encode("utf-8")).hexdigest(), 16)
+
+
+    @staticmethod
+    def set_cache_folder(path):
+        """
+        """
+        global _CACHE_ENABLED, _CACHE_PATH
+
+        # First, create the folder if it doesn't exist
+        os.makedirs(path, exist_ok=True)
+
+        # Save the path and set caching enabled
+        _CACHE_ENABLED = True
+        _CACHE_PATH = os.path.abspath(path)
+
+
+    @staticmethod
+    def set_cache_format(format):
+        """
+        """
+        global _CACHE_FORMAT
+        if format in SUPPORTED_SAVE_FILE_EXTENSIONS:
+            _CACHE_FORMAT = format
+
+        else:
+            raise ValueError(f'Invalid save file format provided: {format}. Available formats are: {SUPPORTED_SAVE_FILE_EXTENSIONS}')
+
+
+def _write_hdf5_file(filename, fit):
+    """
+    Save a fit object to a file, using the hdf5 file format.
+
+    Parameters
+    ----------
+    filename : str or Path
+        The path to the file that will be created.
+
+    fit : Fit
+        The fit object.
+    """
+    with h5py.File(filename, 'w') as f:
+        # Create the main dataset
+        dataset = f.create_dataset('data', data=fit.data_original)
+
+        # h5 files can't save Python's NoneType (since they should
+        # work with any language) so we have to do a little parsing.
+        metadata = {}
+        metadata["xmin"] = fit.xmin
+        metadata["fixed_xmin"] = fit.fixed_xmin
+        metadata["xmax"] = fit.xmax if fit.xmax else np.nan
+
+        metadata["discrete"] = fit.discrete
+        metadata["fit_method"] = fit.fit_method
+        metadata["estimate_discrete"] = fit.estimate_discrete if fit.discrete else False
+        metadata["discrete_normalization"] = fit.discrete_normalization
+        metadata["sigma_threshold"] = fit.sigma_threshold if fit.sigma_threshold else np.nan
+        metadata["xmin_distribution_name"] = fit.xmin_distribution_cls.name
+        metadata["xmin_distance"] = fit.xmin_distance
+        metadata["test_all_xmin"] = fit.test_all_xmin
+        metadata["noise_flag"] = getattr(fit, 'noise_flag', False)
+
+        # For the initial parameters and parameter ranges, we're going
+        # to have to unpack each entry in those dictionaries (since we
+        # can't store a proper dictionary).
+        if fit.initial_parameters:
+            for k, v in fit.initial_parameters.items():
+                metadata[f"initial_{k}"] = v if v else np.nan
+
+        if fit.parameter_ranges:
+            for k, v in fit.parameter_ranges.items():
+                metadata[f"range_{k}_min"] = v[0] if v[0] else np.nan
+                metadata[f"range_{k}_max"] = v[1] if v[1] else np.nan
+
+        # The parameter constraints are quite tricky as well, since we
+        # can't store a Python function object in an h5 file. Instead, we
+        # just copy the source code for the constraint. Note that this
+        # does mean you can't use values defined outside of your constraint
+        # function, for example:
+        # 
+        # some_value = 5
+        # def constraint(dist):
+        #    return dist.value < some_value
+        #
+        # This above constraint function cannot be saved properly because
+        # some_value is defined outside of its scope.
+        if fit.parameter_constraints:
+            for constr in fit.parameter_constraints:
+                function_source = inspect.getsource(constr["fun"])
+                function_name = constr["fun"].__name__
+
+                # This serialized function is the thing we will actually
+                # use to reconstruct the function. It can also be done
+                # by just executing the source code, though this will
+                # lose access to any variable defined outside of the function.
+                # The serialized code will include those.
+                serialized_function = pickle.dumps(constr["fun"])
+
+                # But the serialized function isn't easily readable, so we
+                # want to save the source code too.
+                function_data = np.array([function_source, serialized_function], dtype='S')
+
+                # We create a new dataset for each constraint, with the
+                # main data being the function source code
+                constraint_dataset = f.create_dataset(f'constraint_{function_name}', data=function_data)
+
+                constraint_dataset.attrs.update({'type': constr["type"],
+                                                 'dists': constr.get("dists", ''),
+                                                 'name': function_name})
+
+        # Include the xmin fitting results if available.
+        if hasattr(fit, 'xmin_fitting_results'):
+            # We'll make a new dataset folder with entries for each of
+            # the arrays
+
+            # We also save the minimum index of these arrays in each
+            # one. This might be a little redundant, but again the idea
+            # of using h5 in the first place is that it is accessible
+            # outside of this library and outside of even Python.
+            distances = f.create_dataset('xmin_fitting_results/distances', data=fit.xmin_fitting_results["distances"])
+            distances.attrs['min_index'] = fit.xmin_fitting_results["min_index"]
+
+            xmins = f.create_dataset('xmin_fitting_results/xmins', data=fit.xmin_fitting_results["xmins"])
+            xmins.attrs['min_index'] = fit.xmin_fitting_results["min_index"]
+
+            valid_fits = f.create_dataset('xmin_fitting_results/valid_fits', data=fit.xmin_fitting_results["valid_fits"])
+            valid_fits.attrs['min_index'] = fit.xmin_fitting_results["min_index"]
+
+            # Now we have to create arrays for the parameters of the specific
+            # xmin distribution we are using
+            xmin_fitting_parameters = fit.xmin_distribution_cls.parameter_names
+            for param in xmin_fitting_parameters:
+                param_dataset = f.create_dataset(f'xmin_fitting_results/{param}', data=fit.xmin_fitting_results[param])
+                param_dataset.attrs['min_index'] = fit.xmin_fitting_results["min_index"]
+
+        # Finally, we include the version, since we want to warn if we
+        # open a file made in another version.
+        metadata["powerlaw_version"] = POWERLAW_VERSION if POWERLAW_VERSION else 'Unknown'
+
+        dataset.attrs.update(metadata)
+
+
+def _write_pickle_file(filename, fit):
+    """
+    Save a fit object to a file, using the Python pickle format.
+
+    Parameters
+    ----------
+    filename : str or Path
+        The path to the file that will be created.
+
+    fit : Fit
+        The fit object.
+    """
+    with open(filename, 'wb') as f:
+        pickle.dump((fit, POWERLAW_VERSION), f)
+
+
+def _parse_hdf5_file(filename, verbose=1):
+    """
+    Parse an hdf5 file created using the ``powerlaw.Fit.save()`` function. 
+
+    Not intended to be called directly, but rather through
+    ``powerlaw.Fit.load()``.
+
+    Parameters
+    ----------
+    filename : str or Path
+        The path to the file that will be loaded.
+
+    Returns
+    -------
+    fit : Fit
+        The loaded fit object, which should be functionally identical
+        to the saved object.
+    """
+    with h5py.File(filename) as f:
+        data = f["data"][:]
+        # Most of the metadata here we will directly pass to the Fit
+        # object, but we do have to parse a few things.
+        metadata = dict(f["data"].attrs)
+
+        # Parse the initial parameter values
+        initial_parameters = {}
+        for k, v in metadata.items():
+            if "initial_" in k:
+                variable_name = k.split('_')[1]
+                initial_parameters[variable_name] = v if (not np.isnan(v)) else None
+
+        if len(initial_parameters) == 0:
+            initial_parameters = None
+
+        # Parse the parameter ranges
+        # These will be entries of the form "range_{var}_min" or "range_{var}_max"
+        parameter_ranges = {}
+        for k, v in metadata.items():
+            if "range_" in k:
+                if k.split('_')[-1] not in ["max", "min"]:
+                    warnings.warn(f'Malformed h5 file formatting for parameter ranges: {k}:{v}')
+                    continue
+
+                variable_name = k.split('_')[1]
+                range_index = int(k.split('_')[-1] == "max")
+
+                current_range = parameter_ranges.get(variable_name, [None, None])
+                current_range[range_index] = float(v) if (not np.isnan(v)) else None
+
+                parameter_ranges[variable_name] = current_range
+
+        if len(parameter_ranges) == 0:
+            parameter_ranges = None
+
+        # Parse the parameter constraints
+        parameter_constraints = []
+        for dataset in f.keys():
+            if "constraint_" in dataset:
+                function_source = f[dataset][:][0]
+                serialized_function = f[dataset][:][1]
+
+                # Execute the source code to load the function in
+                try:
+                    # Note that we have to "dedent" this function since it
+                    # will maintain any indentation from exactly where
+                    # it was written. This gets rid of extra indentation
+                    # and puts the "def ..." line at zero indent.
+                    #exec(textwrap.dedent(function_source.decode('utf-8')))
+                    # It is better to use the serialization to reconstruct
+                    # the function since it can save the values of variables
+                    # defined outside of the function.
+                    function = pickle.loads(serialized_function)
+
+                except:
+                    raise ValueError(f'Malformed constraint function {dataset} in file {filename}.')
+
+                constraint_metadata = dict(f[dataset].attrs)
+
+                function_type = constraint_metadata["type"]
+                dists = constraint_metadata["dists"]
+
+                constraint_dict = {"type": function_type,
+                                   "fun": function}
+                if len(dists) > 0:
+                    constraint_dict["dists"] = list(dists)
+
+                parameter_constraints.append(constraint_dict)
+
+
+        if len(parameter_constraints) == 0:
+            parameter_constraints = None
+
+        # Parse xmin fitting results. These are stored in separate
+        # datasets within the folder (within the file) 'xmin_fitting_results'.
+        if not metadata["fixed_xmin"]:
+
+            xmin_fitting_results = {}
+            xmin_fitting_results["distances"] = f["xmin_fitting_results/distances"][:]
+            xmin_fitting_results["valid_fits"] = f["xmin_fitting_results/valid_fits"][:]
+            xmin_fitting_results["xmins"] = f["xmin_fitting_results/xmins"][:]
+
+            xmin_fitting_results["min_index"] = f["xmin_fitting_results/xmins"].attrs["min_index"]
+
+            # Now get the parameter arrays
+            xmin_fitting_parameters = SUPPORTED_DISTRIBUTIONS[metadata["xmin_distribution_name"]].parameter_names
+            for param in xmin_fitting_parameters:
+                xmin_fitting_results[param] = f[f"xmin_fitting_results/{param}"][:]
+
+
+        # There are various issues that might arise if you use a different
+        # version of the package from the one that created the cached
+        # file. For example, if there was a bug in some calculation
+        # that was fixed in a newer version, you might not recalculate
+        # the value to fix the issue. Most of the time you probably
+        # shouldn't have issues, but we should give a warning just in
+        # case.
+        if POWERLAW_VERSION.lower() != "unknown" and metadata["powerlaw_version"].lower() != "unknown":
+            if POWERLAW_VERSION != metadata["powerlaw_version"]:
+                warnings.warn(f'Cached file {filename} was saved with a different version of powerlaw {metadata["powerlaw_version"]} than what you are currently using {POWERLAW_VERSION}! This may cause issues...')
+
+        # Create the fit object
+        fit = Fit(data=data,
+                  discrete=metadata["discrete"],
+                  xmin=metadata["xmin"],
+                  xmax=metadata["xmax"] if (not np.isnan(metadata["xmax"])) else None,
+                  fit_method=metadata["fit_method"],
+                  estimate_discrete=metadata["estimate_discrete"] if metadata["discrete"] else None,
+                  discrete_normalization=metadata["discrete_normalization"],
+                  sigma_threshold=metadata["sigma_threshold"] if (not np.isnan(metadata["sigma_threshold"])) else None,
+                  initial_parameters=initial_parameters,
+                  parameter_ranges=parameter_ranges,
+                  parameter_constraints=parameter_constraints,
+                  xmin_distance=metadata["xmin_distance"],
+                  xmin_distribution=metadata["xmin_distribution_name"],
+                  test_all_xmin=metadata["test_all_xmin"],
+                  ignore_cache=True, # We have to ignore cacheing otherwise we'll get an infinite loop.
+                  verbose=verbose)
+
+        # Now we have to adjust the fact that maybe we did actually do
+        # xmin fitting (but we just cached the result)
+        if not metadata["fixed_xmin"]:
+            fit.fixed_xmin = False
+            fit.noise_flag = metadata["noise_flag"]
+
+            fit.xmin_fitting_results = xmin_fitting_results
+    
+            # Set the Fit's xmin to the optimal xmin
+            setattr(fit, metadata["xmin_distance"], xmin_fitting_results["distances"][xmin_fitting_results["min_index"]])
+
+            # Update the fitting CDF given the new xmin, in case other objects, like
+            # Distributions, want to use it for fitting (like if they do KS fitting)
+            fit.fitting_cdf_bins, fit.fitting_cdf = fit.cdf()
+
+    return fit
+
+
+def _parse_pickle_file(filename):
+    """
+    Parse a pickle file created using the ``powerlaw.Fit.save()`` function. 
+
+    Not intended to be called directly, but rather through
+    ``powerlaw.Fit.load()``.
+
+    Parameters
+    ----------
+    filename : str or Path
+        The path to the file that will be loaded.
+
+    Returns
+    -------
+    fit : Fit
+        The loaded fit object, which should be functionally identical
+        to the saved object.
+    """
+    with open(filename, 'rb') as f:
+        # Note that we save the version with the fit object
+        fit, version = pickle.load(f)
+
+    # There are various issues that might arise if you use a different
+    # version of the package from the one that created the cached
+    # file. For example, if there was a bug in some calculation
+    # that was fixed in a newer version, you might not recalculate
+    # the value to fix the issue. Most of the time you probably
+    # shouldn't have issues, but we should give a warning just in
+    # case.
+    if POWERLAW_VERSION.lower() != "unknown" and version.lower() != "unknown":
+        if POWERLAW_VERSION != version:
+            warnings.warn(f'Cached file {filename} was saved with a different version of powerlaw {version} than what you are currently using {POWERLAW_VERSION}! This may cause issues...')
+
+    return fit

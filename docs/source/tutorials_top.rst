@@ -12,6 +12,7 @@ Tutorials
     tutorials/discrete_continuous
     tutorials/ranges_and_constraints
     tutorials/comparing_distributions
+    tutorials/saving_fits
     tutorials/generating_data
     tutorials/advanced_topics
     tutorials/warnings
