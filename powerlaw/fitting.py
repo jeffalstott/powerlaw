@@ -67,22 +67,36 @@ SUPPORTED_DISTRIBUTIONS = {'power_law': Power_Law,
 SUPPORTED_DISTRIBUTION_LIST = list(SUPPORTED_DISTRIBUTIONS.keys())
 
 """
-Currently just templated; doesn't work yet.
-
 Whether to enable parallelization for certain heavy calculations, eg. 
 fitting the xmin value.
 """
-PARALLEL_ENABLE = False
+_parallel_enable = False
 
 """
-Currently just templated; doesn't work yet.
-
-This is the number of cores that the library should leave free when doing
-certain heavy calculations. For example, if you have 8 cores, and this is
-set to 2, then the processing would use (up to) 6 cores.
+This is the number of cores/processes that the library should use.
 """
-PARALLEL_UNUSED_CORES = 2
+_parallel_cores = 1
 
+"""
+By default, the multiprocessing library has many limitations when it comes
+to what functions can be used in a Pool or Process object. This is becuase
+these require that you serialize the function using pickle, which is then
+pass between processes.
+
+Unfortunately, the standard library `pickle` doesn't have support for many
+types of functions, including those not defined at the root level. The
+function we want to parallelize for `find_xmin` is not defined at the
+root level, so normally we would get an error along the lines of:
+    Can't pickle local object 'Fit.find_xmin.<locals>.fit_function'
+
+We can fix this by manually replacing multiprocessing's use of pickle to
+`dill`'s version of it, which can handle these types of functions.
+"""
+# We imported dill as 'pickle', so all references to 'pickle' are actually
+# dill.
+pickle.Pickler.dumps, pickle.Pickler.loads = pickle.dumps, pickle.loads
+multiprocessing.reduction.ForkingPickler = pickle.Pickler
+multiprocessing.reduction.dump = pickle.dump
 
 """
 The file types and extensions supported for saving and loading files.
@@ -95,7 +109,7 @@ SUPPORTED_SAVE_FORMATS = {"hdf5": ['h5', 'hdf5'],
 
 SUPPORTED_SAVE_FILE_EXTENSIONS = [ext for v in SUPPORTED_SAVE_FORMATS.values() for ext in v]
 
-_DEFAULT_SAVE_FORMAT = 'h5'
+DEFAULT_SAVE_FORMAT = 'h5'
     
 """
 Whether fits are cached automatically or not.
@@ -103,7 +117,7 @@ Whether fits are cached automatically or not.
 This variable should not be manually set, but rather is automatically
 set to True when a valid path is given using Fit.set_cache_folder().
 """
-_CACHE_ENABLED = False
+_cache_enabled = False
 
 """
 The path to the cache folder.
@@ -111,7 +125,7 @@ The path to the cache folder.
 This variable should not be manually set, but rather set using
 Fit.set_cache_folder().
 """
-_CACHE_PATH = None
+_cache_path = None
 
 """
 The format to use when automatically caching files.
@@ -119,7 +133,40 @@ The format to use when automatically caching files.
 This variable should not be manually set, but rather set using
 Fit.set_cache_format(). The default is hdf5.
 """
-_CACHE_FORMAT = _DEFAULT_SAVE_FORMAT
+_cache_format = DEFAULT_SAVE_FORMAT
+
+
+def set_parallel_cores(num_cores):
+    """
+    Set the number of cores to use in parallel for computing xmin.
+
+    If a negative number, will leave that many cores open.
+    """
+    # See the os documentation on for this below; note that newer
+    # versions of python (3.13+) have a function `process_cpu_count()`
+    # that does this in a cleaner way, but it's probably better
+    # to be backwards compatible.
+    # https://docs.python.org/3.11/library/os.html#os.cpu_count
+    total_cores = len(os.sched_getaffinity(0))
+
+    global _parallel_enable, _parallel_cores
+
+    if num_cores < 0:
+        usable_cores = total_cores + num_cores
+        usable_cores = max(usable_cores, 1)
+    else:
+        if num_cores > total_cores:
+            raise ValueError(f'Attempted to parallelize using {num_cores} cores, but only {total_cores} are available.')
+
+        usable_cores = num_cores
+
+    _parallel_cores = usable_cores
+
+    if _parallel_cores == 0 or  _parallel_cores == 1:
+        _parallel_enable = False
+
+    else:
+        _parallel_enable = True
 
 
 class Fit(object):
@@ -381,8 +428,8 @@ class Fit(object):
         # if we need to look for a cached copy of this fit. Notably, this
         # happens before we fit xmin, since the point of caching is to
         # avoid having to repeat that calculation if possible.
-        if _CACHE_ENABLED and not ignore_cache:
-            potential_cache_file = os.path.join(_CACHE_PATH, f'{hash(self)}.{_CACHE_FORMAT}')
+        if _cache_enabled and not ignore_cache:
+            potential_cache_file = os.path.join(_cache_path, f'{hash(self)}.{_cache_format}')
 
             if os.path.exists(potential_cache_file):
                 if self.verbose:
@@ -410,7 +457,7 @@ class Fit(object):
                 print(f'Calculating best minimal value for {xmin_distribution.replace("_"," ")} fit')
 
             # This function tries to optimize the fit based on the xmin
-            self.find_xmin(xmin_distance, test_all_xmin)
+            self.find_xmin(self.xmin_distance, self.test_all_xmin)
 
         # Crop the data to the xmin and
         self.data = self.data[self.data >= self.xmin]
@@ -419,8 +466,8 @@ class Fit(object):
 
         ####################################
         # CREATE CACHE
-        if _CACHE_ENABLED and not ignore_cache:
-            new_cache_file = os.path.join(_CACHE_PATH, f'{hash(self)}.{_CACHE_FORMAT}')
+        if _cache_enabled and not ignore_cache:
+            new_cache_file = os.path.join(_cache_path, f'{hash(self)}.{_cache_format}')
 
             if not os.path.exists(new_cache_file):
                 if verbose:
@@ -539,10 +586,10 @@ class Fit(object):
         else:
             max_bin_value = np.sort(possible_xmin)[-3]
 
-            # 10% of the number of datapoints sounds good. And note that we
-            # only generate bins up into the 3rd to last point so we always
-            # have enough points to calculate distance metrics.
-            num_bins = max(100, len(self.data) // 10)
+            # Use 1% of the datapoints, but always at least 100 if the 1%
+            # is less than that. This should work well for most cases, but
+            # might need to be improved in the future.
+            num_bins = max(100, len(self.data) // 100)
 
             # These are logarithmically spaced
             possible_xmin = np.logspace(np.log10(np.min(self.data)), np.log10(max_bin_value), num_bins)
@@ -607,34 +654,39 @@ class Fit(object):
             warnings.filterwarnings('ignore', category=OptimizeWarning)
             warnings.filterwarnings('ignore', category=UserWarning)
 
-            # TODO parallelize
-            # This is slightly harder than I thought it would be since I can't
-            # directly parallelize a function that isn't defined at the top
-            # level. The alternative is to use a third-party library like
-            # multiprocess but this is something to ask.
-            if PARALLEL_ENABLE:
-                raise NotImplementedError('Parallelization not yet implemented! Use `PARALLEL_ENABLE=False`')
+            # TODO improve parallelization
+            # This currently works, but we see less time reduction than
+            # I would expect. For example, I would expect that using 4
+            # processes/cores would give something like a speedup of close
+            # 4 (though definitely less), but it usually ends up just around
+            # 2x. This means either the majority of the time is spent
+            # communicating between processes (eg. writing arrays), or
+            # something else is weird.
 
-                # See the os documentation on for this below; note that newer
-                # versions of python (3.13+) have a function `process_cpu_count()`
-                # that does this in a cleaner way, but it's probably better
-                # to be backwards compatible.
-                # https://docs.python.org/3.11/library/os.html#os.cpu_count
-                usable_cores = len(os.sched_getaffinity(0)) - PARALLEL_UNUSED_CORES
-                usable_cores = max(usable_cores, 1)
+            global _parallel_enable, _parallel_cores
+            if _parallel_enable:
+                #raise NotImplementedError('Parallelization not yet implemented! Use `PARALLEL_ENABLE=False`')
 
                 # Create a pool of workers
-                with multiprocessing.Pool(usable_cores) as pool:
+                with multiprocessing.Pool(_parallel_cores) as pool:
                     # We don't need the xmin to be tested in order, so we
                     # use an unordered map
-                    result_mapping = pool.imap_unordered(fit_function, possible_xmin)
-                    for result in tqdm(result_mapping, desc="Fitting xmin") if self.verbose else result_mapping:
-                        distances[i], valid_fits[i], params[:, i] = result
+
+                    # chunksize controls how many iterations a process works
+                    # on before communicating back to the main thread. I
+                    # experimented with this a bit, but I think we can get
+                    # better results by choosing this well.
+                    #chunksize = max(int(len(possible_xmin) / PARALLEL_CORES / 100), 1)
+                    chunksize = 1
+
+                    result_mapping = enumerate(pool.imap_unordered(fit_function, possible_xmin, chunksize=chunksize))
+                    for i, result in tqdm(result_mapping, desc="Fitting xmin") if self.verbose else result_mapping:
+                        distances[i], valid_fits[i], params[:,i] = result
 
             else:
                 # For non-parallel case, we just use a simple for loop
                 for i in tqdm(range(num_xmin), desc='Fitting xmin') if self.verbose else range(num_xmin):
-                    distances[i], valid_fits[i], params[:, i] = fit_function(possible_xmin[i])
+                    distances[i], valid_fits[i], params[:,i] = fit_function(possible_xmin[i])
       
 
         # The possible xmin values should of course have all parameters
@@ -1032,8 +1084,8 @@ class Fit(object):
 
             else:
                 # Just use the default format
-                full_filename = filename + '.' + _DEFAULT_SAVE_FORMAT
-                format = _DEFAULT_SAVE_FORMAT
+                full_filename = filename + '.' + DEFAULT_SAVE_FORMAT
+                format = DEFAULT_SAVE_FORMAT
 
         else:
             full_filename = filename
@@ -1180,23 +1232,23 @@ class Fit(object):
     def set_cache_folder(path):
         """
         """
-        global _CACHE_ENABLED, _CACHE_PATH
+        global _cache_enabled, _cache_path
 
         # First, create the folder if it doesn't exist
         os.makedirs(path, exist_ok=True)
 
         # Save the path and set caching enabled
-        _CACHE_ENABLED = True
-        _CACHE_PATH = os.path.abspath(path)
+        _cache_enabled = True
+        _cache_path = os.path.abspath(path)
 
 
     @staticmethod
     def set_cache_format(format):
         """
         """
-        global _CACHE_FORMAT
+        global _cache_format
         if format in SUPPORTED_SAVE_FILE_EXTENSIONS:
-            _CACHE_FORMAT = format
+            _cache_format = format
 
         else:
             raise ValueError(f'Invalid save file format provided: {format}. Available formats are: {SUPPORTED_SAVE_FILE_EXTENSIONS}')
