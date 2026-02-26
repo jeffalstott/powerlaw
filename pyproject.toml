@@ -33,7 +33,9 @@ dependencies = [
     "numpy",
     "matplotlib",
     "mpmath",
-    "tqdm"
+    "tqdm",
+    "h5py",
+    "dill"
 ]
 
 [project.optional-dependencies]
@@ -44,7 +46,7 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "http://www.github.com/jeffalstott/powerlaw"
+Homepage = "http://www.github.com/powerlaw-devs/powerlaw"
 
 [tool.setuptools]
 py-modules = ["powerlaw"]
