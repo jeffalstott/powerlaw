@@ -1209,18 +1209,23 @@ class Fit(object):
         # here too, but finding a consistent hash for a function like that
         # would be very difficult...
 
+        # Also, we have to cast the bool variables to actual bools, since
+        # for some reason they might get transformed into numpy versions
+        # of True and False (numpy.True_ and numpy.False_) when being read
+        # from an hdf5 file.
+
         # The actual object we will hash is a tuple of the important
         # identifying information
-        hash_data = retyped_data + (self.fixed_xmin,
+        hash_data = retyped_data + (bool(self.fixed_xmin),
                                     xmin_value,
                                     xmax_value,
-                                    self.discrete,
+                                    bool(self.discrete),
                                     self.fit_method,
-                                    self.estimate_discrete if self.discrete else False,
+                                    bool(self.estimate_discrete) if self.discrete else False,
                                     self.discrete_normalization if self.discrete else '',
                                     self.xmin_distribution_cls.name,
                                     self.xmin_distance,
-                                    self.test_all_xmin,
+                                    bool(self.test_all_xmin),
                                     parameter_ranges_value,
                                     initial_parameters_value)
 
@@ -1508,11 +1513,11 @@ def _parse_hdf5_file(filename, verbose=1):
 
         # Create the fit object
         fit = Fit(data=data,
-                  discrete=metadata["discrete"],
+                  discrete=bool(metadata["discrete"]),
                   xmin=metadata["xmin"],
                   xmax=metadata["xmax"] if (not np.isnan(metadata["xmax"])) else None,
                   fit_method=metadata["fit_method"],
-                  estimate_discrete=metadata["estimate_discrete"] if metadata["discrete"] else None,
+                  estimate_discrete=bool(metadata["estimate_discrete"] if metadata["discrete"] else None),
                   discrete_normalization=metadata["discrete_normalization"],
                   sigma_threshold=metadata["sigma_threshold"] if (not np.isnan(metadata["sigma_threshold"])) else None,
                   initial_parameters=initial_parameters,
@@ -1520,7 +1525,7 @@ def _parse_hdf5_file(filename, verbose=1):
                   parameter_constraints=parameter_constraints,
                   xmin_distance=metadata["xmin_distance"],
                   xmin_distribution=metadata["xmin_distribution_name"],
-                  test_all_xmin=metadata["test_all_xmin"],
+                  test_all_xmin=bool(metadata["test_all_xmin"]),
                   ignore_cache=True, # We have to ignore cacheing otherwise we'll get an infinite loop.
                   verbose=verbose)
 
