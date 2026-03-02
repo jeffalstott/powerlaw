@@ -26,13 +26,17 @@ This can be done easily using :meth:`Fit.save` and :meth:`Fit.load`.
     ...
 
 The saving and loading functions currently support two different file formats:
-pickle and hdf5. A pickle file is Python's way of serializing an object,
+`pickle <https://docs.python.org/3/library/pickle.html>`_ and
+`hdf5 <https://www.hdfgroup.org/solutions/hdf5/>`_.
+A pickle file is Python's way of serializing an object,
 which saves the entire object to a file that can then be loaded later. The
 hdf5 format is a more universal format that allows you to save numerical data
 alongside various metadata. This means that the hdf5 file doesn't contain the
 actual ``Fit`` object like the pickle file does, but instead saves all of
 the important information and then reconstructs the ``Fit`` when you load it
-back in.
+back in. Pickling is done using the `dill <https://github.com/uqfoundation/dill>`_
+library (which improves on the standard library ``pickle``) and hdf5 file
+operations are done using the `h5py <https://github.com/h5py/h5py>`_ library.
 
 You can choose which format to use by either including it in the filename,
 or with the ``format`` keyword:

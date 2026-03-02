@@ -46,7 +46,7 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "http://www.github.com/powerlaw-devs/powerlaw"
+Homepage = "http://www.github.com/jeffalstott/powerlaw"
 
 [tool.setuptools]
 py-modules = ["powerlaw"]

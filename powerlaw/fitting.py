@@ -49,6 +49,9 @@ try:
     from ._version import __version__
     POWERLAW_VERSION = __version__
 except:
+    # Raise a warning, in case the user isn't aware that the package
+    # isn't properly installed
+    warnings.warn('powerlaw version not found, likely because the package isn\'t installed properly. Not critical, but could affect caching of files.')
     POWERLAW_VERSION = None
 
 # This needs to be a list of the keys in the supported_distributions
