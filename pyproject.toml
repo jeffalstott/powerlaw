@@ -33,7 +33,9 @@ dependencies = [
     "numpy",
     "matplotlib",
     "mpmath",
-    "tqdm"
+    "tqdm",
+    "h5py",
+    "dill"
 ]
 
 [project.optional-dependencies]

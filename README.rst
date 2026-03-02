@@ -13,8 +13,7 @@ to fit heavy-tailed distributions like power laws. Academics, please cite as:
 Jeff Alstott, Ed Bullmore, Dietmar Plenz. (2014). powerlaw: a Python package
 for analysis of heavy-tailed distributions.
 `PLoS ONE 9(1): e85777 <https://doi.org/10.1371/journal.pone.0085777>`_
-
-Also available at `arXiv:1305.0215 [physics.data-an] <http://arxiv.org/abs/1305.0215>`_
+(also available at `arXiv:1305.0215 [physics.data-an] <http://arxiv.org/abs/1305.0215>`_)
 
 
 Basic Usage
@@ -79,9 +78,8 @@ Alternatively, you can install directly from the source:
 
 This library depends on the usual scientific computing libraries that you
 probably already have installed: ``numpy``, ``scipy``, ``matplotlib``, and
-``mpmath``.
-
-The package ``tqdm`` is used for creating progress bars.
+``mpmath``, as well as ``dill`` and ``h5py`` for caching objects and ``tqdm``
+for creating progress bars.
 
 The requirement of ``mpmath`` will be dropped if/when the scipy functions
 ``gamma``, ``gammainc`` and ``gammaincc`` are updated to have sufficient numerical
@@ -117,6 +115,7 @@ discussions. Thanks also to Andreas Klaus,
 and `Adam Ginsburg <https://github.com/keflavich/plfit>`_ for making
 their code available. Their implementations were a critical starting point for
 making ``powerlaw``.
+
 
 
 Power Laws vs. Lognormals and powerlaw's 'lognormal_positive' option
