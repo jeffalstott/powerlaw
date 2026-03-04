@@ -1,5 +1,5 @@
 Saving and loading fits
-==================================
+=======================
 
 After choosing parameters, calculating ``xmin`` values, or fitting various
 distributions, you might want to save the ``Fit`` object to a file. This
