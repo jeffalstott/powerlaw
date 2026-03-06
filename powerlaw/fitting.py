@@ -52,7 +52,7 @@ except:
     # Raise a warning, in case the user isn't aware that the package
     # isn't properly installed
     warnings.warn('powerlaw version not found, likely because the package isn\'t installed properly. Not critical, but could affect caching of files.')
-    POWERLAW_VERSION = None
+    POWERLAW_VERSION = 'unknown'
 
 # This needs to be a list of the keys in the supported_distributions
 # attribute of the Fit class.  The __getattr__ method needs the list.
