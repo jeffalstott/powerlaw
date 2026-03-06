@@ -320,7 +320,10 @@ class Distribution(object):
             # (since we may be given parameters from a fit object that
             # contains information for other distributions).
             for k,v in initial_parameters.items():
-                if k in self.parameter_names:
+                # It's possible that we could be passed an empty initial parameter
+                # value, so we have to check that we actually have a valid
+                # value.
+                if k in self.parameter_names and v not in [None, np.nan]:
                     initial_parameters_dict[k] = v
 
         elif hasattr(initial_parameters, '__iter__') and len(initial_parameters) == len(self.parameter_names):
