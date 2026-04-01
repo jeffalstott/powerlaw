@@ -20,7 +20,7 @@ package for analysis of heavy-tailed distributions. PLoS ONE 9(1): e85777
 Quick links
 -----------
 - Original paper for the library: http://arxiv.org/abs/1305.0215
-- Source code: https://github.com/jeffalstott/powerlaw
+- Source code: https://github.com/powerlaw-devs/powerlaw
 
 
 Installation
@@ -36,21 +36,20 @@ Alternatively, you can install directly from the source:
 
 .. code-block:: console
 
-    $ git clone https://github.com/jeffalstott/powerlaw
+    $ git clone https://github.com/powerlaw-devs/powerlaw
     $ cd powerlaw
     $ pip install .
 
 This library depends on the usual scientific computing libraries that you
 probably already have installed: ``numpy``, ``scipy``, ``matplotlib``, and
-``mpmath``.
-
-The package ``tqdm`` is used for creating progress bars.
+``mpmath``, as well as ``dill`` and ``h5py`` for caching objects and ``tqdm``
+for creating progress bars.
 
 The requirement of ``mpmath`` will be dropped if/when the scipy functions
 ``gamma``, ``gammainc`` and ``gammaincc`` are updated to have sufficient numerical
 accuracy for negative numbers.
 
-See the `powerlaw home page <https://github.com/jeffalstott/powerlaw>`_ for more
+See the `powerlaw home page <https://github.com/powerlaw-devs/powerlaw>`_ for more
 information and examples.
 
 Basic usage
