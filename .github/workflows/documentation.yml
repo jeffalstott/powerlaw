@@ -21,6 +21,10 @@ jobs:
           pip install sphinx sphinx_rtd_theme myst_parser furo sphinx_subfigure numpydoc
           pip install -e .
 
+      - name: Generate documentation figures
+        run: |
+          python docs/documentation_figures.py
+
       - name: Sphinx build
         run: |
           sphinx-build docs/source _build
