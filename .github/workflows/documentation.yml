@@ -5,9 +5,14 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   docs:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,9 +20,11 @@ jobs:
         run: |
           pip install sphinx sphinx_rtd_theme myst_parser furo sphinx_subfigure numpydoc
           pip install -e .
+
       - name: Sphinx build
         run: |
           sphinx-build docs/source _build
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
