@@ -1,6 +1,14 @@
 name: Documentation
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    types:
+      - closed
+    branches:
+      - 'master'
 
 permissions:
   contents: write
