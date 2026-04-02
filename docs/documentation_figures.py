@@ -1,8 +1,5 @@
 """
-This script will create all of the figures for the documentation. I think
-this is preferred over actually having executable documentation, since it
-lets us fine tune things about the figures (size, titles, etc.) without
-that making the example snippets too convoluted.
+This script will create all of the figures for the documentation.
 
 Conventions
 -----------
@@ -19,6 +16,8 @@ constraints, try to stick to this.
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 import powerlaw
