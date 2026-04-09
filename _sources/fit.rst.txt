@@ -1,0 +1,2 @@
+.. autoclass:: powerlaw.Fit
+    :members:
